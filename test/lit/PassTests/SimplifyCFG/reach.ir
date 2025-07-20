@@ -1,0 +1,30 @@
+// RUN: kecc-opt %s --canonicalize-constant --cfg-reach | FileCheck %s
+
+fun i32 @foo () {
+// CHECK: fun i32 @foo ()
+init:
+  bid: b0
+  allocations: 
+
+// CHECK-NEXT: init:
+// CHECK-NEXT:  bid: b0
+// CHECK-NEXT:  allocations: 
+
+
+block b0:
+  j b1()
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   j b1()
+
+block b1:
+  j b0()
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   j b0()
+
+block b2:
+  j b3()
+  
+block b3:
+  j b2()
+}
+// CHECK-NEXT: }

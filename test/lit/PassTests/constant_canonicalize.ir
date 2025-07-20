@@ -1,0 +1,41 @@
+// RUN: kecc-opt %s -action=parse --debug-info | FileCheck %s
+// RUN: kecc-opt %s -action=opt --canonicalize-constant --debug-info | FileCheck %s --check-prefix=CC
+
+fun i32 @main() {
+init: 
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:i0:i32 = add 10:i32 10:i32
+  ret %b0:i0:i32
+}
+
+// CHECK: constants:
+// CHECK-NEXT:  10:i32 
+// CHECK-NEXT:  10:i32
+
+// CHECK-LABEL: fun i32 @main () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT: unresolved:
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:i0:i32 = add 10:i32 10:i32
+// CHECK-NEXT:   ret %b0:i0:i32
+// CHECK-NEXT: }
+
+// CC: constants:
+// CC-NEXT:  10:i32 
+
+// CC-LABEL: fun i32 @main () {
+// CC-NEXT: init:
+// CC-NEXT:   bid: b0
+// CC-NEXT:   allocations:
+// CC-NEXT: unresolved:
+
+// CC-LABEL: block b0:
+// CC-NEXT:   %b0:i0:i32 = add 10:i32 10:i32
+// CC-NEXT:   ret %b0:i0:i32
+// CC-NEXT: }

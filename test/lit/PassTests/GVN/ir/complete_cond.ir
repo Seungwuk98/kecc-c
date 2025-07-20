@@ -1,0 +1,313 @@
+// RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+
+
+fun i32 @func_0 () {
+init:
+  bid: b0
+  allocations: 
+
+
+block b0:
+  %b0:i0:u1 = cmp ne 0:i32 0:i32
+  br %b0:i0:u1, b7(), b8()
+
+block b1:
+  %b1:i0:u1 = cmp ne 0:i32 0:i32
+  br %b1:i0:u1, b19(), b20()
+
+block b2:
+  %b2:i0:u1 = cmp ne 1:i32 0:i32
+  br %b2:i0:u1, b31(), b32()
+
+block b3:
+  %b3:p0:i32:t12
+  %b3:i0:u1 = cmp eq %b3:p0:i32 0:i32
+  %b3:i1:i32 = typecast %b3:i0:u1 to i32
+  ret %b3:i1:i32
+
+block b4:
+  %b4:i0:u1 = cmp ne 1:i32 0:i32
+  br %b4:i0:u1, b10(), b11()
+
+block b5:
+  %b5:i0:u1 = cmp ne 0:i32 0:i32
+  br %b5:i0:u1, b13(), b14()
+
+block b6:
+  %b6:p0:i32:t3
+  %b6:i0:u1 = cmp ne %b6:p0:i32 0:i32
+  br %b6:i0:u1, b1(), b2()
+
+block b7:
+  j b9(1:i32)
+
+block b8:
+  j b9(1:i32)
+
+block b9:
+  %b9:p0:i32:t0
+  %b9:i0:u1 = cmp ne %b9:p0:i32 0:i32
+  br %b9:i0:u1, b4(), b5()
+
+block b10:
+  j b12(0:i32)
+
+block b11:
+  j b12(0:i32)
+
+block b12:
+  %b12:p0:i32:t1
+  j b6(%b12:p0:i32)
+
+block b13:
+  j b15(0:i32)
+
+block b14:
+  j b15(1:i32)
+
+block b15:
+  %b15:p0:i32:t2
+  j b6(%b15:p0:i32)
+
+block b16:
+  %b16:i0:u1 = cmp ne 1:i32 0:i32
+  br %b16:i0:u1, b22(), b23()
+
+block b17:
+  %b17:i0:u1 = cmp ne 0:i32 0:i32
+  br %b17:i0:u1, b25(), b26()
+
+block b18:
+  %b18:p0:i32:t7
+  j b3(%b18:p0:i32)
+
+block b19:
+  j b21(1:i32)
+
+block b20:
+  j b21(1:i32)
+
+block b21:
+  %b21:p0:i32:t4
+  %b21:i0:u1 = cmp ne %b21:p0:i32 0:i32
+  br %b21:i0:u1, b16(), b17()
+
+block b22:
+  j b24(0:i32)
+
+block b23:
+  j b24(1:i32)
+
+block b24:
+  %b24:p0:i32:t5
+  j b18(%b24:p0:i32)
+
+block b25:
+  j b27(1:i32)
+
+block b26:
+  j b27(0:i32)
+
+block b27:
+  %b27:p0:i32:t6
+  j b18(%b27:p0:i32)
+
+block b28:
+  %b28:i0:u1 = cmp ne 0:i32 0:i32
+  br %b28:i0:u1, b34(), b35()
+
+block b29:
+  %b29:i0:u1 = cmp ne 1:i32 0:i32
+  br %b29:i0:u1, b37(), b38()
+
+block b30:
+  %b30:p0:i32:t11
+  j b3(%b30:p0:i32)
+
+block b31:
+  j b33(1:i32)
+
+block b32:
+  j b33(0:i32)
+
+block b33:
+  %b33:p0:i32:t8
+  %b33:i0:u1 = cmp ne %b33:p0:i32 0:i32
+  br %b33:i0:u1, b28(), b29()
+
+block b34:
+  j b36(1:i32)
+
+block b35:
+  j b36(0:i32)
+
+block b36:
+  %b36:p0:i32:t9
+  j b30(%b36:p0:i32)
+
+block b37:
+  j b39(1:i32)
+
+block b38:
+  j b39(0:i32)
+
+block b39:
+  %b39:p0:i32:t10
+  j b30(%b39:p0:i32)
+}
+// CHECK: fun i32 @func_0 () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:i0:u1 = cmp ne 0:i32 0:i32
+// CHECK-NEXT:   br %b0:i0:u1, b7(), b8()
+
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   %b1:i0:u1 = cmp ne 0:i32 0:i32
+// CHECK-NEXT:   br %b0:i0:u1, b19(), b20()
+
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   %b2:i0:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b9:i0:u1, b31(), b32()
+
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   %b3:p0:i32:t12
+// CHECK-NEXT:   %b3:i0:u1 = cmp eq %b3:p0:i32 0:i32
+// CHECK-NEXT:   %b3:i1:i32 = typecast %b3:i0:u1 to i32
+// CHECK-NEXT:   ret %b3:i1:i32
+
+// CHECK-LABEL: block b4:
+// CHECK-NEXT:   %b4:i0:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b9:i0:u1, b10(), b11()
+
+// CHECK-LABEL: block b5:
+// CHECK-NEXT:   %b5:i0:u1 = cmp ne 0:i32 0:i32
+// CHECK-NEXT:   br %b0:i0:u1, b13(), b14()
+
+// CHECK-LABEL: block b6:
+// CHECK-NEXT:   %b6:p0:i32:t3
+// CHECK-NEXT:   %b6:i0:u1 = cmp ne %b6:p0:i32 0:i32
+// CHECK-NEXT:   br %b6:i0:u1, b1(), b2()
+
+// CHECK-LABEL: block b7:
+// CHECK-NEXT:   j b9(1:i32)
+
+// CHECK-LABEL: block b8:
+// CHECK-NEXT:   j b9(1:i32)
+
+// CHECK-LABEL: block b9:
+// CHECK-NEXT:   %b9:p0:i32:t0
+// CHECK-NEXT:   %b9:i0:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b9:i0:u1, b4(), b5()
+
+// CHECK-LABEL: block b10:
+// CHECK-NEXT:   j b12(0:i32)
+
+// CHECK-LABEL: block b11:
+// CHECK-NEXT:   j b12(0:i32)
+
+// CHECK-LABEL: block b12:
+// CHECK-NEXT:   %b12:p0:i32:t1
+// CHECK-NEXT:   j b6(0:i32)
+
+// CHECK-LABEL: block b13:
+// CHECK-NEXT:   j b15(0:i32)
+
+// CHECK-LABEL: block b14:
+// CHECK-NEXT:   j b15(1:i32)
+
+// CHECK-LABEL: block b15:
+// CHECK-NEXT:   %b15:p0:i32:t2
+// CHECK-NEXT:   j b6(%b15:p0:i32)
+
+// CHECK-LABEL: block b16:
+// CHECK-NEXT:   %b16:i0:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b9:i0:u1, b22(), b23()
+
+// CHECK-LABEL: block b17:
+// CHECK-NEXT:   %b17:i0:u1 = cmp ne 0:i32 0:i32
+// CHECK-NEXT:   br %b0:i0:u1, b25(), b26()
+
+// CHECK-LABEL: block b18:
+// CHECK-NEXT:   %b18:p0:i32:t7
+// CHECK-NEXT:   j b3(%b18:p0:i32)
+
+// CHECK-LABEL: block b19:
+// CHECK-NEXT:   j b21(1:i32)
+
+// CHECK-LABEL: block b20:
+// CHECK-NEXT:   j b21(1:i32)
+
+// CHECK-LABEL: block b21:
+// CHECK-NEXT:   %b21:p0:i32:t4
+// CHECK-NEXT:   %b21:i0:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b9:i0:u1, b16(), b17()
+
+// CHECK-LABEL: block b22:
+// CHECK-NEXT:   j b24(0:i32)
+
+// CHECK-LABEL: block b23:
+// CHECK-NEXT:   j b24(1:i32)
+
+// CHECK-LABEL: block b24:
+// CHECK-NEXT:   %b24:p0:i32:t5
+// CHECK-NEXT:   j b18(%b24:p0:i32)
+
+// CHECK-LABEL: block b25:
+// CHECK-NEXT:   j b27(1:i32)
+
+// CHECK-LABEL: block b26:
+// CHECK-NEXT:   j b27(0:i32)
+
+// CHECK-LABEL: block b27:
+// CHECK-NEXT:   %b27:p0:i32:t6
+// CHECK-NEXT:   j b18(%b27:p0:i32)
+
+// CHECK-LABEL: block b28:
+// CHECK-NEXT:   %b28:i0:u1 = cmp ne 0:i32 0:i32
+// CHECK-NEXT:   br %b0:i0:u1, b34(), b35()
+
+// CHECK-LABEL: block b29:
+// CHECK-NEXT:   %b29:i0:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b9:i0:u1, b37(), b38()
+
+// CHECK-LABEL: block b30:
+// CHECK-NEXT:   %b30:p0:i32:t11
+// CHECK-NEXT:   j b3(%b30:p0:i32)
+
+// CHECK-LABEL: block b31:
+// CHECK-NEXT:   j b33(1:i32)
+
+// CHECK-LABEL: block b32:
+// CHECK-NEXT:   j b33(0:i32)
+
+// CHECK-LABEL: block b33:
+// CHECK-NEXT:   %b33:p0:i32:t8
+// CHECK-NEXT:   %b33:i0:u1 = cmp ne %b33:p0:i32 0:i32
+// CHECK-NEXT:   br %b33:i0:u1, b28(), b29()
+
+// CHECK-LABEL: block b34:
+// CHECK-NEXT:   j b36(1:i32)
+
+// CHECK-LABEL: block b35:
+// CHECK-NEXT:   j b36(0:i32)
+
+// CHECK-LABEL: block b36:
+// CHECK-NEXT:   %b36:p0:i32:t9
+// CHECK-NEXT:   j b30(%b36:p0:i32)
+
+// CHECK-LABEL: block b37:
+// CHECK-NEXT:   j b39(1:i32)
+
+// CHECK-LABEL: block b38:
+// CHECK-NEXT:   j b39(0:i32)
+
+// CHECK-LABEL: block b39:
+// CHECK-NEXT:   %b39:p0:i32:t10
+// CHECK-NEXT:   j b30(%b39:p0:i32)
+// CHECK-NEXT: }
+
+

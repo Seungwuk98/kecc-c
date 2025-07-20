@@ -1,0 +1,161 @@
+// RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+
+var i32 @nonce = 1
+// CHECK: var i32 @nonce = 1
+
+fun i32 @main () {
+init:
+  bid: b0
+  allocations: 
+
+
+block b0:
+  %b0:i0:u1 = cmp ne 0:i32 0:i32
+  br %b0:i0:u1, b1(), b2()
+
+block b1:
+  %b1:i0:u1 = cmp gt 2:i32 5:i32
+  br %b1:i0:u1, b4(), b5()
+
+block b2:
+  %b2:i0:i32 = add 2:i32 5:i32
+  j b3(2:i32, %b2:i0:i32)
+
+block b3:
+  %b3:p0:i32:p
+  %b3:p1:i32:t1
+  %b3:i0:i32 = load @nonce:i32*
+  %b3:i1:i32 = mod %b3:i0:i32 100:i32
+  j b8(0:i32, %b3:p0:i32)
+
+block b4:
+  %b4:i0:i32 = sub 2:i32 2:i32
+  j b6(%b4:i0:i32, %b4:i0:i32)
+
+block b5:
+  %b5:i0:i32 = add 2:i32 2:i32
+  j b6(%b5:i0:i32, %b5:i0:i32)
+
+block b6:
+  %b6:p0:i32:p
+  %b6:p1:i32:t0
+  j b3(%b6:p0:i32, %b6:p1:i32)
+
+block b8:
+  %b8:p0:i32:i
+  %b8:p1:i32:p
+  %b8:i0:u1 = cmp lt %b8:p0:i32 %b3:i1:i32
+  br %b8:i0:u1, b9(), b11()
+
+block b9:
+  %b9:i0:i32 = mod %b8:p0:i32 2:i32
+  %b9:i1:u1 = cmp ne %b9:i0:i32 0:i32
+  br %b9:i1:u1, b12(), b13()
+
+block b11:
+  ret %b8:p1:i32
+
+block b12:
+  %b12:i0:i32 = add %b8:p1:i32 5:i32
+  j b14(%b12:i0:i32)
+
+block b13:
+  %b13:i0:i32 = add %b8:p1:i32 %b3:p1:i32
+  j b14(%b13:i0:i32)
+
+block b14:
+  %b14:p0:i32:p
+  %b14:i0:i32 = mod %b8:p0:i32 2:i32
+  %b14:i1:u1 = cmp ne %b14:i0:i32 0:i32
+  br %b14:i1:u1, b15(), b16()
+
+block b15:
+  %b15:i0:i32 = add %b8:p0:i32 2:i32
+  j b17(%b15:i0:i32)
+
+block b16:
+  %b16:i0:i32 = add %b8:p0:i32 1:i32
+  j b17(%b16:i0:i32)
+
+block b17:
+  %b17:p0:i32:i
+  j b8(%b17:p0:i32, %b14:p0:i32)
+}
+// CHECK-LABEL: fun i32 @main () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:i0:u1 = cmp ne 0:i32 0:i32
+// CHECK-NEXT:   br %b0:i0:u1, b1(), b2()
+
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   %b1:i0:u1 = cmp gt 2:i32 5:i32
+// CHECK-NEXT:   br %b1:i0:u1, b4(), b5()
+
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   %b2:i0:i32 = add 2:i32 5:i32
+// CHECK-NEXT:   j b3(2:i32, %b2:i0:i32)
+
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   %b3:p0:i32:p
+// CHECK-NEXT:   %b3:p1:i32:t1
+// CHECK-NEXT:   %b3:i0:i32 = load @nonce:i32*
+// CHECK-NEXT:   %b3:i1:i32 = mod %b3:i0:i32 100:i32
+// CHECK-NEXT:   j b8(0:i32, %b3:p0:i32)
+
+// CHECK-LABEL: block b4:
+// CHECK-NEXT:   %b4:i0:i32 = sub 2:i32 2:i32
+// CHECK-NEXT:   j b6(%b4:i0:i32, %b4:i0:i32)
+
+// CHECK-LABEL: block b5:
+// CHECK-NEXT:   %b5:i0:i32 = add 2:i32 2:i32
+// CHECK-NEXT:   j b6(%b5:i0:i32, %b5:i0:i32)
+
+// CHECK-LABEL: block b6:
+// CHECK-NEXT:   %b6:p0:i32:p
+// CHECK-NEXT:   %b6:p1:i32:t0
+// CHECK-NEXT:   j b3(%b6:p0:i32, %b6:p1:i32)
+
+// CHECK-LABEL: block b8:
+// CHECK-NEXT:   %b8:p0:i32:i
+// CHECK-NEXT:   %b8:p1:i32:p
+// CHECK-NEXT:   %b8:i0:u1 = cmp lt %b8:p0:i32 %b3:i1:i32
+// CHECK-NEXT:   br %b8:i0:u1, b9(), b11()
+
+// CHECK-LABEL: block b9:
+// CHECK-NEXT:   %b9:i0:i32 = mod %b8:p0:i32 2:i32
+// CHECK-NEXT:   %b9:i1:u1 = cmp ne %b9:i0:i32 0:i32
+// CHECK-NEXT:   br %b9:i1:u1, b12(), b13()
+
+// CHECK-LABEL: block b11:
+// CHECK-NEXT:   ret %b8:p1:i32
+
+// CHECK-LABEL: block b12:
+// CHECK-NEXT:   %b12:i0:i32 = add %b8:p1:i32 5:i32
+// CHECK-NEXT:   j b14(%b12:i0:i32)
+
+// CHECK-LABEL: block b13:
+// CHECK-NEXT:   %b13:i0:i32 = add %b8:p1:i32 %b3:p1:i32
+// CHECK-NEXT:   j b14(%b13:i0:i32)
+
+// CHECK-LABEL: block b14:
+// CHECK-NEXT:   %b14:p0:i32:p
+// CHECK-NEXT:   %b14:i0:i32 = mod %b8:p0:i32 2:i32
+// CHECK-NEXT:   %b14:i1:u1 = cmp ne %b9:i0:i32 0:i32
+// CHECK-NEXT:   br %b9:i1:u1, b15(), b16()
+
+// CHECK-LABEL: block b15:
+// CHECK-NEXT:   %b15:i0:i32 = add %b8:p0:i32 2:i32
+// CHECK-NEXT:   j b17(%b15:i0:i32)
+
+// CHECK-LABEL: block b16:
+// CHECK-NEXT:   %b16:i0:i32 = add %b8:p0:i32 1:i32
+// CHECK-NEXT:   j b17(%b16:i0:i32)
+
+// CHECK-LABEL: block b17:
+// CHECK-NEXT:   %b17:p0:i32:i
+// CHECK-NEXT:   j b8(%b17:p0:i32, %b14:p0:i32)
+// CHECK-NEXT: }

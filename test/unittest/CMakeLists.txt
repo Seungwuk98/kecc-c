@@ -1,0 +1,19 @@
+add_executable(
+  UnitTest
+  unittest.cpp
+  TypeTests.cpp
+  AttrTests.cpp
+  IRTests.cpp
+  ModuleTests.cpp
+  ParserTests.cpp
+  UsageTests.cpp
+)
+
+target_link_libraries(
+  UnitTest
+  PRIVATE
+  doctest
+  ${llvm_libs}
+  KeccIR
+  KeccParser
+)

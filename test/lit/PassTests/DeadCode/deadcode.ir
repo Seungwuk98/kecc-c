@@ -1,0 +1,66 @@
+// RUN: kecc-opt %s --dead-code-elimination | FileCheck %s
+
+fun unit @sink (unit) {
+// CHECK: fun unit @sink (unit) 
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:unit
+  // CHECK-NEXT: %b0:p0:unit
+  ret unit:unit
+  // CHECK-NEXT: ret unit:unit
+}
+
+fun i32 @deadcode () {
+// CHECK-LABEL: fun i32 @deadcode ()
+init:
+  bid: b0
+  allocations:
+    %l0:i32:x
+    %l1:i32:y
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i32:y
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:i32 = add 100:i32 200:i32
+  // CHECK-NEXT: %b0:i0:i32 = add 100:i32 200:i32
+  %b0:i1:i32 = add %b0:i0:i32 300:i32
+  %b0:i2:i32 = add %b0:i1:i32 400:i32
+  %b0:i3:unit = store %b0:i0:i32 %l1:i32*
+  // CHECK-NEXT: %b0:i1:unit = store %b0:i0:i32 %l0:i32*
+
+  br undef:i1, b1(), b2()
+  // CHECK-NEXT: br undef:i1, b1(), b2()
+
+block b1:
+// CHECK-LABEL: block b1:
+  %b1:i0:unit = nop
+  %b1:i1:unit = call @sink:[ret:unit params:(unit)]*(%b1:i0:unit)
+  // CHECK-NEXT: %b1:i0:unit = call @sink:[ret:unit params:(unit)]*(unit:unit)
+
+  j b3()
+  // CHECK-NEXT: j b3()
+
+block b2:
+// CHECK-LABEL: block b2:
+  %b2:i0:unit = store 42:i32 %l1:i32*
+  // CHECK-NEXT: %b2:i0:unit = store 42:i32 %l0:i32*
+
+  j b3()
+  // CHECK-NEXT: j b3()
+
+block b3:
+// CHECK-LABEL: block b3:
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+// CHECK-NEXT: }

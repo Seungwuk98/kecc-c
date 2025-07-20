@@ -1,0 +1,59 @@
+// RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+
+
+fun i32 @main () {
+init:
+  bid: b0
+  allocations: 
+
+
+block b0:
+  j b1(0:i32, 0:i32)
+
+block b1:
+  %b1:p0:i32:i
+  %b1:p1:i32:c
+  %b1:i0:u1 = cmp lt %b1:p0:i32 10:i32
+  br %b1:i0:u1, b2(), b3()
+
+block b2:
+  %b2:i0:i32 = add %b1:p0:i32 1:i32
+  switch %b2:i0:i32 default b7() [
+    1:i32 b1(%b2:i0:i32, %b1:p1:i32)
+  ]
+
+block b3:
+  ret %b1:p1:i32
+
+block b7:
+  %b7:i0:i32 = add %b1:p1:i32 1:i32
+  j b1(%b2:i0:i32, %b7:i0:i32)
+}
+// CHECK: fun i32 @main () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   j b1(0:i32, 0:i32)
+
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   %b1:p0:i32:i
+// CHECK-NEXT:   %b1:p1:i32:c
+// CHECK-NEXT:   %b1:i0:u1 = cmp lt %b1:p0:i32 10:i32
+// CHECK-NEXT:   br %b1:i0:u1, b2(), b3()
+
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   %b2:i0:i32 = add %b1:p0:i32 1:i32
+// CHECK-NEXT:   switch %b2:i0:i32 default b7() [
+// CHECK-NEXT:     1:i32 b1(%b2:i0:i32, %b1:p1:i32)
+// CHECK-NEXT:   ]
+
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   ret %b1:p1:i32
+
+// CHECK-LABEL: block b7:
+// CHECK-NEXT:   %b7:i0:i32 = add %b1:p1:i32 1:i32
+// CHECK-NEXT:   j b1(%b2:i0:i32, %b7:i0:i32)
+// CHECK-NEXT: }

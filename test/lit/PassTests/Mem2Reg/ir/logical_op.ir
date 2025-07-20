@@ -1,0 +1,182 @@
+// RUN: kecc-opt %s --mem2reg | FileCheck %s
+
+
+fun i32 @main () {
+init:
+  bid: b0
+  allocations: 
+    %l0:i32:a
+    %l1:i32:b
+    %l2:i32:c
+    %l3:i32:d
+    %l4:u1:t0
+    %l5:u1:t1
+    %l6:u1:t2
+
+block b0:
+  %b0:i0:unit = store 0:i32 %l0:i32*
+  %b0:i1:unit = store 0:i32 %l1:i32*
+  %b0:i2:unit = store 0:i32 %l2:i32*
+  %b0:i3:unit = store 0:i32 %l3:i32*
+  %b0:i4:unit = store 1:i32 %l0:i32*
+  %b0:i5:u1 = cmp ne 1:i32 0:i32
+  br %b0:i5:u1, b4(), b5()
+
+block b1:
+  %b1:i0:i32 = load %l1:i32*
+  %b1:i1:i32 = add %b1:i0:i32 1:i32
+  %b1:i2:unit = store %b1:i1:i32 %l1:i32*
+  j b3()
+
+block b3:
+  %b3:i0:unit = store 1:i32 %l2:i32*
+  %b3:i1:u1 = cmp ne 1:i32 0:i32
+  br %b3:i1:u1, b10(), b11()
+
+block b4:
+  %b4:i0:unit = store 1:u1 %l4:u1*
+  j b6()
+
+block b5:
+  %b5:i0:unit = store 1:i32 %l1:i32*
+  %b5:i1:u1 = cmp ne 1:i32 0:i32
+  %b5:i2:unit = store %b5:i1:u1 %l4:u1*
+  j b6()
+
+block b6:
+  %b6:i0:u1 = load %l4:u1*
+  br %b6:i0:u1, b1(), b3()
+
+block b7:
+  %b7:i0:i32 = load %l3:i32*
+  %b7:i1:i32 = add %b7:i0:i32 1:i32
+  %b7:i2:unit = store %b7:i1:i32 %l3:i32*
+  j b9()
+
+block b9:
+  %b9:i0:i32 = load %l1:i32*
+  %b9:i1:u1 = cmp eq %b9:i0:i32 1:i32
+  br %b9:i1:u1, b13(), b14()
+
+block b10:
+  %b10:i0:unit = store 1:i32 %l3:i32*
+  %b10:i1:u1 = cmp ne 1:i32 0:i32
+  %b10:i2:unit = store %b10:i1:u1 %l5:u1*
+  j b12()
+
+block b11:
+  %b11:i0:unit = store 0:u1 %l5:u1*
+  j b12()
+
+block b12:
+  %b12:i0:u1 = load %l5:u1*
+  br %b12:i0:u1, b7(), b9()
+
+block b13:
+  %b13:i0:i32 = load %l3:i32*
+  %b13:i1:u1 = cmp eq %b13:i0:i32 2:i32
+  %b13:i2:unit = store %b13:i1:u1 %l6:u1*
+  j b15()
+
+block b14:
+  %b14:i0:unit = store 0:u1 %l6:u1*
+  j b15()
+
+block b15:
+  %b15:i0:u1 = load %l6:u1*
+  %b15:i1:i32 = typecast %b15:i0:u1 to i32
+  ret %b15:i1:i32
+}
+// CHECK: fun i32 @main () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i32:a
+// CHECK-NEXT:     %l1:i32:b
+// CHECK-NEXT:     %l2:i32:c
+// CHECK-NEXT:     %l3:i32:d
+// CHECK-NEXT:     %l4:u1:t0
+// CHECK-NEXT:     %l5:u1:t1
+// CHECK-NEXT:     %l6:u1:t2
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:i0:unit = nop
+// CHECK-NEXT:   %b0:i1:unit = nop
+// CHECK-NEXT:   %b0:i2:unit = nop
+// CHECK-NEXT:   %b0:i3:unit = nop
+// CHECK-NEXT:   %b0:i4:unit = nop
+// CHECK-NEXT:   %b0:i5:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b0:i5:u1, b4(), b5()
+
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   %b1:i0:unit = nop
+// CHECK-NEXT:   %b1:i1:i32 = add %b6:p0:i32 1:i32
+// CHECK-NEXT:   %b1:i2:unit = nop
+// CHECK-NEXT:   j b3(%b1:i1:i32)
+
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   %b3:p0:i32:b
+// CHECK-NEXT:   %b3:i0:unit = nop
+// CHECK-NEXT:   %b3:i1:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   br %b3:i1:u1, b10(), b11()
+
+// CHECK-LABEL: block b4:
+// CHECK-NEXT:   %b4:i0:unit = nop
+// CHECK-NEXT:   j b6(0:i32, 1:u1)
+
+// CHECK-LABEL: block b5:
+// CHECK-NEXT:   %b5:i0:unit = nop
+// CHECK-NEXT:   %b5:i1:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   %b5:i2:unit = nop
+// CHECK-NEXT:   j b6(1:i32, %b5:i1:u1)
+
+// CHECK-LABEL: block b6:
+// CHECK-NEXT:   %b6:p0:i32:b
+// CHECK-NEXT:   %b6:p1:u1:t0
+// CHECK-NEXT:   %b6:i0:unit = nop
+// CHECK-NEXT:   br %b6:p1:u1, b1(), b3(%b6:p0:i32)
+
+// CHECK-LABEL: block b7:
+// CHECK-NEXT:   %b7:i0:unit = nop
+// CHECK-NEXT:   %b7:i1:i32 = add %b12:p0:i32 1:i32
+// CHECK-NEXT:   %b7:i2:unit = nop
+// CHECK-NEXT:   j b9(%b7:i1:i32)
+
+// CHECK-LABEL: block b9:
+// CHECK-NEXT:   %b9:p0:i32:d
+// CHECK-NEXT:   %b9:i0:unit = nop
+// CHECK-NEXT:   %b9:i1:u1 = cmp eq %b3:p0:i32 1:i32
+// CHECK-NEXT:   br %b9:i1:u1, b13(), b14()
+
+// CHECK-LABEL: block b10:
+// CHECK-NEXT:   %b10:i0:unit = nop
+// CHECK-NEXT:   %b10:i1:u1 = cmp ne 1:i32 0:i32
+// CHECK-NEXT:   %b10:i2:unit = nop
+// CHECK-NEXT:   j b12(1:i32, %b10:i1:u1)
+
+// CHECK-LABEL: block b11:
+// CHECK-NEXT:   %b11:i0:unit = nop
+// CHECK-NEXT:   j b12(0:i32, 0:u1)
+
+// CHECK-LABEL: block b12:
+// CHECK-NEXT:   %b12:p0:i32:d
+// CHECK-NEXT:   %b12:p1:u1:t1
+// CHECK-NEXT:   %b12:i0:unit = nop
+// CHECK-NEXT:   br %b12:p1:u1, b7(), b9(%b12:p0:i32)
+
+// CHECK-LABEL: block b13:
+// CHECK-NEXT:   %b13:i0:unit = nop
+// CHECK-NEXT:   %b13:i1:u1 = cmp eq %b9:p0:i32 2:i32
+// CHECK-NEXT:   %b13:i2:unit = nop
+// CHECK-NEXT:   j b15(%b13:i1:u1)
+
+// CHECK-LABEL: block b14:
+// CHECK-NEXT:   %b14:i0:unit = nop
+// CHECK-NEXT:   j b15(0:u1)
+
+// CHECK-LABEL: block b15:
+// CHECK-NEXT:   %b15:p0:u1:t2
+// CHECK-NEXT:   %b15:i0:unit = nop
+// CHECK-NEXT:   %b15:i1:i32 = typecast %b15:p0:u1 to i32
+// CHECK-NEXT:   ret %b15:i1:i32
+// CHECK-NEXT: }

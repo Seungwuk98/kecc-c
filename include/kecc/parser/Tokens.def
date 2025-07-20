@@ -1,0 +1,81 @@
+#ifndef TOKEN
+#define TOKEN(Name)
+#endif
+
+#ifndef KEYWORD
+#define KEYWORD(Name) TOKEN(Name)
+#endif
+
+#ifndef TYPE
+#define TYPE(Name) TOKEN(Name)
+#endif
+
+#ifndef AST
+#define AST(Name) TOKEN(ast_##Name)
+#endif
+
+KEYWORD(struct)
+KEYWORD(fun)
+KEYWORD(allocations)
+KEYWORD(var)
+KEYWORD(const)
+KEYWORD(params)
+KEYWORD(init)
+KEYWORD(bid)
+KEYWORD(block)
+KEYWORD(undef)
+KEYWORD(opaque)
+KEYWORD(to)
+KEYWORD(offset)
+KEYWORD(default)
+KEYWORD(ret)
+
+TOKEN(identifier)
+TOKEN(percent_block_id)
+TOKEN(block_id)
+TOKEN(percent_allocation_id)
+TOKEN(instruction_id)
+TOKEN(phi_id)
+TOKEN(integer)
+TOKEN(float)
+TOKEN(global_variable)
+TOKEN(anonymous)
+
+TOKEN(rparen)
+TOKEN(lparen)
+TOKEN(lbrace)
+TOKEN(rbrace)
+TOKEN(lbracket)
+TOKEN(rbracket)
+TOKEN(comma)
+TOKEN(colon)
+TOKEN(equal)
+TOKEN(plus)
+TOKEN(minus)
+TOKEN(asterisk)
+TOKEN(x)
+
+TOKEN(EOF)
+TOKEN(unknown)
+
+TYPE(i1)
+TYPE(i8)
+TYPE(i16)
+TYPE(i32)
+TYPE(i64)
+TYPE(u1)
+TYPE(u8)
+TYPE(u16)
+TYPE(u32)
+TYPE(u64)
+TYPE(f32)
+TYPE(f64)
+TYPE(unit)
+
+AST(integer)
+AST(float)
+
+#undef AST
+#undef TYPE
+#undef KEYWORD
+#undef TOKEN

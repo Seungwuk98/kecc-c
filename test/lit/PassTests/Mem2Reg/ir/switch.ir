@@ -1,0 +1,84 @@
+// RUN: kecc-opt %s --mem2reg | FileCheck %s
+
+
+fun i32 @main () {
+init:
+  bid: b0
+  allocations: 
+    %l0:i32:a
+    %l1:i32:b
+
+block b0:
+  %b0:i0:unit = store 1:i32 %l0:i32*
+  %b0:i1:unit = store 0:i32 %l1:i32*
+  %b0:i2:i32 = load %l0:i32*
+  switch %b0:i2:i32 default b4() [
+    0:i32 b2()
+    1:i32 b3()
+  ]
+
+block b1:
+  %b1:i0:i32 = load %l1:i32*
+  %b1:i1:u1 = cmp eq %b1:i0:i32 2:i32
+  %b1:i2:i32 = typecast %b1:i1:u1 to i32
+  ret %b1:i2:i32
+
+block b2:
+  %b2:i0:i32 = load %l1:i32*
+  %b2:i1:i32 = add %b2:i0:i32 1:i32
+  %b2:i2:unit = store %b2:i1:i32 %l1:i32*
+  j b1()
+
+block b3:
+  %b3:i0:i32 = load %l1:i32*
+  %b3:i1:i32 = add %b3:i0:i32 2:i32
+  %b3:i2:unit = store %b3:i1:i32 %l1:i32*
+  j b1()
+
+block b4:
+  %b4:i0:i32 = load %l1:i32*
+  %b4:i1:i32 = add %b4:i0:i32 3:i32
+  %b4:i2:unit = store %b4:i1:i32 %l1:i32*
+  j b1()
+}
+// CHECK: fun i32 @main () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i32:a
+// CHECK-NEXT:     %l1:i32:b
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:i0:unit = nop
+// CHECK-NEXT:   %b0:i1:unit = nop
+// CHECK-NEXT:   %b0:i2:unit = nop
+// CHECK-NEXT:   switch 1:i32 default b4() [
+// CHECK-NEXT:     0:i32 b2()
+// CHECK-NEXT:     1:i32 b3()
+// CHECK-NEXT:   ]
+
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   %b1:p0:i32:b
+// CHECK-NEXT:   %b1:i0:unit = nop
+// CHECK-NEXT:   %b1:i1:u1 = cmp eq %b1:p0:i32 2:i32
+// CHECK-NEXT:   %b1:i2:i32 = typecast %b1:i1:u1 to i32
+// CHECK-NEXT:   ret %b1:i2:i32
+
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   %b2:i0:unit = nop
+// CHECK-NEXT:   %b2:i1:i32 = add 0:i32 1:i32
+// CHECK-NEXT:   %b2:i2:unit = nop
+// CHECK-NEXT:   j b1(%b2:i1:i32)
+
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   %b3:i0:unit = nop
+// CHECK-NEXT:   %b3:i1:i32 = add 0:i32 2:i32
+// CHECK-NEXT:   %b3:i2:unit = nop
+// CHECK-NEXT:   j b1(%b3:i1:i32)
+
+// CHECK-LABEL: block b4:
+// CHECK-NEXT:   %b4:i0:unit = nop
+// CHECK-NEXT:   %b4:i1:i32 = add 0:i32 3:i32
+// CHECK-NEXT:   %b4:i2:unit = nop
+// CHECK-NEXT:   j b1(%b4:i1:i32)
+// CHECK-NEXT: }

@@ -1,0 +1,13 @@
+import os
+
+config.kecc_src_root = "@CMAKE_SOURCE_DIR@"
+config.kecc_bin_root = "@CMAKE_BINARY_DIR@"
+config.kecc_lit_test_root = "@CMAKE_CURRENT_SOURCE_DIR@"
+
+config.llvm_tools_dir = "@LLVM_TOOLS_BINARY_DIR@"
+
+import lit.llvm
+
+lit.llvm.initialize(lit_config, config)
+
+lit_config.load_config(config, os.path.join(config.kecc_lit_test_root, 'lit.cfg.py'))

@@ -1,0 +1,58 @@
+// RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+
+var i32 @g = 10
+var i32 @nonce = 1
+// CHECK: var i32 @g = 10
+// CHECK-LABEL: var i32 @nonce = 1
+
+fun i32 @foo (i32, i32) {
+init:
+  bid: b0
+  allocations: 
+
+
+block b0:
+  %b0:p0:i32:i
+  %b0:p1:i32:j
+  %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+  %b0:i1:i32 = load @nonce:i32*
+  %b0:i2:i32 = add %b0:i0:i32 %b0:i1:i32
+  ret %b0:i2:i32
+}
+// CHECK-LABEL: fun i32 @foo (i32, i32) {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:p0:i32:i
+// CHECK-NEXT:   %b0:p1:i32:j
+// CHECK-NEXT:   %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+// CHECK-NEXT:   %b0:i1:i32 = load @nonce:i32*
+// CHECK-NEXT:   %b0:i2:i32 = add %b0:i0:i32 %b0:i1:i32
+// CHECK-NEXT:   ret %b0:i2:i32
+// CHECK-NEXT: }
+
+fun i32 @main () {
+init:
+  bid: b0
+  allocations: 
+
+
+block b0:
+  %b0:i0:i32 = load @g:i32*
+  %b0:i1:i32 = call @foo:[ret:i32 params:(i32, i32)]*(%b0:i0:i32, %b0:i0:i32)
+  ret %b0:i1:i32
+}
+// CHECK-LABEL: fun i32 @main () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:i0:i32 = load @g:i32*
+// CHECK-NEXT:   %b0:i1:i32 = call @foo:[ret:i32 params:(i32, i32)]*(%b0:i0:i32, %b0:i0:i32)
+// CHECK-NEXT:   ret %b0:i1:i32
+// CHECK-NEXT: }

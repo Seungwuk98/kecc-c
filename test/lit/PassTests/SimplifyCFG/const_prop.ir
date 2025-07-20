@@ -1,0 +1,192 @@
+// RUN: kecc-opt %s --canonicalize-constant --cfg-constant-prop | FileCheck %s
+
+fun i32 @const_prop_same () {
+// CHECK: fun i32 @const_prop_same ()
+init:
+  bid: b0
+  allocations: 
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+  br undef:i1, b1(), b1()
+// CHECK-LABEL: block b0:
+// CHECK-NEXT: j b1()
+
+block b1:
+  ret 0:i1
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   ret 0:i1 
+}
+
+fun i32 @const_prop_true () {
+// CHECK-LABEL: fun i32 @const_prop_true ()
+init:
+  bid: b0
+  allocations: 
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+  br 1:i1, b1(), b2()
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   j b1()
+
+block b1:
+  ret 0:i1
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   ret 0:i1
+
+
+block b2:
+  ret 0:i1
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   ret 0:i1
+}
+
+fun i32 @const_prop_false () {
+// CHECK-LABEL: fun i32 @const_prop_false ()
+init:
+  bid: b0
+  allocations: 
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+  br 0:i1, b1(), b2()
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   j b2()
+
+block b1:
+  ret 0:i1
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   ret 0:i1
+
+block b2:
+  ret 0:i1
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   ret 0:i1
+}
+
+fun i32 @const_prop_switch_same () {
+// CHECK-LABEL: fun i32 @const_prop_switch_same ()
+init:
+  bid: b0
+  allocations: 
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations: 
+
+block b0:
+  switch 42:i32 default b1() [
+    2:i32 b1()
+    3:i32 b1()
+  ]
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   j b1() 
+
+block b1:
+  ret 0:i1
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   ret 0:i1
+}
+
+fun i32 @const_prop_switch_same2 () {
+// CHECK-LABEL: fun i32 @const_prop_switch_same2 ()
+init: 
+  bid: b0
+  allocations:
+    %l0:i32:x
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i32:x
+
+block b0:
+  %b0:p0:i32 
+  %b0:i0:unit = store %b0:p0:i32 %l0:i32*
+  %b0:i1:i32 = load %l0:i32*
+  switch %b0:i1:i32 default b1() [
+    2:i32 b1()
+    3:i32 b1()
+  ]
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:p0:i32
+// CHECK-NEXT:   %b0:i0:unit = store %b0:p0:i32 %l0:i32*
+// CHECK-NEXT:   %b0:i1:i32 = load %l0:i32*
+// CHECK-NEXT:   j b1()
+
+block b1:
+  ret 0:i32
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   ret 0:i32
+}
+
+fun i32 @const_prop_switch_case () {
+// CHECK-LABEL: fun i32 @const_prop_switch_case ()
+init:
+  bid: b0
+  allocations: 
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations: 
+
+block b0:
+  switch 2:i32 default b1() [
+    2:i32 b2()
+    3:i32 b3()
+  ]
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   j b2()
+
+block b1:
+  ret 0:i1
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   ret 0:i1
+
+block b2:
+  ret 0:i1
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   ret 0:i1
+
+block b3:
+  ret 0:i1
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   ret 0:i1
+}
+
+fun i32 @const_prop_switch_default () {
+// CHECK-LABEL: fun i32 @const_prop_switch_default ()
+init:
+  bid: b0
+  allocations: 
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations: 
+
+block b0:
+  switch 42:i32 default b1() [
+    2:i32 b2()
+    3:i32 b3()
+  ]
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   j b1() 
+
+block b1:
+  ret 0:i1
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   ret 0:i1
+
+block b2:
+  ret 0:i1
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   ret 0:i1
+
+block b3:
+  ret 0:i1
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   ret 0:i1
+}

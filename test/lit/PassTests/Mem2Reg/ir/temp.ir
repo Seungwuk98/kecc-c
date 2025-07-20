@@ -1,0 +1,66 @@
+// RUN: kecc-opt %s --mem2reg | FileCheck %s
+
+
+fun i32 @fibonacci (i32) {
+init:
+  bid: b0
+  allocations: 
+    %l0:i32:n
+
+block b0:
+  %b0:p0:i32:n
+  %b0:i0:unit = store %b0:p0:i32 %l0:i32*
+  %b0:i1:i32 = load %l0:i32*
+  %b0:i2:i32 = load %l0:i32*
+  %b0:i3:i32 = add %b0:i1:i32 %b0:i2:i32
+  %b0:i4:u1 = cmp ne %b0:i3:i32 0:i32
+  br %b0:i4:u1, b2(), b3()
+
+block b2:
+  %b2:i0:i32 = load %l0:i32*
+  ret %b2:i0:i32
+
+block b3:
+  ret undef:i32
+}
+// CHECK: fun i32 @fibonacci (i32) {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i32:n
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:p0:i32:n
+// CHECK-NEXT:   %b0:i0:unit = nop
+// CHECK-NEXT:   %b0:i1:unit = nop
+// CHECK-NEXT:   %b0:i2:unit = nop
+// CHECK-NEXT:   %b0:i3:i32 = add %b0:p0:i32 %b0:p0:i32
+// CHECK-NEXT:   %b0:i4:u1 = cmp ne %b0:i3:i32 0:i32
+// CHECK-NEXT:   br %b0:i4:u1, b2(), b3()
+
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   %b2:i0:unit = nop
+// CHECK-NEXT:   ret %b0:p0:i32
+
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   ret undef:i32
+// CHECK-NEXT: }
+
+fun i32 @main () {
+init:
+  bid: b0
+  allocations: 
+
+
+block b0:
+  ret 1:i32
+}
+// CHECK-LABEL: fun i32 @main () {
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   ret 1:i32
+// CHECK-NEXT: }

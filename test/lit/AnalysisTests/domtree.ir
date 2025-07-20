@@ -1,0 +1,71 @@
+// RUN: kecc-opt %s -action=dump-analysis -dump-analysis=dominance | FileCheck %s
+
+fun i32 @main() {
+init:
+  bid: b1
+  allocations:
+
+block b1:
+  switch 0:i32 default b2() [
+    1:i32 b3()
+    2:i32 b4()
+  ]
+
+block b2:
+  switch 0:i32 default b4() [
+    1:i32 b5()
+    2:i32 b6()
+  ]
+
+block b3:
+  br 0:u1, b9(), b10()
+
+block b4:
+  j b5()
+
+block b5:
+  j b7()
+
+block b6:
+  j b8()
+
+block b7:
+  j b8()
+
+block b8:
+  br 0:u1, b6(), b13()
+
+block b9:
+  br 0:u1, b11(), b12()
+
+block b10:
+  j b12()
+
+block b11:
+  j b12()
+
+block b12:
+  j b13()
+
+block b13:
+  br 0:u1, b1(), b12()
+}
+
+
+// CHECK: Dominator Analysis dump
+
+// CHECK-LABEL: Domtree (@main):
+// CHECK-NEXT:  b1: b2, b3, b4, b5, b6, b8, b12, b13
+// CHECK-NEXT:  b2:
+// CHECK-NEXT:  b3: b9, b10
+// CHECK-NEXT:  b4:
+// CHECK-NEXT:  b5: b7
+// CHECK-NEXT:  b6:
+// CHECK-NEXT:  b7:
+// CHECK-NEXT:  b8:
+// CHECK-NEXT:  b9: b11
+// CHECK-NEXT:  b10:
+// CHECK-NEXT:  b11:
+// CHECK-NEXT:  b12:
+// CHECK-NEXT:  b13:
+

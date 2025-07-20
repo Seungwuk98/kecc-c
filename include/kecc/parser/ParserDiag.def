@@ -1,0 +1,20 @@
+#ifndef DIAG
+#define DIAG(Name, Message, Kind)
+#endif
+
+DIAG(duplicated_register_id, "Duplicated definition of register ID '{0}'",
+     Error)
+DIAG(unmatched_result_size,
+     "Unmatched result size for instruction '{0}', result size is '{1}'", Error)
+DIAG(unmatched_result_size_for_inst,
+     "Unmatched result size for instruction '{0}', expected '{1}', got '{2}'",
+     Error)
+DIAG(unmatched_result_type,
+     "Unmatched type for instruction '{0}', register type is '{1}'", Error)
+DIAG(unexpected_type, "Unexpected type '{0}', expected '{1}'", Error)
+DIAG(unmatched_type_with_declaration,
+     "Unmatched type. Declared type is '{0}', got '{1}'", Error)
+DIAG(unexpected_token, "Unexpected token '{0}', expected '{1}'", Error)
+
+DIAG(declaration_info, "The instruction declared here", Note)
+#undef DIAG
