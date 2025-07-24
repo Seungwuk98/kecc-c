@@ -311,6 +311,14 @@ static ConstantAttr lt(ConstantAttr lhs, ConstantAttr rhs) {
 
   if (lhsT.isa<IntT>()) {
     return intOp(lhs, rhs, [](ConstantIntAttr lhsInt, ConstantIntAttr rhsInt) {
+      if (lhsInt.isSigned())
+        return ConstantIntAttr::get(
+            lhsInt.getContext(),
+            static_cast<std::int64_t>(lhsInt.getValue()) <
+                    static_cast<std::int64_t>(rhsInt.getValue())
+                ? 1
+                : 0,
+            1, true);
       return ConstantIntAttr::get(lhsInt.getContext(),
                                   lhsInt.getValue() < rhsInt.getValue() ? 1 : 0,
                                   1, true);
