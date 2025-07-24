@@ -99,6 +99,8 @@ public:
   void print(IRPrintContext &printContext) const;
   void remove(InstructionStorage *inst);
 
+  void dropReferences();
+
 private:
   int blockId;
   Function *parentFunction = nullptr;

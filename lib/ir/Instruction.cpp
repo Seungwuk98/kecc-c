@@ -145,6 +145,10 @@ bool InstructionStorage::hasInterface(TypeID interfaceId) const {
   return abstractInst->hasInterface(interfaceId);
 }
 
+bool InstructionStorage::hasTrait(TypeID traitId) const {
+  return abstractInst->getHasTraitFn()(traitId);
+}
+
 std::size_t InstructionStorage::getPrefixBytes() const {
   return llvm::alignTo(sizeof(ValueImpl) * resultSize,
                        alignof(InstructionStorage));
@@ -218,9 +222,21 @@ void InstructionStorage::setAttribute(std::size_t index, Attribute attribute) {
   getTrailingObjects<Attribute>()[index] = attribute;
 }
 
+void InstructionStorage::setAttributes(llvm::ArrayRef<Attribute> attrs) {
+  assert(attrs.size() == attributeSize && "Attributes size mismatch");
+  for (std::size_t i = 0; i < attrs.size(); ++i)
+    setAttribute(i, attrs[i]);
+}
+
 void InstructionStorage::setOperand(std::size_t index, Value operand) {
   assert(index < operandSize && "Operand index out of bounds");
   getTrailingObjects<Operand>()[index] = Operand(this, operand);
+}
+
+void InstructionStorage::setOperands(llvm::ArrayRef<Value> operands) {
+  assert(operands.size() == operandSize && "Operands size mismatch");
+  for (std::size_t i = 0; i < operands.size(); ++i)
+    setOperand(i, operands[i]);
 }
 
 void InstructionStorage::setJumpArg(std::size_t index, JumpArgState jumpArg) {
@@ -228,6 +244,12 @@ void InstructionStorage::setJumpArg(std::size_t index, JumpArgState jumpArg) {
   JumpArg **jumpArgs = getTrailingObjects<JumpArg *>();
   jumpArgs[index]->destroy();
   jumpArgs[index] = JumpArg::create(this, jumpArg);
+}
+
+void InstructionStorage::setJumpArgs(llvm::ArrayRef<JumpArgState> jumpArgs) {
+  assert(jumpArgs.size() == jumpArgSize && "JumpArgs size mismatch");
+  for (std::size_t i = 0; i < jumpArgs.size(); ++i)
+    setJumpArg(i, jumpArgs[i]);
 }
 
 IRContext *InstructionStorage::getContext() const {

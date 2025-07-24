@@ -33,4 +33,18 @@ InstructionStorage *IRBuilder::clone(InstructionStorage *target) {
   return newStorage;
 }
 
+void IRBuilder::setInsertionPointAfterInst(InstructionStorage *inst) {
+  Block *block = inst->getParentBlock();
+  auto it = block->find(inst);
+  assert(it != block->end() && "Instruction not found in block");
+  insertionPoint = Block::InsertionPoint(block, it);
+}
+
+void IRBuilder::setInsertionPointBeforeInst(InstructionStorage *inst) {
+  Block *block = inst->getParentBlock();
+  auto it = block->find(inst);
+  assert(it != block->end() && "Instruction not found in block");
+  insertionPoint = Block::InsertionPoint(block, --it);
+}
+
 } // namespace kecc::ir

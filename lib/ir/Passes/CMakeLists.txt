@@ -6,6 +6,8 @@ add_library(KeccIRPasses
   Mem2Reg.cpp
   GVN.cpp
   DeadCode.cpp
+  OutlineConstant.cpp
+  InstructionFold.cpp
 )
 
 target_link_libraries(KeccIRPasses

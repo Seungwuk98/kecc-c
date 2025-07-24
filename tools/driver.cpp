@@ -173,6 +173,8 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::Mem2Reg>();
   kecc::ir::registerPass<kecc::ir::GVN>();
   kecc::ir::registerPass<kecc::ir::DeadCode>();
+  kecc::ir::registerPass<kecc::ir::OutlineConstant>();
+  kecc::ir::registerPass<kecc::ir::InstructionFold>();
   kecc::ir::registerSimplifyCFGPass();
   kecc::cl::registerPMOption();
   llvm::cl::ParseCommandLineOptions(argc, argv,

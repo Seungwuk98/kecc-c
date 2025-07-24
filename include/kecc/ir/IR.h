@@ -85,6 +85,9 @@ public:
 
   void dropReferences();
 
+  void setName(llvm::StringRef newName) { name = newName.str(); }
+  void setFunctionType(Type newType) { functionType = newType; }
+
 private:
   std::string name;
   Type functionType;

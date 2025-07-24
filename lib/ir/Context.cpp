@@ -9,79 +9,56 @@
 
 namespace kecc::ir {
 
-template <typename T> void registerType(IRContext *context) {
-  TypeID typeId = TypeID::get<T>();
-  auto *abstType = new (context->getTypeStorage()->allocate<AbstractType>())
-      AbstractType(AbstractType::build<T>(context));
-  context->getTypeStorage()->registerType<T>(abstType);
-}
-
-template <typename T> void registerAttr(IRContext *context) {
-  TypeID typeId = TypeID::get<T>();
-  auto *abstAttr =
-      new (context->getTypeStorage()->allocate<AbstractAttribute>())
-          AbstractAttribute(AbstractAttribute::build<T>(context));
-  context->getTypeStorage()->registerAttr<T>(abstAttr);
-}
-
-template <typename T> void registerInst(IRContext *context) {
-  TypeID typeId = TypeID::get<T>();
-  auto *abstInst =
-      new (context->getTypeStorage()->allocate<AbstractInstruction>())
-          AbstractInstruction(AbstractInstruction::build<T>(context));
-  context->getTypeStorage()->registerInst<T>(abstInst);
-}
-
 IRContext::IRContext()
     : typeStorage(std::make_unique<TypeStorage>(this)), diagEngine(srcMgr) {
   // Register built-in types
-  registerType<IntT>(this);
-  registerType<FloatT>(this);
-  registerType<NameStruct>(this);
-  registerType<UnitT>(this);
-  registerType<FunctionT>(this);
-  registerType<PointerT>(this);
-  registerType<ConstQualifier>(this);
-  registerType<TupleT>(this);
-  registerType<ArrayT>(this);
+  registerType<IntT>();
+  registerType<FloatT>();
+  registerType<NameStruct>();
+  registerType<UnitT>();
+  registerType<FunctionT>();
+  registerType<PointerT>();
+  registerType<ConstQualifier>();
+  registerType<TupleT>();
+  registerType<ArrayT>();
 
   // Register built-in attributes
-  registerAttr<StringAttr>(this);
-  registerAttr<ConstantIntAttr>(this);
-  registerAttr<ConstantFloatAttr>(this);
-  registerAttr<ConstantStringFloatAttr>(this);
-  registerAttr<ConstantUndefAttr>(this);
-  registerAttr<ConstantUnitAttr>(this);
-  registerAttr<ConstantVariableAttr>(this);
-  registerAttr<ArrayAttr>(this);
-  registerAttr<TypeAttr>(this);
-  registerAttr<EnumAttr>(this);
-  registerAttr<ASTInitializerList>(this);
-  registerAttr<ASTGroupOp>(this);
-  registerAttr<ASTUnaryOp>(this);
-  registerAttr<ASTInteger>(this);
-  registerAttr<ASTFloat>(this);
+  registerAttr<StringAttr>();
+  registerAttr<ConstantIntAttr>();
+  registerAttr<ConstantFloatAttr>();
+  registerAttr<ConstantStringFloatAttr>();
+  registerAttr<ConstantUndefAttr>();
+  registerAttr<ConstantUnitAttr>();
+  registerAttr<ConstantVariableAttr>();
+  registerAttr<ArrayAttr>();
+  registerAttr<TypeAttr>();
+  registerAttr<EnumAttr>();
+  registerAttr<ASTInitializerList>();
+  registerAttr<ASTGroupOp>();
+  registerAttr<ASTUnaryOp>();
+  registerAttr<ASTInteger>();
+  registerAttr<ASTFloat>();
 
   // Register built-in instructions
-  registerInst<Phi>(this);
-  registerInst<inst::Nop>(this);
-  registerInst<inst::Load>(this);
-  registerInst<inst::Store>(this);
-  registerInst<inst::Call>(this);
-  registerInst<inst::TypeCast>(this);
-  registerInst<inst::Gep>(this);
-  registerInst<inst::Binary>(this);
-  registerInst<inst::Unary>(this);
-  registerInst<inst::Jump>(this);
-  registerInst<inst::Branch>(this);
-  registerInst<inst::Switch>(this);
-  registerInst<inst::Return>(this);
-  registerInst<inst::Unreachable>(this);
-  registerInst<inst::Constant>(this);
-  registerInst<inst::StructDefinition>(this);
-  registerInst<inst::GlobalVariableDefinition>(this);
-  registerInst<inst::LocalVariable>(this);
-  registerInst<inst::Unresolved>(this);
+  registerInst<Phi>();
+  registerInst<inst::Nop>();
+  registerInst<inst::Load>();
+  registerInst<inst::Store>();
+  registerInst<inst::Call>();
+  registerInst<inst::TypeCast>();
+  registerInst<inst::Gep>();
+  registerInst<inst::Binary>();
+  registerInst<inst::Unary>();
+  registerInst<inst::Jump>();
+  registerInst<inst::Branch>();
+  registerInst<inst::Switch>();
+  registerInst<inst::Return>();
+  registerInst<inst::Unreachable>();
+  registerInst<inst::Constant>();
+  registerInst<inst::StructDefinition>();
+  registerInst<inst::GlobalVariableDefinition>();
+  registerInst<inst::LocalVariable>();
+  registerInst<inst::Unresolved>();
 }
 
 IRContext::~IRContext() {

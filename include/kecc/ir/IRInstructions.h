@@ -4,6 +4,7 @@
 #include "kecc/ir/Context.h"
 #include "kecc/ir/IRAttributes.h"
 #include "kecc/ir/IRBuilder.h"
+#include "kecc/ir/IRTransforms.h"
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/JumpArg.h"
 
@@ -16,6 +17,10 @@ public:
   static void build(IRBuilder &builder, InstructionState &state);
 
   static void printer(Nop op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
+  };
 };
 
 class Load : public InstructionTemplate<Load, Instruction, OneResult> {
@@ -26,6 +31,13 @@ public:
   Value getPointer() const;
 
   static void printer(Load op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+    Value getPointer() const;
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class Store : public InstructionTemplate<Store, Instruction, NOperand<2>::Trait,
@@ -39,8 +51,15 @@ public:
   Value getPointer() const;
 
   static void printer(Store op, IRPrintContext &context);
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
 
-private:
+    Value getValue() const;
+    Value getPointer() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class Call : public InstructionTemplate<Call, Instruction, VariadicResults,
@@ -55,7 +74,15 @@ public:
 
   static void printer(Call op, IRPrintContext &context);
 
-private:
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getFunction() const;
+    llvm::ArrayRef<Value> getArguments() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class TypeCast : public InstructionTemplate<TypeCast, Instruction, OneResult> {
@@ -69,7 +96,14 @@ public:
 
   static void printer(TypeCast op, IRPrintContext &context);
 
-private:
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getValue() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class Gep : public InstructionTemplate<Gep, Instruction, NOperand<2>::Trait,
@@ -83,6 +117,16 @@ public:
   Value getOffset() const;
 
   static void printer(Gep op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getBasePointer() const;
+    Value getOffset() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class Binary : public InstructionTemplate<Binary, Instruction,
@@ -119,7 +163,15 @@ public:
 
   static void printer(Binary op, IRPrintContext &context);
 
-private:
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getLhs() const;
+    Value getRhs() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class Unary : public InstructionTemplate<Unary, Instruction, OneResult> {
@@ -139,7 +191,14 @@ public:
 
   static void printer(Unary op, IRPrintContext &context);
 
-private:
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getValue() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class Jump : public InstructionTemplate<Jump, BlockExit, ZeroResult> {
@@ -151,6 +210,13 @@ public:
   JumpArg *getJumpArg() const;
 
   static void printer(Jump op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState> jumpArgs)
+        : jumpArgs(jumpArgs) {}
+    const JumpArgState &getJumpArg() const;
+    llvm::ArrayRef<JumpArgState> jumpArgs;
+  };
 };
 
 class Branch : public InstructionTemplate<Branch, BlockExit, ZeroResult> {
@@ -164,6 +230,19 @@ public:
   JumpArg *getElseArg() const;
 
   static void printer(Branch op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands,
+            llvm::ArrayRef<JumpArgState> jumpArgs)
+        : operands(operands), jumpArgs(jumpArgs) {}
+
+    Value getCondition() const;
+    JumpArgState getIfArg() const;
+    JumpArgState getElseArg() const;
+
+    llvm::ArrayRef<Value> operands;
+    llvm::ArrayRef<JumpArgState> jumpArgs;
+  };
 };
 
 class Switch : public InstructionTemplate<Switch, BlockExit, ZeroResult> {
@@ -181,6 +260,21 @@ public:
   JumpArg *getDefaultCase() const;
 
   static void printer(Switch op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands,
+            llvm::ArrayRef<JumpArgState> jumpArgs)
+        : operands(operands), jumpArgs(jumpArgs) {}
+
+    Value getValue() const;
+    Value getCaseValue(size_t idx) const;
+    JumpArgState getCaseJumpArg(size_t idx) const;
+    JumpArgState getDefaultCase() const;
+    std::size_t getCaseSize() const;
+
+    llvm::ArrayRef<Value> operands;
+    llvm::ArrayRef<JumpArgState> jumpArgs;
+  };
 };
 
 class Return : public InstructionTemplate<Return, BlockExit, ZeroResult> {
@@ -197,6 +291,17 @@ public:
   std::size_t getValueSize() const { return getValues().size(); }
 
   static void printer(Return op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getValue(std::size_t idx) const;
+    llvm::ArrayRef<Value> getValues() const;
+    std::size_t getValueSize() const { return getValues().size(); }
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 class Unreachable
@@ -206,6 +311,9 @@ public:
   static void build(IRBuilder &builder, InstructionState &state);
 
   static void printer(Unreachable op, IRPrintContext &context);
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
+  };
 };
 
 class Constant : public InstructionTemplate<Constant, Instruction, OneResult> {
@@ -220,6 +328,10 @@ public:
   ConstantAttr getValue() const;
 
   void replaceValue(ConstantAttr value);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
+  };
 };
 
 class StructDefinition
@@ -235,6 +347,9 @@ public:
   llvm::StringRef getName() const;
 
   static void printer(StructDefinition op, IRPrintContext &context);
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
+  };
 };
 
 class GlobalVariableDefinition
@@ -252,6 +367,9 @@ public:
   void interpretInitializer();
 
   static void printer(GlobalVariableDefinition op, IRPrintContext &context);
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
+  };
 };
 
 class LocalVariable
@@ -265,6 +383,10 @@ public:
   void printAsDef(IRPrintContext &context) const;
 
   static void printer(LocalVariable op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
+  };
 };
 
 class Unresolved
@@ -274,6 +396,30 @@ public:
   static void build(IRBuilder &builder, InstructionState &state, Type type);
 
   static void printer(Unresolved op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
+  };
+};
+
+class OutlineConstant
+    : public InstructionTemplate<OutlineConstant, Instruction, OneResult> {
+public:
+  using Base::Base;
+  static void build(IRBuilder &builder, InstructionState &state, Value value);
+
+  Value getConstant() const;
+
+  static void printer(OutlineConstant op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getConstant() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
 };
 
 } // namespace kecc::ir::inst

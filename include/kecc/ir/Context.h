@@ -16,9 +16,9 @@
 
 namespace kecc::ir {
 
+class AbstractInstruction;
 class AbstractType;
 class AbstractAttribute;
-class AbstractInstruction;
 class AttributeImpl;
 class TypeImpl;
 class IRContext;
@@ -190,10 +190,57 @@ public:
 
   void *allocate(size_t size);
 
+  template <typename T> T *allocate(size_t cnt) {
+    return static_cast<T *>(sizeof(T) * cnt);
+  }
+
   utils::DiagEngine &diag() { return diagEngine; }
   llvm::SourceMgr &getSourceMgr() { return srcMgr; }
 
+  template <typename T> void registerType() {
+    auto *abstType =
+        GetAbstractTable<T, typename T::AbstractTableTy>::allocateAndGet(this);
+    typeStorage->registerType<T>(abstType);
+  }
+
+  template <typename T> void registerAttr() {
+    auto *abstAttr =
+        GetAbstractTable<T, typename T::AbstractTableTy>::allocateAndGet(this);
+    typeStorage->registerAttr<T>(abstAttr);
+  }
+
+  template <typename T> void registerInst() {
+    auto *abstInst =
+        GetAbstractTable<T, AbstractInstruction>::allocateAndGet(this);
+    typeStorage->registerInst<T>(abstInst);
+  }
+
+  template <typename T> bool isRegisteredType() {
+    TypeID typeId = TypeID::get<T>();
+    return typeStorage->getAbstractTable<AbstractType>(typeId) != nullptr;
+  }
+
+  template <typename T> bool isRegisteredAttr() {
+    TypeID typeId = TypeID::get<T>();
+    return typeStorage->getAbstractTable<AbstractAttribute>(typeId) != nullptr;
+  }
+
+  template <typename T> bool isRegisteredInst() {
+    TypeID typeId = TypeID::get<T>();
+    return typeStorage->getAbstractTable<AbstractInstruction>(typeId) !=
+           nullptr;
+  }
+
 private:
+  template <typename T, typename AbstractTableTy> struct GetAbstractTable {
+    static AbstractTableTy *allocateAndGet(IRContext *context) {
+      TypeID typeId = TypeID::get<T>();
+      auto *abstTy = new (context->allocate(sizeof(AbstractTableTy)))
+          AbstractTableTy(AbstractTableTy::template build<T>(context));
+      return abstTy;
+    }
+  };
+
   std::unique_ptr<TypeStorage> typeStorage;
   llvm::SourceMgr srcMgr;
   utils::DiagEngine diagEngine;

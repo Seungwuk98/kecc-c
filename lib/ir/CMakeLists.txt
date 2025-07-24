@@ -15,13 +15,15 @@ add_library(KeccIR
   Value.cpp
   Pass.cpp
   JumpArg.cpp
+  PatternMatch.cpp
 )
+
+add_subdirectory(Analyses)
+add_subdirectory(Passes)
 
 target_link_libraries(KeccIR
   PRIVATE
   ${llvm_libs}
   MLIRSupport
+  KeccIRAnalyses
 )
-
-add_subdirectory(Analyses)
-add_subdirectory(Passes)

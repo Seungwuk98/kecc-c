@@ -70,6 +70,21 @@ public:
   }
 };
 
+class OutlineConstant : public Pass {
+public:
+  void init(Module *module) override;
+  PassResult run(Module *module) override;
+
+  llvm::StringRef getPassName() const override { return "outline-constant"; }
+};
+
+class InstructionFold : public Pass {
+public:
+  PassResult run(Module *module) override;
+
+  llvm::StringRef getPassName() const override { return "constant-fold"; }
+};
+
 } // namespace kecc::ir
 
 #endif // KECC_IR_TRANSFORMATIONS_H

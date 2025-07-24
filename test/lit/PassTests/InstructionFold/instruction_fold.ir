@@ -1,0 +1,103 @@
+// RUN: kecc-opt %s --constant-fold | FileCheck %s
+
+fun i32 @constant_fold () {
+// CHECK: fun i32 @constant_fold ()
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:i32 = add 1:i32 2:i32
+  %b0:i1:i32 = add %b0:i0:i32 3:i32
+  ret %b0:i1:i32
+  // CHECK-NEXT: ret 6:i32
+}
+
+fun i32 @constant_fold1 () {
+// CHECK: fun i32 @constant_fold1 ()
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:i32 = div 20:i32 10:i32
+  %b0:i1:i32 = mod 49:i32 %b0:i0:i32
+  ret %b0:i1:i32
+  // CHECK-NEXT: ret 1:i32
+}
+
+fun i32 @constant_fold2 () {
+// CHECK: fun i32 @constant_fold2 ()
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:i32 = mod -9:i32 2:i32 
+  ret %b0:i0:i32
+  // CHECK-NEXT: ret -1:i32
+}
+
+fun u32 @constant_fold3 () {
+// CHECK: fun u32 @constant_fold3 ()
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:u32 = mod -9:u32 2:u32 
+  ret %b0:i0:u32
+  // CHECK-NEXT: ret 1:u32
+}
+
+fun i32 @constant_fold4 () {
+// CHECK: fun i32 @constant_fold4 ()
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  br 1:i1, b1(), b2() 
+  // CHECK-NEXT: br 1:i1, b1(), b2()
+
+block b1:
+// CHECK-LABEL: block b1:
+  %b1:i0:i32 = add 1:i32 2:i32
+  j b3(%b1:i0:i32)
+  // CHECK-NEXT: j b3(3:i32)
+
+block b2:
+// CHECK-LABEL: block b2:
+  %b2:i0:i32 = sub 1:i32 2:i32
+  j b3(%b2:i0:i32)
+  // CHECK-NEXT: j b3(-1:i32)
+
+block b3:
+// CHECK-LABEL: block b3:
+  %b3:p0:i32
+  // CHECK-NEXT: %b3:p0:i32
+  ret %b3:p0:i32
+  // CHECK-NEXT: ret %b3:p0:i32
+  
+}
+

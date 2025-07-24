@@ -7,6 +7,8 @@ add_executable(
   ModuleTests.cpp
   ParserTests.cpp
   UsageTests.cpp
+  ConversionTests.cpp
+  TestTensor.cpp
 )
 
 target_link_libraries(

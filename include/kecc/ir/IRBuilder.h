@@ -45,6 +45,11 @@ public:
   }
 
   struct InsertionGuard {
+    InsertionGuard(IRBuilder &builder)
+        : builder(builder), savedInsertionPoint(builder.insertionPoint) {
+      // No change to insertion point
+    }
+
     InsertionGuard(IRBuilder &builder, Block::InsertionPoint point)
         : builder(builder), savedInsertionPoint(builder.insertionPoint) {
       builder.insertionPoint = point;
@@ -69,6 +74,9 @@ public:
   void setInsertionPoint(Block::InsertionPoint point) {
     insertionPoint = point;
   }
+
+  void setInsertionPointAfterInst(InstructionStorage *inst);
+  void setInsertionPointBeforeInst(InstructionStorage *inst);
 
 private:
   Block::InsertionPoint insertionPoint;

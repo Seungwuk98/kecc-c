@@ -45,6 +45,7 @@ void Load::printer(Load op, IRPrintContext &context) {
 }
 
 Value Load::getPointer() const { return this->getStorage()->getOperand(0); }
+Value Load::Adaptor::getPointer() const { return operands[0]; }
 
 //============================================================================//
 /// Store
@@ -68,6 +69,9 @@ void Store::printer(Store op, IRPrintContext &context) {
 
 Value Store::getValue() const { return this->getStorage()->getOperand(0); }
 Value Store::getPointer() const { return this->getStorage()->getOperand(1); }
+
+Value Store::Adaptor::getValue() const { return operands[0]; }
+Value Store::Adaptor::getPointer() const { return operands[1]; }
 
 //============================================================================//
 /// Call
@@ -114,6 +118,11 @@ llvm::ArrayRef<Operand> Call::getArguments() const {
   return this->getStorage()->getOperands().slice(1);
 }
 
+Value Call::Adaptor::getFunction() const { return operands[0]; }
+llvm::ArrayRef<Value> Call::Adaptor::getArguments() const {
+  return operands.slice(1);
+}
+
 //============================================================================//
 /// TypeCast
 //============================================================================//
@@ -137,6 +146,8 @@ Type TypeCast::getTargetType() const {
   return this->getStorage()->getResult(0).getType();
 }
 
+Value TypeCast::Adaptor::getValue() const { return operands[0]; }
+
 //============================================================================//
 /// Gep
 //============================================================================//
@@ -159,6 +170,9 @@ void Gep::printer(Gep op, IRPrintContext &context) {
 Value Gep::getBasePointer() const { return this->getStorage()->getOperand(0); }
 
 Value Gep::getOffset() const { return this->getStorage()->getOperand(1); }
+
+Value Gep::Adaptor::getBasePointer() const { return operands[0]; }
+Value Gep::Adaptor::getOffset() const { return operands[1]; }
 
 //============================================================================//
 /// Binary
@@ -249,6 +263,9 @@ Binary::OpKind Binary::getOpKind() const {
       .getEnumValue<OpKind>();
 }
 
+Value Binary::Adaptor::getLhs() const { return operands[0]; }
+Value Binary::Adaptor::getRhs() const { return operands[1]; }
+
 //============================================================================//
 /// Unary
 //============================================================================//
@@ -288,6 +305,8 @@ Unary::OpKind Unary::getOpKind() const {
       .getEnumValue<OpKind>();
 }
 
+Value Unary::Adaptor::getValue() const { return operands[0]; }
+
 //============================================================================//
 /// Jump
 //============================================================================//
@@ -303,6 +322,8 @@ void Jump::printer(Jump op, IRPrintContext &context) {
 }
 
 JumpArg *Jump::getJumpArg() const { return this->getStorage()->getJumpArg(0); }
+
+const JumpArgState &Jump::Adaptor::getJumpArg() const { return jumpArgs[0]; }
 
 //============================================================================//
 /// Branch
@@ -330,6 +351,10 @@ JumpArg *Branch::getIfArg() const { return this->getStorage()->getJumpArg(0); }
 JumpArg *Branch::getElseArg() const {
   return this->getStorage()->getJumpArg(1);
 }
+
+Value Branch::Adaptor::getCondition() const { return operands[0]; }
+JumpArgState Branch::Adaptor::getIfArg() const { return jumpArgs[0]; }
+JumpArgState Branch::Adaptor::getElseArg() const { return jumpArgs[1]; }
 
 //============================================================================//
 /// Switch
@@ -390,6 +415,16 @@ std::size_t Switch::getCaseSize() const {
   return this->getStorage()->getJumpArgSize() - 1;
 }
 
+Value Switch::Adaptor::getValue() const { return operands[0]; }
+Value Switch::Adaptor::getCaseValue(std::size_t idx) const {
+  return operands[idx + 1];
+}
+JumpArgState Switch::Adaptor::getCaseJumpArg(std::size_t idx) const {
+  return jumpArgs[idx + 1];
+}
+JumpArgState Switch::Adaptor::getDefaultCase() const { return jumpArgs[0]; }
+std::size_t Switch::Adaptor::getCaseSize() const { return jumpArgs.size() - 1; }
+
 //============================================================================//
 /// Return
 //============================================================================//
@@ -425,6 +460,12 @@ Value Return::getValue(std::size_t idx) const {
 llvm::ArrayRef<Operand> Return::getValues() const {
   return this->getStorage()->getOperands();
 }
+
+Value Return::Adaptor::getValue(std::size_t idx) const {
+  assert(idx < getValueSize() && "Index out of bounds for return value");
+  return operands[idx];
+}
+llvm::ArrayRef<Value> Return::Adaptor::getValues() const { return operands; }
 
 //============================================================================//
 /// Unreachable
@@ -665,5 +706,28 @@ void Unresolved::printer(Unresolved op, IRPrintContext &context) {
   auto rid = context.getId(op);
   context.getOS() << rid.toString() << ":" << op.getType() << " = unresolved";
 }
+
+//============================================================================//
+/// Outline constant
+//============================================================================//
+
+void OutlineConstant::build(IRBuilder &builder, InstructionState &state,
+                            Value value) {
+  assert(value.getDefiningInst<Constant>() && "Requiring constant operand");
+  state.pushType(value.getType());
+  state.pushOperand(value);
+}
+
+Value OutlineConstant::getConstant() const {
+  return getStorage()->getOperand(0);
+}
+
+void OutlineConstant::printer(OutlineConstant op, IRPrintContext &context) {
+  op.printAsOperand(context, true);
+  context.getOS() << " = outline ";
+  op.getConstant().printAsOperand(context);
+}
+
+Value OutlineConstant::Adaptor::getConstant() const { return operands[0]; }
 
 } // namespace kecc::ir::inst

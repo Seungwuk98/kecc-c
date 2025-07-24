@@ -32,6 +32,10 @@ public:
   bool operator==(const Instruction &other) const { return impl == other.impl; }
   bool operator!=(const Instruction &other) const { return impl != other.impl; }
   operator bool() const { return impl != nullptr; }
+  InstructionStorage *operator->() const {
+    assert(impl && "InstructionStorage is null");
+    return impl;
+  }
 
   template <typename... U> bool isa() const { return llvm::isa<U...>(*this); }
   template <typename U> U cast() const { return llvm::cast<U>(*this); }
@@ -53,8 +57,10 @@ public:
   void dump() const;
 
   template <typename Interface> bool implementInterface() const;
+  bool implementInterface(TypeID interfaceId) const;
 
   template <template <typename> typename Trait> bool hasTrait() const;
+  bool hasTrait(TypeID traitId) const;
 
   Block *getParentBlock() const;
 
@@ -88,6 +94,7 @@ public:
   void setArgs(llvm::ArrayRef<Value> newArgs) {
     args.assign(newArgs.begin(), newArgs.end());
   }
+  void setArg(std::size_t index, Value arg) { args[index] = arg; }
   void pushArg(Value arg) { args.emplace_back(arg); }
 
 private:
@@ -168,6 +175,9 @@ public:
   WalkResult walk(llvm::function_ref<WalkResult(const Operand &)> callback);
 
   AbstractInstruction *getAbstractInstruction() const { return abstractInst; }
+  void setAbstractInstruction(AbstractInstruction *abstractInst) {
+    this->abstractInst = abstractInst;
+  }
 
   template <typename Inst> Inst getDefiningInst();
 
@@ -176,24 +186,34 @@ public:
   void replaceOperand(Value oldV, Value newV);
   Block *getParentBlock() const { return parentBlock; }
 
+  void setRange(llvm::SMRange range) { this->range = range; }
   void setAttribute(std::size_t index, Attribute attr);
+  void setAttributes(llvm::ArrayRef<Attribute> attrs);
   void setOperand(std::size_t index, Value operand);
+  void setOperands(llvm::ArrayRef<Value> operands);
   void setJumpArg(std::size_t index, JumpArgState jumpArg);
+  void setJumpArgs(llvm::ArrayRef<JumpArgState> jumpArgs);
   void setParentBlock(Block *block) { parentBlock = block; }
 
   IRContext *getContext() const;
 
   void dropReferences();
 
+  template <typename Interface> bool implementInterface() const {
+    return implementInterface(TypeID::get<Interface>());
+  }
+  bool implementInterface(TypeID interfaceId) const;
+
+  template <template <typename> typename Trait> bool hasTrait() const {
+    return hasTrait(TypeID::get<Trait>());
+  }
+  bool hasTrait(TypeID traitId) const;
+
 private:
   friend class IRBuilder;
   InstructionStorage(std::uint8_t resultSize, std::size_t operandSize,
                      std::size_t attributeSize, std::size_t jumpArgSize,
                      llvm::SMRange range, Block *parentBlock);
-
-  void setAbstractInstruction(AbstractInstruction *abstractInst) {
-    this->abstractInst = abstractInst;
-  }
 
   ValueImpl *getResultMemory(std::uint8_t valueNumber);
 

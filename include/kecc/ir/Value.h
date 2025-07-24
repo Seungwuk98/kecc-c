@@ -79,6 +79,8 @@ public:
 
   llvm::StringRef getValueName() const { return impl->getValueName(); }
 
+  bool isConstant() const;
+
 protected:
   ValueImpl *impl;
 };

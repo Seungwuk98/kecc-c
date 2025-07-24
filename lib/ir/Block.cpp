@@ -130,4 +130,11 @@ ir::IR *Block::getParentIR() const {
   return getParentFunction()->getParentIR();
 }
 
+void Block::dropReferences() {
+  walk([&](InstructionStorage *inst) -> WalkResult {
+    inst->dropReferences();
+    return WalkResult::advance();
+  });
+}
+
 } // namespace kecc::ir
