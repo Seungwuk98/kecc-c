@@ -56,6 +56,8 @@ public:
 
   IRContext *getContext() const;
 
+  void updatePredsAndSuccs();
+
 private:
   Module(std::unique_ptr<IR> ir) : ir(std::move(ir)) {}
 

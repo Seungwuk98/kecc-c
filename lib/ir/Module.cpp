@@ -20,23 +20,28 @@ const llvm::DenseSet<Block *> &Module::getPredecessors(Block *block) const {
 std::unique_ptr<Module> Module::create(std::unique_ptr<IR> ir) {
   auto module = std::unique_ptr<Module>(new Module(std::move(ir)));
 
+  module->updatePredsAndSuccs();
+  return module;
+}
+
+void Module::updatePredsAndSuccs() {
+  predecessors.clear();
+  successors.clear();
   // Initialize users, predecessors, and successors
-  for (const auto function : *module->ir) {
+  for (const auto function : *ir) {
     for (const auto block : *function) {
-      module->predecessors.try_emplace(block, llvm::DenseSet<Block *>());
-      module->successors.try_emplace(block, llvm::DenseSet<Block *>());
+      predecessors.try_emplace(block, llvm::DenseSet<Block *>());
+      successors.try_emplace(block, llvm::DenseSet<Block *>());
 
       auto exit = block->getExit();
       exit.walk([&](JumpArg *arg) -> WalkResult {
         auto succ = arg->getBlock();
-        module->successors[block].insert(succ);
-        module->predecessors[succ].insert(block);
+        successors[block].insert(succ);
+        predecessors[succ].insert(block);
         return WalkResult::advance();
       });
     }
   }
-
-  return module;
 }
 
 void Module::replaceInst(InstructionStorage *oldInst,

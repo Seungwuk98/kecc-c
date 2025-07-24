@@ -222,6 +222,8 @@ void IRRewriter::applyRewrite() {
       block->getParentFunction()->eraseBlock(block->getId());
     }
   }
+
+  module->updatePredsAndSuccs();
 }
 
 std::pair<llvm::SmallVector<Value>, llvm::SmallVector<JumpArgState>>
@@ -347,7 +349,7 @@ utils::LogicalResult applyPatternConversion(Module *module,
   if (result.isError()) {
     rewriter.discardRewrite();
     return result;
-  } // failed
+  }
   rewriter.applyRewrite();
   return utils::LogicalResult::success();
 }
