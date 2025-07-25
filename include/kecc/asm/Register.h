@@ -2,6 +2,7 @@
 #define KECC_ASM_REGISTER_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include <string>
 
@@ -104,7 +105,12 @@ public:
   bool isInteger() const;
   bool isFloatingPoint() const;
 
+  friend inline llvm::hash_code hash_value(const Register &reg) {
+    return llvm::DenseMapInfo<RegisterImpl *>::getHashValue(reg.impl);
+  }
+
 private:
+  friend class llvm::DenseMapInfo<Register>;
   Register(RegisterImpl *impl) : impl(impl) {}
 
   RegisterImpl *impl;
@@ -118,5 +124,28 @@ llvm::ArrayRef<Register> getFpArgRegisters();
 llvm::ArrayRef<Register> getFpSavedRegisters();
 
 } // namespace kecc::as
+
+namespace llvm {
+
+template <> struct DenseMapInfo<kecc::as::Register> {
+  static kecc::as::Register getEmptyKey() {
+    return llvm::DenseMapInfo<kecc::as::RegisterImpl *>::getEmptyKey();
+  }
+
+  static kecc::as::Register getTombstoneKey() {
+    return llvm::DenseMapInfo<kecc::as::RegisterImpl *>::getTombstoneKey();
+  }
+
+  static unsigned getHashValue(const kecc::as::Register &reg) {
+    return hash_value(reg);
+  }
+
+  static bool isEqual(const kecc::as::Register &LHS,
+                      const kecc::as::Register &RHS) {
+    return LHS == RHS;
+  }
+};
+
+} // namespace llvm
 
 #endif // KECC_ASM_REGISTER_H
