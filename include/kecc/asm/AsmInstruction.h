@@ -4,11 +4,31 @@
 #include "kecc/asm/Asm.h"
 #include "kecc/asm/Register.h"
 #include "kecc/utils/MLIR.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/TrailingObjects.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace kecc::as {
 
-class Immediate {
+template <typename T> struct PointerCastBase {
+  template <typename... Us> bool isa() const {
+    return llvm::isa<Us...>(derived());
+  }
+  template <typename U> U *cast() { return llvm::cast<U>(derived()); }
+  template <typename U> const U *cast() const {
+    return llvm::cast<U>(derived());
+  }
+  template <typename U> U *dyn_cast() { return llvm::dyn_cast<U>(derived()); }
+  template <typename U> const U *dyn_cast() const {
+    return llvm::dyn_cast<U>(derived());
+  }
+
+private:
+  T *derived() { return static_cast<T *>(this); }
+  const T *derived() const { return static_cast<const T *>(this); }
+};
+
+class Immediate : public PointerCastBase<Immediate> {
 public:
   virtual ~Immediate() = default;
   enum class Kind {
@@ -19,6 +39,7 @@ public:
   Kind getKind() const { return kind; }
 
   virtual void print(llvm::raw_ostream &os) const = 0;
+  std::string toString() const;
 
 protected:
   Immediate(Kind kind) : kind(kind) {}
@@ -27,7 +48,7 @@ private:
   Kind kind;
 };
 
-class ValueImmediate : public Immediate {
+class ValueImmediate final : public Immediate {
 public:
   ValueImmediate(std::size_t value) : Immediate(Kind::Value), value(value) {}
 
@@ -43,7 +64,7 @@ private:
   std::size_t value;
 };
 
-class RelocationImmediate : public Immediate {
+class RelocationImmediate final : public Immediate {
 public:
   enum class RelocationFunction {
     Hi20,
@@ -80,16 +101,56 @@ public:
     DoublePrecision,
   };
 
+  DataSize(Kind kind) : kind(kind) {}
+
+  static DataSize byte() { return DataSize(Kind::Byte); }
+  static DataSize half() { return DataSize(Kind::Half); }
+  static DataSize word() { return DataSize(Kind::Word); }
+  static DataSize doubleWord() { return DataSize(Kind::Double); }
+  static DataSize singlePrecision() { return DataSize(Kind::SinglePrecision); }
+  static DataSize doublePrecision() { return DataSize(Kind::DoublePrecision); }
+
+  std::string toString() const {
+    switch (kind) {
+    case Kind::Byte:
+      return "b";
+    case Kind::Half:
+      return "h";
+    case Kind::Word:
+      return "w";
+    case Kind::Double:
+      return "d";
+    case Kind::SinglePrecision:
+      return "s";
+    case Kind::DoublePrecision:
+      return "d";
+    }
+  }
+
+  bool isByte() const { return kind == Kind::Byte; }
+  bool isHalf() const { return kind == Kind::Half; }
+  bool isWord() const { return kind == Kind::Word; }
+  bool isDouble() const { return kind == Kind::Double; }
+  bool isSinglePrecision() const { return kind == Kind::SinglePrecision; }
+  bool isDoublePrecision() const { return kind == Kind::DoublePrecision; }
+  bool isFloat() const {
+    return kind == Kind::SinglePrecision || kind == Kind::DoublePrecision;
+  }
+  bool isInt() const {
+    return kind == Kind::Byte || kind == Kind::Half || kind == Kind::Word ||
+           kind == Kind::Double;
+  }
+
 private:
   Kind kind;
 };
 
-class Instruction {
+class Instruction : public PointerCastBase<Instruction> {
 public:
   virtual ~Instruction() = default;
   TypeID getId() const { return typeId; }
 
-  virtual void print(llvm::raw_ostream &os) const;
+  virtual void print(llvm::raw_ostream &os) const = 0;
 
 protected:
   Instruction(TypeID id) : typeId(id) {}
@@ -120,6 +181,10 @@ public:
 
   static bool classof(const Instruction *inst);
 
+  void print(llvm::raw_ostream &os) const override final;
+
+  virtual std::string toString() const = 0;
+
 protected:
   RType(TypeID id, Register rd, Register rs1, std::optional<Register> rs2)
       : Instruction(id), rd(rd), rs1(rs1), rs2(rs2) {}
@@ -132,9 +197,11 @@ private:
 
 namespace rtype {
 
-class Add : public InstructionTemplate<Add, RType> {
+class Add final : public InstructionTemplate<Add, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -143,9 +210,11 @@ private:
   DataSize dataSize;
 };
 
-class Sub : public InstructionTemplate<Sub, RType> {
+class Sub final : public InstructionTemplate<Sub, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -154,9 +223,11 @@ private:
   DataSize dataSize;
 };
 
-class Sll : public InstructionTemplate<Sll, RType> {
+class Sll final : public InstructionTemplate<Sll, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -165,9 +236,11 @@ private:
   DataSize dataSize;
 };
 
-class Srl : public InstructionTemplate<Srl, RType> {
+class Srl final : public InstructionTemplate<Srl, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -176,9 +249,11 @@ private:
   DataSize dataSize;
 };
 
-class Sra : public InstructionTemplate<Sra, RType> {
+class Sra final : public InstructionTemplate<Sra, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -187,9 +262,11 @@ private:
   DataSize dataSize;
 };
 
-class Mul : public InstructionTemplate<Mul, RType> {
+class Mul final : public InstructionTemplate<Mul, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -198,10 +275,11 @@ private:
   DataSize dataSize;
 };
 
-class Div : public InstructionTemplate<Div, RType> {
+class Div final : public InstructionTemplate<Div, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
   bool isSigned() const { return isSignedV; }
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -211,10 +289,12 @@ private:
   bool isSignedV;
 };
 
-class Rem : public InstructionTemplate<Rem, RType> {
+class Rem final : public InstructionTemplate<Rem, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
   bool isSigned() const { return isSignedV; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -224,9 +304,11 @@ private:
   bool isSignedV;
 };
 
-class Slt : public InstructionTemplate<Slt, RType> {
+class Slt final : public InstructionTemplate<Slt, RType> {
 public:
   bool isSigned() const { return isSignedV; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -234,30 +316,38 @@ private:
   bool isSignedV;
 };
 
-class Xor : public InstructionTemplate<Xor, RType> {
+class Xor final : public InstructionTemplate<Xor, RType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   Xor(Register rd, Register rs1, std::optional<Register> rs2);
 };
 
-class Or : public InstructionTemplate<Or, RType> {
+class Or final : public InstructionTemplate<Or, RType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   Or(Register rd, Register rs1, std::optional<Register> rs2);
 };
 
-class And : public InstructionTemplate<And, RType> {
+class And final : public InstructionTemplate<And, RType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   And(Register rd, Register rs1, std::optional<Register> rs2);
 };
 
-class Fadd : public InstructionTemplate<Fadd, RType> {
+class Fadd final : public InstructionTemplate<Fadd, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -266,9 +356,11 @@ private:
   DataSize dataSize;
 };
 
-class Fsub : public InstructionTemplate<Fsub, RType> {
+class Fsub final : public InstructionTemplate<Fsub, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -277,9 +369,11 @@ private:
   DataSize dataSize;
 };
 
-class Fmul : public InstructionTemplate<Fmul, RType> {
+class Fmul final : public InstructionTemplate<Fmul, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -288,9 +382,11 @@ private:
   DataSize dataSize;
 };
 
-class Fdiv : public InstructionTemplate<Fdiv, RType> {
+class Fdiv final : public InstructionTemplate<Fdiv, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -299,9 +395,11 @@ private:
   DataSize dataSize;
 };
 
-class Feq : public InstructionTemplate<Feq, RType> {
+class Feq final : public InstructionTemplate<Feq, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -310,9 +408,11 @@ private:
   DataSize dataSize;
 };
 
-class Flt : public InstructionTemplate<Flt, RType> {
+class Flt final : public InstructionTemplate<Flt, RType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -321,9 +421,11 @@ private:
   DataSize dataSize;
 };
 
-class FmvIntToFloat : public InstructionTemplate<FmvIntToFloat, RType> {
+class FmvIntToFloat final : public InstructionTemplate<FmvIntToFloat, RType> {
 public:
   DataSize getFloatDataSize() const { return floatDataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -332,9 +434,11 @@ private:
   DataSize floatDataSize;
 };
 
-class FmvFloatToInt : public InstructionTemplate<FmvFloatToInt, RType> {
+class FmvFloatToInt final : public InstructionTemplate<FmvFloatToInt, RType> {
 public:
   DataSize getFloatDataSize() const { return floatDataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -343,11 +447,13 @@ private:
   DataSize floatDataSize;
 };
 
-class FcvtIntToFloat : public InstructionTemplate<FcvtIntToFloat, RType> {
+class FcvtIntToFloat final : public InstructionTemplate<FcvtIntToFloat, RType> {
 public:
   DataSize getIntDataSize() const { return intDataSize; }
   DataSize getFloatDataSize() const { return floatDataSize; }
   bool isSigned() const { return isSignedV; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -358,11 +464,13 @@ private:
   bool isSignedV;
 };
 
-class FcvtFloatToInt : public InstructionTemplate<FcvtFloatToInt, RType> {
+class FcvtFloatToInt final : public InstructionTemplate<FcvtFloatToInt, RType> {
 public:
   DataSize getIntDataSize() const { return intDataSize; }
   DataSize getFloatDataSize() const { return floatDataSize; }
   bool isSigned() const { return isSignedV; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -373,10 +481,13 @@ private:
   bool isSignedV;
 };
 
-class FcvtFloatToFloat : public InstructionTemplate<FcvtFloatToFloat, RType> {
+class FcvtFloatToFloat final
+    : public InstructionTemplate<FcvtFloatToFloat, RType> {
 public:
   DataSize getFromDataSize() const { return from; }
   DataSize getToDataSize() const { return to; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -397,6 +508,10 @@ public:
 
   static bool classof(const Instruction *inst);
 
+  void print(llvm::raw_ostream &os) const override final;
+
+  virtual std::string toString() const = 0;
+
 protected:
   IType(TypeID id, Register rd, Register rs1, Immediate *imm)
       : Instruction(id), rd(rd), rs1(rs1), imm(imm) {}
@@ -409,10 +524,12 @@ private:
 
 namespace itype {
 
-class Load : public InstructionTemplate<Load, IType> {
+class Load final : public InstructionTemplate<Load, IType> {
 public:
   DataSize getDataSize() const { return dataSize; }
   bool isSigned() const { return isSignedV; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -422,9 +539,11 @@ private:
   bool isSignedV;
 };
 
-class Addi : public InstructionTemplate<Addi, IType> {
+class Addi final : public InstructionTemplate<Addi, IType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -432,30 +551,38 @@ private:
   DataSize dataSize;
 };
 
-class Xori : public InstructionTemplate<Xori, IType> {
+class Xori final : public InstructionTemplate<Xori, IType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   using Base::Base;
 };
 
-class Ori : public InstructionTemplate<Ori, IType> {
+class Ori final : public InstructionTemplate<Ori, IType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   using Base::Base;
 };
 
-class Andi : public InstructionTemplate<Andi, IType> {
+class Andi final : public InstructionTemplate<Andi, IType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   using Base::Base;
 };
 
-class Slli : public InstructionTemplate<Slli, IType> {
+class Slli final : public InstructionTemplate<Slli, IType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -463,9 +590,11 @@ private:
   DataSize dataSize;
 };
 
-class Srli : public InstructionTemplate<Srli, IType> {
+class Srli final : public InstructionTemplate<Srli, IType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -473,9 +602,11 @@ private:
   DataSize dataSize;
 };
 
-class Srai : public InstructionTemplate<Srai, IType> {
+class Srai final : public InstructionTemplate<Srai, IType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -483,9 +614,11 @@ private:
   DataSize dataSize;
 };
 
-class Slti : public InstructionTemplate<Slti, IType> {
+class Slti final : public InstructionTemplate<Slti, IType> {
 public:
   bool isSigned() const { return isSignedV; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -504,6 +637,10 @@ public:
 
   static bool classof(const Instruction *inst);
 
+  void print(llvm::raw_ostream &os) const override final;
+
+  virtual std::string toString() const = 0;
+
 protected:
   SType(TypeID id, Register rs1, Register rs2, Immediate *imm)
       : Instruction(id), rs1(rs1), rs2(rs2), imm(imm) {}
@@ -515,9 +652,11 @@ private:
 };
 
 namespace stype {
-class Store : public InstructionTemplate<Store, SType> {
+class Store final : public InstructionTemplate<Store, SType> {
 public:
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -528,56 +667,66 @@ private:
 
 class BType : public Instruction {
 public:
-  ~BType();
   Register getRs1() const { return rs1; }
   Register getRs2() const { return rs2; }
-  Immediate *getImm() const { return imm; }
+  llvm::StringRef getImm() const { return imm; }
 
   static bool classof(const Instruction *inst);
 
+  void print(llvm::raw_ostream &os) const override final;
+
+  virtual std::string toString() const = 0;
+
 protected:
-  BType(TypeID id, Register rs1, Register rs2, Immediate *imm)
+  BType(TypeID id, Register rs1, Register rs2, llvm::StringRef imm)
       : Instruction(id), rs1(rs1), rs2(rs2), imm(imm) {}
 
 private:
   Register rs1;
   Register rs2;
-  Immediate *imm;
+  std::string imm;
 };
 
 namespace btype {
 
-class Beq : public InstructionTemplate<Beq, BType> {
+class Beq final : public InstructionTemplate<Beq, BType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   using Base::Base;
 };
 
-class Bne : public InstructionTemplate<Bne, BType> {
+class Bne final : public InstructionTemplate<Bne, BType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   using Base::Base;
 };
 
-class Blt : public InstructionTemplate<Blt, BType> {
+class Blt final : public InstructionTemplate<Blt, BType> {
 public:
   bool isSigned() const { return isSignedV; }
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
-  Blt(Register rs1, Register rs2, Immediate *imm, bool isSigned);
+  Blt(Register rs1, Register rs2, llvm::StringRef imm, bool isSigned);
   bool isSignedV;
 };
 
-class Bge : public InstructionTemplate<Bge, BType> {
+class Bge final : public InstructionTemplate<Bge, BType> {
 public:
   bool isSigned() const { return isSignedV; }
 
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
-  Bge(Register rs1, Register rs2, Immediate *imm, bool isSigned);
+  Bge(Register rs1, Register rs2, llvm::StringRef imm, bool isSigned);
   bool isSignedV;
 };
 
@@ -591,6 +740,10 @@ public:
   Register getRd() const { return rd; }
   Immediate *getImm() const { return imm; }
 
+  void print(llvm::raw_ostream &os) const override final;
+
+  virtual std::string toString() const = 0;
+
 protected:
   UType(TypeID id, Register rd, Immediate *imm)
       : Instruction(id), rd(rd), imm(imm) {}
@@ -601,8 +754,10 @@ private:
 };
 
 namespace utype {
-class Lui : public InstructionTemplate<Lui, UType> {
+class Lui final : public InstructionTemplate<Lui, UType> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   using Base::Base;
@@ -613,29 +768,37 @@ class Pseudo : public Instruction {
 public:
   static bool classof(const Instruction *inst);
 
+  void print(llvm::raw_ostream &os) const override final;
+
+  virtual std::string toString() const = 0;
+
 protected:
   using Instruction::Instruction;
 };
 
 namespace pseudo {
 
-class La : public InstructionTemplate<La, Pseudo> {
+class La final : public InstructionTemplate<La, Pseudo> {
 public:
   ~La();
   Register getRd() const { return rd; }
-  Immediate *getImm() const { return imm; }
+  llvm::StringRef getSymbol() const { return symbol; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
-  La(Register rd, Immediate *imm);
+  La(Register rd, llvm::StringRef symbol);
   Register rd;
-  Immediate *imm;
+  std::string symbol;
 };
 
-class Li : public InstructionTemplate<Li, Pseudo> {
+class Li final : public InstructionTemplate<Li, Pseudo> {
 public:
   Register getRd() const { return rd; }
   std::size_t getImm() const { return imm; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -644,10 +807,12 @@ private:
   std::size_t imm;
 };
 
-class Mv : public InstructionTemplate<Mv, Pseudo> {
+class Mv final : public InstructionTemplate<Mv, Pseudo> {
 public:
   Register getRd() const { return rd; }
   Register getRs() const { return rs; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -656,11 +821,13 @@ private:
   Register rs;
 };
 
-class Fmv : public InstructionTemplate<Fmv, Pseudo> {
+class Fmv final : public InstructionTemplate<Fmv, Pseudo> {
 public:
   Register getRd() const { return rd; }
   Register getRs() const { return rs; }
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -670,11 +837,13 @@ private:
   Register rs;
 };
 
-class Neg : public InstructionTemplate<Neg, Pseudo> {
+class Neg final : public InstructionTemplate<Neg, Pseudo> {
 public:
   Register getRd() const { return rd; }
   Register getRs() const { return rs; }
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -684,10 +853,12 @@ private:
   Register rs;
 };
 
-class SextW : public InstructionTemplate<SextW, Pseudo> {
+class SextW final : public InstructionTemplate<SextW, Pseudo> {
 public:
   Register getRd() const { return rd; }
   Register getRs() const { return rs; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -696,10 +867,12 @@ private:
   Register rs;
 };
 
-class Seqz : public InstructionTemplate<Seqz, Pseudo> {
+class Seqz final : public InstructionTemplate<Seqz, Pseudo> {
 public:
   Register getRd() const { return rd; }
   Register getRs() const { return rs; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -708,10 +881,12 @@ private:
   Register rs;
 };
 
-class Snez : public InstructionTemplate<Snez, Pseudo> {
+class Snez final : public InstructionTemplate<Snez, Pseudo> {
 public:
   Register getRd() const { return rd; }
   Register getRs() const { return rs; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -720,11 +895,13 @@ private:
   Register rs;
 };
 
-class Fneg : public InstructionTemplate<Fneg, Pseudo> {
+class Fneg final : public InstructionTemplate<Fneg, Pseudo> {
 public:
   Register getRd() const { return rd; }
   Register getRs() const { return rs; }
   DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -734,9 +911,11 @@ private:
   Register rs;
 };
 
-class J : public InstructionTemplate<J, Pseudo> {
+class J final : public InstructionTemplate<J, Pseudo> {
 public:
   llvm::StringRef getLabel() const { return label; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -744,9 +923,11 @@ private:
   std::string label;
 };
 
-class Jr : public InstructionTemplate<Jr, Pseudo> {
+class Jr final : public InstructionTemplate<Jr, Pseudo> {
 public:
   Register getRs() const { return rs; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -754,9 +935,11 @@ private:
   Register rs;
 };
 
-class Jalr : public InstructionTemplate<Jalr, Pseudo> {
+class Jalr final : public InstructionTemplate<Jalr, Pseudo> {
 public:
   Register getRs() const { return rs; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;
@@ -764,16 +947,20 @@ private:
   Register rs;
 };
 
-class Ret : public InstructionTemplate<Ret, Pseudo> {
+class Ret final : public InstructionTemplate<Ret, Pseudo> {
 public:
+  std::string toString() const override;
+
 private:
   friend class ASMBuilder;
   using Base::Base;
 };
 
-class Call : public InstructionTemplate<Call, Pseudo> {
+class Call final : public InstructionTemplate<Call, Pseudo> {
 public:
   llvm::StringRef getLabel() const { return label; }
+
+  std::string toString() const override;
 
 private:
   friend class ASMBuilder;

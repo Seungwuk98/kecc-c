@@ -1,6 +1,7 @@
 add_library(KeccASM
   STATIC 
-  ASMInstruction.cpp
+  AsmInstruction.cpp
+  Register.cpp
 )
 
 target_link_libraries(KeccASM
