@@ -2,18 +2,10 @@
 #define KECC_ASM_H
 
 #include "kecc/utils/List.h"
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/raw_ostream.h"
 
 namespace kecc::as {
-
-constexpr size_t IndentSize = 2;
-
-inline void printIndent(llvm::raw_ostream &os, size_t indent) {
-  os << std::string(indent * IndentSize, ' ');
-}
 
 template <typename Declaration> class Section;
 class Block;
@@ -24,9 +16,6 @@ class Instruction;
 
 class Asm {
 public:
-  void print(llvm::raw_ostream &os) const;
-  ~Asm();
-
 private:
   llvm::SmallVector<Section<Function> *> functions;
   llvm::SmallVector<Section<Variable> *> variables;
@@ -34,16 +23,6 @@ private:
 
 template <typename Declaration> class Section {
 public:
-  Section(llvm::ArrayRef<Directive *> directives, Declaration *declaration)
-      : directives(directives.begin(), directives.end()),
-        declaration(declaration) {}
-  ~Section();
-
-  llvm::ArrayRef<Directive *> getDirectives() const { return directives; }
-  Declaration *getDeclaration() const { return declaration; }
-
-  void print(llvm::raw_ostream &os, size_t indent) const;
-
 private:
   llvm::SmallVector<Directive *> directives;
   Declaration *declaration;
@@ -51,27 +30,14 @@ private:
 
 class Function {
 public:
-  Function(llvm::ArrayRef<Block *> blocks)
-      : blocks(blocks.begin(), blocks.end()) {}
-  ~Function();
-
-  llvm::ArrayRef<Block *> getBlocks() const { return blocks; }
-  void print(llvm::raw_ostream &os, size_t indent) const;
-
 private:
   llvm::SmallVector<Block *> blocks;
 };
 
 class Variable {
 public:
-  Variable(llvm::StringRef label, llvm::ArrayRef<Directive *> directives)
-      : label(label.str()), directives(directives.begin(), directives.end()) {}
-
-  ~Variable();
-  void print(llvm::raw_ostream &os, size_t indent) const;
-
 private:
-  std::string label;
+  llvm::StringRef label;
   llvm::SmallVector<Directive *> directives;
 };
 
@@ -79,11 +45,8 @@ class Block : public utils::ListObject<Block, Instruction *> {
 public:
   using Node = utils::ListObject<Block, Instruction *>::Node;
 
-  llvm::StringRef getLabel() const { return label; }
-  void print(llvm::raw_ostream &os, size_t indent) const;
-
 private:
-  std::string label;
+  llvm::StringRef label;
 };
 
 class Directive {
@@ -204,45 +167,6 @@ public:
 private:
   std::uint32_t value;
 };
-
-class QuadDirective : public Directive {
-public:
-  QuadDirective(std::int64_t value) : Directive(Kind::Quad), value(value) {}
-
-  std::string toString() const override;
-  std::uint64_t getValue() const { return value; }
-
-private:
-  std::uint64_t value;
-};
-
-class ZeroDirective : public Directive {
-public:
-  ZeroDirective(std::size_t size) : Directive(Kind::Zero), size(size) {}
-
-  std::string toString() const override;
-
-  std::size_t getSize() const { return size; }
-
-private:
-  std::size_t size;
-};
-
-template <typename Declaration> Section<Declaration>::~Section() {
-  for (auto directive : directives) {
-    delete directive;
-  }
-  delete declaration;
-}
-
-template <typename Declaration>
-void Section<Declaration>::print(llvm::raw_ostream &os, size_t indent) const {
-  for (const auto *directive : directives) {
-    printIndent(os, indent + 1);
-    os << directive->toString() << '\n';
-  }
-  declaration->print(os, indent);
-}
 
 } // namespace kecc::as
 

@@ -61,6 +61,20 @@ DEFINE_KECC_TYPE_ID(kecc::as::pseudo::Call)
 
 namespace kecc::as {
 
+void ValueImmediate::print(llvm::raw_ostream &os) const { os << getValue(); }
+void RelocationImmediate::print(llvm::raw_ostream &os) const {
+  std::string func;
+  switch (relocation) {
+  case RelocationFunction::Hi20:
+    func = "%hi";
+    break;
+  case RelocationFunction::Lo12:
+    func = "%lo";
+    break;
+  }
+  os << std::format("{}({})", func, label);
+}
+
 bool RType::classof(const Instruction *inst) {
   return llvm::isa<rtype::Add, rtype::Sub, rtype::Sll, rtype::Srl, rtype::Sra,
                    rtype::Mul, rtype::Div, rtype::Rem, rtype::Slt, rtype::Xor,

@@ -1,6 +1,7 @@
 #ifndef KECC_UTILS_LIST_H
 #define KECC_UTILS_LIST_H
 
+#include <cassert>
 #include <iterator>
 #include <utility>
 namespace kecc::utils {

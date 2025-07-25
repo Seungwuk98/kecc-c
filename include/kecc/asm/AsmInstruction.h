@@ -3,9 +3,9 @@
 
 #include "kecc/asm/Asm.h"
 #include "kecc/asm/Register.h"
+#include "kecc/ir/Type.h"
 #include "kecc/utils/MLIR.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/TrailingObjects.h"
 #include "llvm/Support/raw_ostream.h"
 
 namespace kecc::as {
@@ -52,7 +52,7 @@ class ValueImmediate final : public Immediate {
 public:
   ValueImmediate(std::size_t value) : Immediate(Kind::Value), value(value) {}
 
-  std::size_t getValue() const { return value; }
+  std::int64_t getValue() const { return value; }
 
   static bool classof(const Immediate *imm) {
     return imm->getKind() == Kind::Value;
@@ -61,7 +61,7 @@ public:
   void print(llvm::raw_ostream &os) const override;
 
 private:
-  std::size_t value;
+  std::int64_t value;
 };
 
 class RelocationImmediate final : public Immediate {
@@ -140,6 +140,8 @@ public:
     return kind == Kind::Byte || kind == Kind::Half || kind == Kind::Word ||
            kind == Kind::Double;
   }
+
+  static DataSize tryFrom(ir::Type type);
 
 private:
   Kind kind;
