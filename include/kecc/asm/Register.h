@@ -140,9 +140,9 @@ template <> struct DenseMapInfo<kecc::as::Register> {
     return hash_value(reg);
   }
 
-  static bool isEqual(const kecc::as::Register &LHS,
-                      const kecc::as::Register &RHS) {
-    return LHS == RHS;
+  static bool isEqual(const kecc::as::Register &l,
+                      const kecc::as::Register &r) {
+    return l == r;
   }
 };
 

@@ -49,6 +49,8 @@ public:
 
   IRContext *getContext() const;
 
+  std::pair<size_t, size_t> getSizeAndAlign(const StructSizeMap &sizeMap) const;
+
 private:
   TypeImpl *impl;
 };
@@ -56,6 +58,8 @@ private:
 class AbstractType {
 public:
   using PrintFn = std::function<void(Type, llvm::raw_ostream &)>;
+  using GetBitSizeFn =
+      std::function<std::pair<size_t, size_t>(Type, const StructSizeMap &)>;
 
   TypeID getId() const { return id; }
   IRContext *getContext() const { return context; }
@@ -63,16 +67,20 @@ public:
 
   template <typename T> static AbstractType build(IRContext *context) {
     TypeID typeId = TypeID::get<T>();
-    return AbstractType(typeId, context, T::getPrintFn());
+    return AbstractType(typeId, context, T::getPrintFn(),
+                        T::getSizeAndAlignFn());
   }
 
 private:
-  AbstractType(TypeID id, IRContext *context, PrintFn printFn)
-      : id(id), context(context), printFn(std::move(printFn)) {}
+  AbstractType(TypeID id, IRContext *context, PrintFn printFn,
+               GetBitSizeFn getBitSizeFn)
+      : id(id), context(context), printFn(std::move(printFn)),
+        getBitSizeFn(std::move(getBitSizeFn)) {}
 
   TypeID id;
   IRContext *context;
   PrintFn printFn;
+  GetBitSizeFn getBitSizeFn;
 };
 
 class TypeImpl {
@@ -133,6 +141,10 @@ template <typename Range> static std::string typeRangeToString(Range &&range) {
   }
   return result;
 }
+
+std::tuple<size_t, size_t, llvm::SmallVector<size_t>>
+getTypeSizeAlignOffsets(llvm::ArrayRef<Type> fields,
+                        const StructSizeMap &sizeMap);
 
 } // namespace kecc::ir
 

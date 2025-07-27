@@ -3,8 +3,12 @@
 
 #include "kecc/ir/Context.h"
 #include "kecc/utils/MLIR.h"
+#include "llvm/ADT/SmallVector.h"
 
 namespace kecc::ir {
+using StructSizeMap =
+    llvm::DenseMap<llvm::StringRef,
+                   std::tuple<size_t, size_t, llvm::SmallVector<size_t>>>;
 
 template <typename T>
 concept HasVerify = requires(T) {
@@ -43,6 +47,13 @@ struct TypeAttrTemplate : public ParentType {
   static auto getPrintFn() {
     return [](BaseType obj, llvm::raw_ostream &os) {
       ConcreteType::printer(obj.template cast<ConcreteType>(), os);
+    };
+  }
+
+  static auto getSizeAndAlignFn() {
+    return [](BaseType obj, const StructSizeMap &sizeMap) {
+      return ConcreteType::calculateSizeAndAlign(
+          obj.template cast<ConcreteType>(), sizeMap);
     };
   }
 };

@@ -85,6 +85,21 @@ public:
   llvm::StringRef getPassName() const override { return "constant-fold"; }
 };
 
+class CanonicalizeStructImpl;
+class CanonicalizeStruct : public Pass {
+public:
+  CanonicalizeStruct();
+  ~CanonicalizeStruct();
+  void init(Module *module) override;
+  void exit(Module *module) override;
+  PassResult run(Module *module) override;
+
+  llvm::StringRef getPassName() const override { return "canonicalize-struct"; }
+
+private:
+  std::unique_ptr<CanonicalizeStructImpl> impl;
+};
+
 } // namespace kecc::ir
 
 #endif // KECC_IR_TRANSFORMATIONS_H

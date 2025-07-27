@@ -3,6 +3,8 @@
 
 #include "kecc/ir/Context.h"
 #include "kecc/ir/Type.h"
+#include "kecc/parser/Lexer.h"
+#include <cstddef>
 
 namespace kecc::ir {
 
@@ -20,6 +22,8 @@ public:
   using Base::Base;
   static IntT get(IRContext *context, int bitWidth, bool isSigned);
   static void printer(IntT type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(IntT type, const StructSizeMap &sizeMap);
 
   static IntT getBool(IRContext *context) { return get(context, 1, true); }
 
@@ -32,6 +36,8 @@ public:
   using Base::Base;
   static FloatT get(IRContext *context, int bitWidth);
   static void printer(FloatT type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(FloatT type, const StructSizeMap &sizeMap);
 
   int getBitWidth() const;
 };
@@ -41,6 +47,8 @@ public:
   using Base::Base;
   static NameStruct get(IRContext *context, llvm::StringRef name);
   static void printer(NameStruct type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(NameStruct type, const StructSizeMap &sizeMap);
 
   llvm::StringRef getName() const;
 };
@@ -50,6 +58,8 @@ public:
   using Base::Base;
   static UnitT get(IRContext *context);
   static void printer(UnitT type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t> calcuateSizeAndAlign(UnitT type,
+                                                        const StructSizeMap &);
 };
 
 class FunctionT : public Type::Base<FunctionT, Type, FunctionTImpl> {
@@ -58,6 +68,8 @@ public:
   static FunctionT get(IRContext *context, llvm::ArrayRef<Type> returnTypes,
                        llvm::ArrayRef<Type> argTypes);
   static void printer(FunctionT type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(FunctionT type, const StructSizeMap &sizeMap);
 
   llvm::ArrayRef<Type> getReturnTypes() const;
   llvm::ArrayRef<Type> getArgTypes() const;
@@ -69,6 +81,8 @@ public:
   static PointerT get(IRContext *context, Type pointeeType,
                       bool isConst = false);
   static void printer(PointerT type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(PointerT type, const StructSizeMap &sizeMap);
 
   Type getPointeeType() const;
   bool isConst() const;
@@ -78,8 +92,9 @@ class ArrayT : public Type::Base<ArrayT, Type, ArrayTImpl> {
 public:
   using Base::Base;
   static ArrayT get(IRContext *context, std::size_t size, Type elementType);
-
   static void printer(ArrayT type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(ArrayT type, const StructSizeMap &sizeMap);
   std::size_t getSize() const;
   Type getElementType() const;
 };
@@ -90,6 +105,8 @@ public:
   using Base::Base;
   static ConstQualifier get(IRContext *context, Type type);
   static void printer(ConstQualifier type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(ConstQualifier type, const StructSizeMap &sizeMap);
 
   Type getType() const;
 };
@@ -99,6 +116,8 @@ public:
   using Base::Base;
   static TupleT get(IRContext *context, llvm::ArrayRef<Type> elementTypes);
   static void printer(TupleT type, llvm::raw_ostream &os);
+  static std::pair<size_t, size_t>
+  calcuateSizeAndAlign(TupleT type, const StructSizeMap &sizeMap);
 
   llvm::ArrayRef<Type> getElementTypes() const;
 };

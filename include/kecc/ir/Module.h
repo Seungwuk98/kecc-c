@@ -9,6 +9,9 @@
 
 namespace kecc::ir {
 
+using StructFieldsMap =
+    llvm::DenseMap<llvm::StringRef, llvm::SmallVector<Type>>;
+
 class Module {
 public:
   static std::unique_ptr<Module> create(std::unique_ptr<IR> ir);
@@ -57,6 +60,8 @@ public:
   IRContext *getContext() const;
 
   void updatePredsAndSuccs();
+
+  std::pair<StructSizeMap, StructFieldsMap> calcStructSizeMap() const;
 
 private:
   Module(std::unique_ptr<IR> ir) : ir(std::move(ir)) {}

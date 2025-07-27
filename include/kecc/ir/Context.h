@@ -23,6 +23,8 @@ class AttributeImpl;
 class TypeImpl;
 class IRContext;
 
+constexpr size_t BITS_OF_BYTE = 8;
+
 template <typename T, typename... Args>
 concept DetectGetKey = requires(T obj, Args &&...args) {
   {
@@ -231,6 +233,11 @@ public:
            nullptr;
   }
 
+  void setArchitectureBitSize(size_t bitSize) {
+    architectrureBitSize = bitSize;
+  }
+  size_t getArchitectureBitSize() const { return architectrureBitSize; }
+
 private:
   template <typename T, typename AbstractTableTy> struct GetAbstractTable {
     static AbstractTableTy *allocateAndGet(IRContext *context) {
@@ -245,6 +252,7 @@ private:
   llvm::SourceMgr srcMgr;
   utils::DiagEngine diagEngine;
   std::vector<void *> allocations;
+  size_t architectrureBitSize = 64;
 };
 
 class RegisterId {
