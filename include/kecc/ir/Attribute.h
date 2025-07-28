@@ -100,10 +100,10 @@ public:
 
   bool isEqual(const KeyTy &otherKey) const { return key == otherKey; }
 
+  const KeyTy &getKeyValue() const { return key; }
+
 protected:
   AttributeImplTemplate(const KeyType &key) : key(key) {}
-
-  const KeyTy &getKeyValue() const { return key; }
 
 private:
   KeyType key;

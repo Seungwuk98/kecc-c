@@ -5,6 +5,7 @@
 #include "kecc/ir/PatternMatch.h"
 #include "kecc/ir/WalkSupport.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVectorExtras.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
 
@@ -153,6 +154,10 @@ private:
   Module *module;
   StructSizeMap sizeMap;
   StructFieldsMap fieldsMap;
+
+  llvm::DenseMap<Value, Value> replaceMap;
+  llvm::DenseMap<Function *, llvm::DenseMap<size_t, inst::LocalVariable>>
+      structValue2ArgMap;
 };
 
 void CanonicalizeStruct::init(Module *module) {
@@ -176,6 +181,9 @@ PassResult CanonicalizeStruct::run(Module *module) {
 }
 
 PassResult CanonicalizeStructImpl::run(Function *func) {
+  replaceMap.clear();
+  structValue2ArgMap.clear();
+
   IRBuilder builder(module->getContext());
   builder.setInsertionPoint(func->getAllocationBlock());
 
@@ -193,7 +201,7 @@ PassResult CanonicalizeStructImpl::run(Function *func) {
     for (Value value : results) {
       if (auto structT = value.getType().dyn_cast<NameStruct>()) {
         auto [size, align] = structT.getSizeAndAlign(sizeMap);
-        if (size <= 2)
+        if (size <= 16)
           smallStructs.emplace_back(value);
         else
           bigStructs.emplace_back(value);
@@ -220,6 +228,9 @@ PassResult CanonicalizeStructImpl::run(Function *func) {
 
 void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
                                                Value int64_2Ptr) {
+  assert(replaceMap.find(value) == replaceMap.end() &&
+         "Value must not be already replaced");
+
   auto inst = value.getInstruction();
   auto block = inst->getParentBlock();
   auto structName = value.getType().cast<NameStruct>().getName();
@@ -284,18 +295,21 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
 
     for (unsigned i = 0u, newi = 0u, e = call->getResultSize(); i < e;
          ++i, ++newi) {
+      auto oldValue = call.getResult(i);
       if (i == value.getImpl()->getValueNumber()) {
         auto newValue = newCall.getResult(newi);
-        newValue.getImpl()->setValueName(call.getResult(i).getValueName());
+        newValue.getImpl()->setValueName(oldValue.getValueName());
         newValues.emplace_back(newValue);
         if (size > 8) {
           newValue = newCall.getResult(++newi);
           newValues.emplace_back(newValue);
-          newValue.getImpl()->setValueName(call.getResult(i).getValueName());
+          newValue.getImpl()->setValueName(oldValue.getValueName());
         }
       } else {
         auto newValue = newCall.getResult(newi);
-        newValue.getImpl()->setValueName(call.getResult(i).getValueName());
+        newValue.getImpl()->setValueName(oldValue.getValueName());
+        oldValue.replaceWith(newValue);
+        replaceMap[oldValue] = newValue;
       }
     }
   } else if (auto load = inst->getDefiningInst<inst::Load>()) {
@@ -428,10 +442,32 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
           PointerT::get(module->getContext(), newFuncType));
       auto newCall =
           builder.create<inst::Call>(call.getRange(), newFunc, newArgs);
-      module->replaceInst(user, newCall.getStorage());
+
+      // update replace map
+      for (auto [from, to] :
+           llvm::zip(call->getResults(), newCall->getResults()))
+        replaceMap[from] = to;
+
+      module->replaceInst(user, newCall->getResults(), true);
     } else if (auto store = user->getDefiningInst<inst::Store>()) {
       storeValuesIntoPointer(store.getRange(), builder, newValues,
                              store.getPointer(), size, int64Ptr, int64_2Ptr);
+    } else if (auto ret = user->getDefiningInst<inst::Return>()) {
+      auto oldValues = ret.getValues();
+      llvm::SmallVector<Value> newRetValues;
+      newRetValues.reserve(oldValues.size() + (newValues.size() > 1));
+
+      for (unsigned i = 0u; i < oldValues.size(); ++i) {
+        if (oldValues[i] == value) {
+          newRetValues.emplace_back(newValues[0]);
+          if (newValues.size() > 1)
+            newRetValues.emplace_back(newValues[1]);
+        } else
+          newRetValues.emplace_back(oldValues[i]);
+      }
+
+      auto newRet = builder.create<inst::Return>(ret.getRange(), newRetValues);
+      module->replaceInst(user, newRet->getResults(), true);
     } else if (auto blockExit = user->getDefiningInst<BlockExit>()) {
       assert(llvm::all_of(blockExit->getOperands(),
                           [&](const Operand &op) { return op != value; }) &&
@@ -442,7 +478,7 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
       for (auto [idx, jumpArg] : llvm::enumerate(blockExit->getJumpArgs())) {
         JumpArgState jumpArgState = jumpArg->getAsState();
         JumpArgState newJumpArgState(jumpArgState.getBlock());
-        for (auto [argIdx, arg] : llvm::enumerate(jumpArgState.getArgs())) {
+        for (auto arg : jumpArgState.getArgs()) {
           if (arg == value) {
             newJumpArgState.pushArg(newValues[0]);
             if (newValues.size() > 1)
@@ -569,6 +605,256 @@ void CanonicalizeStructImpl::storeValuesIntoPointer(
   } else
     llvm_unreachable("Unexpected total value size for struct manipulation."
                      "Because total value size is always bigger than memory.");
+}
+
+void CanonicalizeStructImpl::processBigValue(Value value) {
+  assert(replaceMap.find(value) == replaceMap.end() &&
+         "Value must not be already replaced");
+  auto *inst = value.getInstruction();
+  auto structT = value.getType().cast<NameStruct>();
+
+  Value storedPointer;
+  if (auto phi = inst->getDefiningInst<Phi>()) {
+    IRBuilder builder(module->getContext());
+    builder.setInsertionPointAfterInst(inst);
+
+    auto phiT = phi.getType();
+    auto phiPointerT = PointerT::get(module->getContext(), phiT);
+
+    auto newPhi = builder.create<Phi>(phi.getRange(), phiPointerT);
+    newPhi.setValueName(phi.getValueName());
+
+    phi.getResult().replaceWith(newPhi);
+    storedPointer = newPhi;
+  } else if (auto call = inst->getDefiningInst<inst::Call>()) {
+    // Create new pointer and give it to the function
+    // The function must be changed to accept a pointer to the struct instead of
+    // the struct itself
+
+    llvm::SmallVector<Type> newReturnTypes;
+    newReturnTypes.reserve(call->getResultSize() - 1);
+
+#ifndef NDEBUG
+    /// Calling this function must be ordered.
+    ///
+    /// v0:struct X, v1:struct Y = call @func()
+    /// -> unit = call @func(struct Y*, struct X*)
+    bool found = false;
+    for (unsigned i = 0u; i < call->getResultSize(); ++i) {
+      if (call.getResult(i) == value) {
+        found = true;
+      } else {
+        newReturnTypes.emplace_back(call.getResult(i).getType());
+        if (!found && call.getResult(i).getType().isa<NameStruct>()) {
+          assert(call.getResult(i)
+                         .getType()
+                         .cast<NameStruct>()
+                         .getSizeAndAlign(sizeMap)
+                         .first <= 16 &&
+                 "Struct size must be le than 16 bytes for this operation");
+        }
+      }
+    }
+#else
+    for (unisgned i = 0u; i < call->getResultSize(); ++i) {
+      if (call.getResult(i) != value)
+        newReturnTypes.emplace_back(call.getResult(i).getType());
+    }
+#endif
+
+    IRBuilder builder(module->getContext());
+    // create temporary allocation
+    builder.setInsertionPoint(
+        inst->getParentBlock()->getParentFunction()->getAllocationBlock());
+    auto structValuePtr =
+        builder.create<inst::LocalVariable>({}, value.getType());
+
+    llvm::SmallVector<Value> newArgs;
+    newArgs.reserve(call.getArguments().size() + 1);
+    newArgs.emplace_back(structValuePtr);
+
+    newArgs.append(call.getArguments().begin(), call.getArguments().end());
+
+    const llvm::SmallVector<Type> newArgTypes =
+        llvm::map_to_vector(newArgs, [](Value v) { return v.getType(); });
+
+    auto newFuncT =
+        FunctionT::get(module->getContext(), newReturnTypes, newArgTypes);
+
+    builder.setInsertionPointBeforeInst(inst);
+    auto newFunc = builder.create<inst::TypeCast>(
+        call.getRange(), call.getFunction(),
+        PointerT::get(module->getContext(), newFuncT));
+
+    auto newCall =
+        builder.create<inst::Call>(call.getRange(), newFunc, newArgs);
+
+    // update replace map
+    for (auto [from, to] : llvm::zip(call->getResults(), newCall->getResults()))
+      replaceMap[from] = to;
+    module->replaceInst(inst, newCall->getResults(), false);
+    storedPointer = structValuePtr;
+  } else if (auto load = inst->getDefiningInst<inst::Load>()) {
+    // create new pointer to the struct value and memcpy
+    IRBuilder builder(module->getContext());
+    builder.setInsertionPoint(
+        inst->getParentBlock()->getParentFunction()->getAllocationBlock());
+
+    auto structValuePtr =
+        builder.create<inst::LocalVariable>({}, value.getType());
+
+    builder.setInsertionPointBeforeInst(inst);
+    auto memcpy = createMemCpy(load.getRange());
+    auto constMemSize =
+        createIntConstant(structT.getSizeAndAlign(sizeMap).first,
+                          IntT::get(module->getContext(), 64, true));
+
+    auto voidPtrT = getVoidPointerT();
+    auto voidStructPtr = builder.create<inst::TypeCast>(
+        load.getRange(), structValuePtr, voidPtrT);
+    auto pointer = load.getPointer();
+    if (pointer.getType() != voidPtrT)
+      pointer =
+          builder.create<inst::TypeCast>(load.getRange(), pointer, voidPtrT);
+    builder.create<inst::Call>(
+        load.getRange(), memcpy,
+        llvm::SmallVector<Value>{voidStructPtr, pointer, constMemSize});
+    storedPointer = structValuePtr;
+  } else {
+    llvm_unreachable("Unexpected instruction type for struct manipulation.");
+  }
+
+  llvm::SmallVector<InstructionStorage *> users;
+  for (Operand *operand : *value.getImpl()) {
+    auto user = operand->getOwner();
+    users.emplace_back(user);
+  }
+
+  for (InstructionStorage *user : users) {
+    if (auto store = user->getDefiningInst<inst::Store>()) {
+      // memcpy values into pointer
+
+      IRBuilder builder(module->getContext());
+      builder.setInsertionPointAfterInst(store.getStorage());
+      auto pointer = store.getPointer();
+
+      auto voidPtrT = getVoidPointerT();
+      if (pointer.getType() != voidPtrT)
+        pointer =
+            builder.create<inst::TypeCast>(store.getRange(), pointer, voidPtrT);
+
+      auto constMemSize =
+          createIntConstant(structT.getSizeAndAlign(sizeMap).first,
+                            IntT::get(module->getContext(), 64, true));
+
+      auto voidStoredPointer = builder.create<inst::TypeCast>(
+          store.getRange(), storedPointer, voidPtrT);
+      auto memcpy = createMemCpy(store.getRange());
+      builder.create<inst::Call>(
+          store.getRange(), memcpy,
+          llvm::SmallVector<Value>{pointer, voidStoredPointer, constMemSize});
+
+      module->removeInst(user);
+    } else if (auto call = user->getDefiningInst<inst::Call>()) {
+      // replace the argument to pointer
+      // The function must be changed to accept a pointer to the struct
+
+      llvm::SmallVector<Value> newArgs;
+      newArgs.reserve(call.getArguments().size());
+
+      for (unsigned i = 0u; i < call.getArguments().size(); ++i) {
+        if (call.getArguments()[i] == value) {
+          newArgs.emplace_back(storedPointer);
+        } else {
+          newArgs.emplace_back(call.getArguments()[i]);
+        }
+      }
+
+      llvm::SmallVector<Type> newTypes =
+          llvm::map_to_vector(newArgs, [](Value v) { return v.getType(); });
+
+      auto func = call.getFunction();
+      auto functionT =
+          func.getType().cast<PointerT>().getPointeeType().cast<FunctionT>();
+      auto returnTypes = functionT.getReturnTypes();
+      auto newFuncType =
+          FunctionT::get(module->getContext(), returnTypes, newTypes);
+
+      // cast function
+      IRBuilder builder(module->getContext());
+      builder.setInsertionPointBeforeInst(inst);
+
+      auto newFunc = builder.create<inst::TypeCast>(
+          call.getRange(), func,
+          PointerT::get(module->getContext(), newFuncType));
+      auto newCall =
+          builder.create<inst::Call>(call.getRange(), newFunc, newArgs);
+
+      // update replace map
+      for (auto [from, to] :
+           llvm::zip(call->getResults(), newCall->getResults()))
+        replaceMap[from] = to;
+
+      module->replaceInst(user, newCall->getResults(), true);
+    } else if (auto ret = user->getDefiningInst<inst::Return>()) {
+      // replace the return value to pointer
+      auto toStorePtr =
+          structValue2ArgMap[user->getParentBlock()->getParentFunction()]
+                            [value.getImpl()->getValueNumber()];
+      assert(toStorePtr &&
+             "Struct value must be mapped to a function argument");
+
+      IRBuilder builder(module->getContext());
+      builder.setInsertionPointBeforeInst(inst);
+
+      auto memcpy = createMemCpy(ret.getRange());
+      auto constMemSize =
+          createIntConstant(structT.getSizeAndAlign(sizeMap).first,
+                            IntT::get(module->getContext(), 64, true));
+      auto voidPtrT = getVoidPointerT();
+      auto voidStoredPointer = builder.create<inst::TypeCast>(
+          ret.getRange(), storedPointer, voidPtrT);
+      auto voidToStorePtr =
+          builder.create<inst::TypeCast>(ret.getRange(), toStorePtr, voidPtrT);
+
+      builder.create<inst::Call>(ret.getRange(), memcpy,
+                                 llvm::SmallVector<Value>{voidToStorePtr,
+                                                          voidStoredPointer,
+                                                          constMemSize});
+
+      llvm::SmallVector<Value> newRetValues;
+      newRetValues.reserve(ret.getValues().size() - 1);
+
+      for (unsigned i = 0u; i < ret.getValues().size(); ++i) {
+        if (ret.getValues()[i] != value)
+          newRetValues.emplace_back(ret.getValues()[i]);
+      }
+
+      builder.create<inst::Return>(ret.getRange(), newRetValues);
+      module->removeInst(user);
+    } else if (auto blockExit = user->getDefiningInst<BlockExit>()) {
+      // replace the jump argument to pointer
+      assert(llvm::all_of(blockExit->getOperands(),
+                          [&](const Operand &op) { return op != value; }) &&
+             "struct value cannont be operand of block exit");
+
+      // no need to use `Module::replaceExit` because we are not changing the
+      // relationship between blocks
+      for (auto [idx, jumpArg] : llvm::enumerate(blockExit->getJumpArgs())) {
+        JumpArgState jumpArgState = jumpArg->getAsState();
+        JumpArgState newJumpArgState(jumpArgState.getBlock());
+        for (auto arg : jumpArgState.getArgs()) {
+          if (arg == value)
+            newJumpArgState.pushArg(storedPointer);
+          else
+            newJumpArgState.pushArg(arg);
+        }
+        blockExit->setJumpArg(idx, newJumpArgState);
+      }
+    }
+  }
+
+  module->removeInst(inst);
 }
 
 } // namespace kecc::ir

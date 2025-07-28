@@ -1,6 +1,7 @@
 #ifndef KECC_IR_CONTEXT_H
 #define KECC_IR_CONTEXT_H
 
+#include "kecc/ir/TypeConcepts.h"
 #include "kecc/utils/Diag.h"
 #include "kecc/utils/MLIR.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -24,13 +25,6 @@ class TypeImpl;
 class IRContext;
 
 constexpr size_t BITS_OF_BYTE = 8;
-
-template <typename T, typename... Args>
-concept DetectGetKey = requires(T obj, Args &&...args) {
-  {
-    T::getKey(std::forward<Args>(args)...)
-  } -> std::convertible_to<typename T::KeyTy>;
-};
 
 class TypeStorage {
 private:

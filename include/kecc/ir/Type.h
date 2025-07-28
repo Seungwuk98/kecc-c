@@ -3,6 +3,7 @@
 
 #include "kecc/ir/Context.h"
 #include "kecc/ir/TypeAttributeSupport.h"
+#include "kecc/ir/WalkSupport.h"
 #include "kecc/utils/MLIR.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
@@ -50,6 +51,11 @@ public:
   IRContext *getContext() const;
 
   std::pair<size_t, size_t> getSizeAndAlign(const StructSizeMap &sizeMap) const;
+
+  WalkResult walk(const llvm::function_ref<WalkResult(Type)> callback) const;
+  Type replace(const llvm::function_ref<Type(Type)> replaceFn) const;
+  void walkSubElements(const llvm::function_ref<void(Type)> callback) const;
+  Type replaceSubElements(llvm::ArrayRef<Type> replaced) const;
 
 private:
   TypeImpl *impl;

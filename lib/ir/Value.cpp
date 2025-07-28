@@ -47,8 +47,6 @@ void Value::replaceWith(Value newValue) {
   if (*this == newValue) {
     return; // No need to replace with itself
   }
-  assert(newValue.getType() == getType() &&
-         "Cannot replace value with different type");
 
   llvm::DenseSet<InstructionStorage *> userInsts;
   for (Operand *user : *getImpl()) {
