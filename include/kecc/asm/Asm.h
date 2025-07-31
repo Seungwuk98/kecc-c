@@ -82,6 +82,46 @@ public:
   llvm::StringRef getLabel() const { return label; }
   void print(llvm::raw_ostream &os, size_t indent) const;
 
+  class InsertionPoint {
+  public:
+    InsertionPoint() : block(nullptr), it(nullptr) {};
+    InsertionPoint(Block *block, Iterator it) : block(block), it(it) {}
+
+    InsertionPoint insertNext(Instruction *inst) {
+      assert(it.getNode()->next && "Cannot insert after the tail of list");
+      Node *newNode = it.getNode()->insertNext(inst);
+      return InsertionPoint(block, Iterator(newNode));
+    }
+
+    Block *getBlock() const { return block; }
+    Iterator getIterator() const { return it; }
+
+    bool isValid() const { return block != nullptr && it.getNode() != nullptr; }
+
+    InsertionPoint &operator++() {
+      it++;
+      return *this;
+    }
+    InsertionPoint operator++(int) {
+      InsertionPoint temp = *this;
+      ++(*this);
+      return temp;
+    }
+    InsertionPoint &operator--() {
+      it--;
+      return *this;
+    }
+    InsertionPoint operator--(int) {
+      InsertionPoint temp = *this;
+      --(*this);
+      return temp;
+    }
+
+  private:
+    Block *block;
+    Iterator it;
+  };
+
 private:
   std::string label;
 };

@@ -8,11 +8,36 @@
 
 namespace kecc::as {
 
+enum class ABIKind {
+  Zero,
+  Ra,
+  Sp,
+  Gp,
+  Tp,
+  Temp,
+  Saved,
+  Arg,
+};
+
+enum class Mnemonic {
+  x,
+  f,
+};
+
+enum class RegisterType {
+  Integer,
+  FloatingPoint,
+};
+
+enum class CallingConvension {
+  None,
+  CallerSave,
+  CalleeSave,
+};
+
 class RegisterImpl;
 class Register {
 public:
-  enum class Type { Integer, FloatingPoint };
-
   std::string toString() const;
 
   static Register zero();
@@ -85,13 +110,13 @@ public:
   static Register fa6();
   static Register fa7();
 
-  static Register temp(Type type, size_t index);
-  static Register arg(Type type, size_t index);
-  static Register saved(Type type, size_t index);
+  static Register temp(RegisterType type, size_t index);
+  static Register arg(RegisterType type, size_t index);
+  static Register saved(RegisterType type, size_t index);
 
-  std::optional<std::pair<Type, size_t>> getTemp() const;
-  std::optional<std::pair<Type, size_t>> getArg() const;
-  std::optional<std::pair<Type, size_t>> getSaved() const;
+  std::optional<std::pair<RegisterType, size_t>> getTemp() const;
+  std::optional<std::pair<RegisterType, size_t>> getArg() const;
+  std::optional<std::pair<RegisterType, size_t>> getSaved() const;
 
   bool operator==(const Register &other) const { return impl == other.impl; }
   bool operator!=(const Register &other) const { return impl != other.impl; }
@@ -108,6 +133,12 @@ public:
   friend inline llvm::hash_code hash_value(const Register &reg) {
     return llvm::DenseMapInfo<RegisterImpl *>::getHashValue(reg.impl);
   }
+
+  static Register getAnonymousRegister(RegisterType type,
+                                       CallingConvension callingConvention,
+                                       llvm::StringRef name);
+
+  static Register getAnonymousRegister(llvm::StringRef name);
 
 private:
   friend class llvm::DenseMapInfo<Register>;

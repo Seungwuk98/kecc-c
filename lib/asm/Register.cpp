@@ -1,32 +1,12 @@
 #include "kecc/asm/Register.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/Support/ManagedStatic.h"
 
 namespace kecc::as {
 
-enum class Mnemonic {
-  x,
-  f,
-};
-
-enum class ABIKind {
-  Zero,
-  Ra,
-  Sp,
-  Gp,
-  Tp,
-  Temp,
-  Saved,
-  Arg,
-};
-
-enum class CallingConvension {
-  None,
-  CallerSave,
-  CalleeSave,
-};
-
 class RegisterImpl {
 public:
-  RegisterImpl(Mnemonic mnemonic, int index, Register::Type type, ABIKind kind,
+  RegisterImpl(Mnemonic mnemonic, int index, RegisterType type, ABIKind kind,
                CallingConvension callingConvention, int abiIndex,
                llvm::StringRef description, llvm::StringRef printName)
       : mnemonic(mnemonic), type(type), kind(kind),
@@ -35,7 +15,7 @@ public:
 
   Mnemonic getMnemonic() const { return mnemonic; }
   int getIndex() const { return index; }
-  Register::Type getType() const { return type; }
+  RegisterType getType() const { return type; }
   ABIKind getABIKind() const { return kind; }
   CallingConvension getCallingConvention() const { return callingConvention; }
   int getABIIndex() const { return index; }
@@ -45,7 +25,7 @@ public:
 private:
   Mnemonic mnemonic;
   int index;
-  Register::Type type;
+  RegisterType type;
   ABIKind kind;
   CallingConvension callingConvention;
 
@@ -59,97 +39,97 @@ namespace detail {
 /// x
 //===----------------------------------------------------------------------===//
 
-static RegisterImpl x0(Mnemonic::x, 0, Register::Type::Integer, ABIKind::Zero,
+static RegisterImpl x0(Mnemonic::x, 0, RegisterType::Integer, ABIKind::Zero,
                        CallingConvension::None, -1, "Hard-wired zero", "zero");
-static RegisterImpl x1(Mnemonic::x, 1, Register::Type::Integer, ABIKind::Ra,
+static RegisterImpl x1(Mnemonic::x, 1, RegisterType::Integer, ABIKind::Ra,
                        CallingConvension::CallerSave, -1, "Return address",
                        "ra");
-static RegisterImpl x2(Mnemonic::x, 2, Register::Type::Integer, ABIKind::Sp,
+static RegisterImpl x2(Mnemonic::x, 2, RegisterType::Integer, ABIKind::Sp,
                        CallingConvension::CalleeSave, -1, "Stack pointer",
                        "sp");
-static RegisterImpl x3(Mnemonic::x, 3, Register::Type::Integer, ABIKind::Gp,
+static RegisterImpl x3(Mnemonic::x, 3, RegisterType::Integer, ABIKind::Gp,
                        CallingConvension::None, -1, "Global pointer", "gp");
-static RegisterImpl x4(Mnemonic::x, 4, Register::Type::Integer, ABIKind::Tp,
+static RegisterImpl x4(Mnemonic::x, 4, RegisterType::Integer, ABIKind::Tp,
                        CallingConvension::None, -1, "Thread pointer", "tp");
-static RegisterImpl x5(Mnemonic::x, 5, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x5(Mnemonic::x, 5, RegisterType::Integer, ABIKind::Temp,
                        CallingConvension::CallerSave, 0,
                        "Temporary/alternate link register", "t0");
-static RegisterImpl x6(Mnemonic::x, 6, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x6(Mnemonic::x, 6, RegisterType::Integer, ABIKind::Temp,
                        CallingConvension::CallerSave, 1, "Temporary register",
                        "t1");
-static RegisterImpl x7(Mnemonic::x, 7, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x7(Mnemonic::x, 7, RegisterType::Integer, ABIKind::Temp,
                        CallingConvension::CallerSave, 2, "Temporary register",
                        "t2");
-static RegisterImpl x8(Mnemonic::x, 8, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x8(Mnemonic::x, 8, RegisterType::Integer, ABIKind::Temp,
                        CallingConvension::CalleeSave, 0,
                        "Saved register/frame pointer", "s0");
-static RegisterImpl x9(Mnemonic::x, 9, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x9(Mnemonic::x, 9, RegisterType::Integer, ABIKind::Temp,
                        CallingConvension::CalleeSave, 1, "Saved register",
                        "s1");
-static RegisterImpl x10(Mnemonic::x, 10, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x10(Mnemonic::x, 10, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 0,
                         "Function arguments/return values", "a0");
-static RegisterImpl x11(Mnemonic::x, 11, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x11(Mnemonic::x, 11, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 1,
                         "Function arguments/return values", "a1");
-static RegisterImpl x12(Mnemonic::x, 12, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x12(Mnemonic::x, 12, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 2, "Function arguments",
                         "a2");
-static RegisterImpl x13(Mnemonic::x, 13, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x13(Mnemonic::x, 13, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 3, "Function arguments",
                         "a3");
-static RegisterImpl x14(Mnemonic::x, 14, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x14(Mnemonic::x, 14, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 4, "Function arguments",
                         "a4");
-static RegisterImpl x15(Mnemonic::x, 15, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x15(Mnemonic::x, 15, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 5, "Function arguments",
                         "a5");
-static RegisterImpl x16(Mnemonic::x, 16, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x16(Mnemonic::x, 16, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 6, "Function arguments",
                         "a6");
-static RegisterImpl x17(Mnemonic::x, 17, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x17(Mnemonic::x, 17, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 7, "Function arguments",
                         "a7");
-static RegisterImpl x18(Mnemonic::x, 18, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 2,
-                        "Saved register", "s2");
-static RegisterImpl x19(Mnemonic::x, 19, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 3,
-                        "Saved register", "s3");
-static RegisterImpl x20(Mnemonic::x, 20, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 4,
-                        "Saved register", "s4");
-static RegisterImpl x21(Mnemonic::x, 21, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 5,
-                        "Saved register", "s5");
-static RegisterImpl x22(Mnemonic::x, 22, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 6,
-                        "Saved register", "s6");
-static RegisterImpl x23(Mnemonic::x, 23, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 7,
-                        "Saved register", "s7");
-static RegisterImpl x24(Mnemonic::x, 24, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 8,
-                        "Saved register", "s8");
-static RegisterImpl x25(Mnemonic::x, 25, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 9,
-                        "Saved register", "s9");
-static RegisterImpl x26(Mnemonic::x, 26, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 10,
-                        "Saved register", "s10");
-static RegisterImpl x27(Mnemonic::x, 27, Register::Type::Integer,
-                        ABIKind::Saved, CallingConvension::CalleeSave, 11,
-                        "Saved register", "s11");
-static RegisterImpl x28(Mnemonic::x, 28, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x18(Mnemonic::x, 18, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 2, "Saved register",
+                        "s2");
+static RegisterImpl x19(Mnemonic::x, 19, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 3, "Saved register",
+                        "s3");
+static RegisterImpl x20(Mnemonic::x, 20, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 4, "Saved register",
+                        "s4");
+static RegisterImpl x21(Mnemonic::x, 21, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 5, "Saved register",
+                        "s5");
+static RegisterImpl x22(Mnemonic::x, 22, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 6, "Saved register",
+                        "s6");
+static RegisterImpl x23(Mnemonic::x, 23, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 7, "Saved register",
+                        "s7");
+static RegisterImpl x24(Mnemonic::x, 24, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 8, "Saved register",
+                        "s8");
+static RegisterImpl x25(Mnemonic::x, 25, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 9, "Saved register",
+                        "s9");
+static RegisterImpl x26(Mnemonic::x, 26, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 10, "Saved register",
+                        "s10");
+static RegisterImpl x27(Mnemonic::x, 27, RegisterType::Integer, ABIKind::Saved,
+                        CallingConvension::CalleeSave, 11, "Saved register",
+                        "s11");
+static RegisterImpl x28(Mnemonic::x, 28, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 3, "Temporary register",
                         "t3");
-static RegisterImpl x29(Mnemonic::x, 29, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x29(Mnemonic::x, 29, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 4, "Temporary register",
                         "t4");
-static RegisterImpl x30(Mnemonic::x, 30, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x30(Mnemonic::x, 30, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 5, "Temporary register",
                         "t5");
-static RegisterImpl x31(Mnemonic::x, 31, Register::Type::Integer, ABIKind::Temp,
+static RegisterImpl x31(Mnemonic::x, 31, RegisterType::Integer, ABIKind::Temp,
                         CallingConvension::CallerSave, 6, "Temporary register",
                         "t6");
 
@@ -157,100 +137,100 @@ static RegisterImpl x31(Mnemonic::x, 31, Register::Type::Integer, ABIKind::Temp,
 /// f
 //===----------------------------------------------------------------------===//
 
-static RegisterImpl f0(Mnemonic::f, 0, Register::Type::FloatingPoint,
+static RegisterImpl f0(Mnemonic::f, 0, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 0,
                        "FP temporary", "ft0");
-static RegisterImpl f1(Mnemonic::f, 1, Register::Type::FloatingPoint,
+static RegisterImpl f1(Mnemonic::f, 1, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 1,
                        "FP temporary", "ft1");
-static RegisterImpl f2(Mnemonic::f, 2, Register::Type::FloatingPoint,
+static RegisterImpl f2(Mnemonic::f, 2, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 2,
                        "FP temporary", "ft2");
-static RegisterImpl f3(Mnemonic::f, 3, Register::Type::FloatingPoint,
+static RegisterImpl f3(Mnemonic::f, 3, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 3,
                        "FP temporary", "ft3");
-static RegisterImpl f4(Mnemonic::f, 4, Register::Type::FloatingPoint,
+static RegisterImpl f4(Mnemonic::f, 4, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 4,
                        "FP temporary", "ft4");
-static RegisterImpl f5(Mnemonic::f, 5, Register::Type::FloatingPoint,
+static RegisterImpl f5(Mnemonic::f, 5, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 5,
                        "FP temporary", "ft5");
-static RegisterImpl f6(Mnemonic::f, 6, Register::Type::FloatingPoint,
+static RegisterImpl f6(Mnemonic::f, 6, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 6,
                        "FP temporary", "ft6");
-static RegisterImpl f7(Mnemonic::f, 7, Register::Type::FloatingPoint,
+static RegisterImpl f7(Mnemonic::f, 7, RegisterType::FloatingPoint,
                        ABIKind::Temp, CallingConvension::CallerSave, 7,
                        "FP temporary", "ft7");
-static RegisterImpl f8(Mnemonic::f, 8, Register::Type::FloatingPoint,
+static RegisterImpl f8(Mnemonic::f, 8, RegisterType::FloatingPoint,
                        ABIKind::Saved, CallingConvension::CalleeSave, 0,
                        "FP saved register", "fs0");
-static RegisterImpl f9(Mnemonic::f, 9, Register::Type::FloatingPoint,
+static RegisterImpl f9(Mnemonic::f, 9, RegisterType::FloatingPoint,
                        ABIKind::Saved, CallingConvension::CalleeSave, 1,
                        "FP saved register", "fs1");
-static RegisterImpl f10(Mnemonic::f, 10, Register::Type::FloatingPoint,
+static RegisterImpl f10(Mnemonic::f, 10, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 0,
                         "FP argument/return value", "fa0");
-static RegisterImpl f11(Mnemonic::f, 11, Register::Type::FloatingPoint,
+static RegisterImpl f11(Mnemonic::f, 11, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 1,
                         "FP argument/return value", "fa1");
-static RegisterImpl f12(Mnemonic::f, 12, Register::Type::FloatingPoint,
+static RegisterImpl f12(Mnemonic::f, 12, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 2,
                         "FP argument", "fa2");
-static RegisterImpl f13(Mnemonic::f, 13, Register::Type::FloatingPoint,
+static RegisterImpl f13(Mnemonic::f, 13, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 3,
                         "FP argument", "fa3");
-static RegisterImpl f14(Mnemonic::f, 14, Register::Type::FloatingPoint,
+static RegisterImpl f14(Mnemonic::f, 14, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 4,
                         "FP argument", "fa4");
-static RegisterImpl f15(Mnemonic::f, 15, Register::Type::FloatingPoint,
+static RegisterImpl f15(Mnemonic::f, 15, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 5,
                         "FP argument", "fa5");
-static RegisterImpl f16(Mnemonic::f, 16, Register::Type::FloatingPoint,
+static RegisterImpl f16(Mnemonic::f, 16, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 6,
                         "FP argument", "fa6");
-static RegisterImpl f17(Mnemonic::f, 17, Register::Type::FloatingPoint,
+static RegisterImpl f17(Mnemonic::f, 17, RegisterType::FloatingPoint,
                         ABIKind::Arg, CallingConvension::CallerSave, 7,
                         "FP argument", "fa7");
-static RegisterImpl f18(Mnemonic::f, 18, Register::Type::FloatingPoint,
+static RegisterImpl f18(Mnemonic::f, 18, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 2,
                         "FP saved register", "fs2");
-static RegisterImpl f19(Mnemonic::f, 19, Register::Type::FloatingPoint,
+static RegisterImpl f19(Mnemonic::f, 19, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 3,
                         "FP saved register", "fs3");
-static RegisterImpl f20(Mnemonic::f, 20, Register::Type::FloatingPoint,
+static RegisterImpl f20(Mnemonic::f, 20, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 4,
                         "FP saved register", "fs4");
-static RegisterImpl f21(Mnemonic::f, 21, Register::Type::FloatingPoint,
+static RegisterImpl f21(Mnemonic::f, 21, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 5,
                         "FP saved register", "fs5");
-static RegisterImpl f22(Mnemonic::f, 22, Register::Type::FloatingPoint,
+static RegisterImpl f22(Mnemonic::f, 22, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 6,
                         "FP saved register", "fs6");
-static RegisterImpl f23(Mnemonic::f, 23, Register::Type::FloatingPoint,
+static RegisterImpl f23(Mnemonic::f, 23, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 7,
                         "FP saved register", "fs7");
-static RegisterImpl f24(Mnemonic::f, 24, Register::Type::FloatingPoint,
+static RegisterImpl f24(Mnemonic::f, 24, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 8,
                         "FP saved register", "fs8");
-static RegisterImpl f25(Mnemonic::f, 25, Register::Type::FloatingPoint,
+static RegisterImpl f25(Mnemonic::f, 25, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 9,
                         "FP saved register", "fs9");
-static RegisterImpl f26(Mnemonic::f, 26, Register::Type::FloatingPoint,
+static RegisterImpl f26(Mnemonic::f, 26, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 10,
                         "FP saved register", "fs10");
-static RegisterImpl f27(Mnemonic::f, 27, Register::Type::FloatingPoint,
+static RegisterImpl f27(Mnemonic::f, 27, RegisterType::FloatingPoint,
                         ABIKind::Saved, CallingConvension::CalleeSave, 11,
                         "FP saved register", "fs11");
-static RegisterImpl f28(Mnemonic::f, 28, Register::Type::FloatingPoint,
+static RegisterImpl f28(Mnemonic::f, 28, RegisterType::FloatingPoint,
                         ABIKind::Temp, CallingConvension::CallerSave, 8,
                         "FP temporary", "ft8");
-static RegisterImpl f29(Mnemonic::f, 29, Register::Type::FloatingPoint,
+static RegisterImpl f29(Mnemonic::f, 29, RegisterType::FloatingPoint,
                         ABIKind::Temp, CallingConvension::CallerSave, 9,
                         "FP temporary", "ft9");
-static RegisterImpl f30(Mnemonic::f, 30, Register::Type::FloatingPoint,
+static RegisterImpl f30(Mnemonic::f, 30, RegisterType::FloatingPoint,
                         ABIKind::Temp, CallingConvension::CallerSave, 10,
                         "FP temporary", "ft10");
-static RegisterImpl f31(Mnemonic::f, 31, Register::Type::FloatingPoint,
+static RegisterImpl f31(Mnemonic::f, 31, RegisterType::FloatingPoint,
                         ABIKind::Temp, CallingConvension::CallerSave, 11,
                         "FP temporary", "ft11");
 } // namespace detail
@@ -374,36 +354,36 @@ bool Register::isXRegister() const {
 bool Register::isFRegister() const {
   return impl->getMnemonic() == Mnemonic::f;
 }
-bool Register::isInteger() const { return impl->getType() == Type::Integer; }
+bool Register::isInteger() const {
+  return impl->getType() == RegisterType::Integer;
+}
 bool Register::isFloatingPoint() const {
-  return impl->getType() == Type::FloatingPoint;
+  return impl->getType() == RegisterType::FloatingPoint;
 }
 
-std::optional<std::pair<Register::Type, std::size_t>>
-Register::getTemp() const {
+std::optional<std::pair<RegisterType, std::size_t>> Register::getTemp() const {
   if (impl->getABIKind() != ABIKind::Temp)
     return std::nullopt;
 
   return std::pair(impl->getType(), impl->getABIIndex());
 }
 
-std::optional<std::pair<Register::Type, std::size_t>>
-Register::getSaved() const {
+std::optional<std::pair<RegisterType, std::size_t>> Register::getSaved() const {
   if (impl->getABIKind() != ABIKind::Saved)
     return std::nullopt;
 
   return std::pair(impl->getType(), impl->getABIIndex());
 }
 
-std::optional<std::pair<Register::Type, std::size_t>> Register::getArg() const {
+std::optional<std::pair<RegisterType, std::size_t>> Register::getArg() const {
   if (impl->getABIKind() != ABIKind::Arg)
     return std::nullopt;
 
   return std::pair(impl->getType(), impl->getABIIndex());
 }
 
-Register Register::temp(Type type, size_t index) {
-  if (type == Type::Integer) {
+Register Register::temp(RegisterType type, size_t index) {
+  if (type == RegisterType::Integer) {
     assert(index < detail::integerTempRegisters.size() &&
            "Index out of bounds for integer temporary registers");
     return detail::integerTempRegisters[index];
@@ -414,8 +394,8 @@ Register Register::temp(Type type, size_t index) {
   }
 }
 
-Register Register::saved(Type type, size_t index) {
-  if (type == Type::Integer) {
+Register Register::saved(RegisterType type, size_t index) {
+  if (type == RegisterType::Integer) {
     assert(index < detail::integerSavedRegisters.size() &&
            "Index out of bounds for integer saved registers");
     return detail::integerSavedRegisters[index];
@@ -426,8 +406,8 @@ Register Register::saved(Type type, size_t index) {
   }
 }
 
-Register Register::arg(Type type, size_t index) {
-  if (type == Type::Integer) {
+Register Register::arg(RegisterType type, size_t index) {
+  if (type == RegisterType::Integer) {
     assert(index < detail::integerArgRegisters.size() &&
            "Index out of bounds for integer argument registers");
     return detail::integerArgRegisters[index];
@@ -460,6 +440,45 @@ llvm::ArrayRef<Register> getFpArgRegisters() {
 
 llvm::ArrayRef<Register> getFpSavedRegisters() {
   return detail::floatSavedRegisters;
+}
+
+namespace {
+llvm::ManagedStatic<llvm::StringMap<std::unique_ptr<RegisterImpl>>> tempStorage;
+static RegisterImpl *
+createAnonymousRegister(RegisterType type, CallingConvension callingConvention,
+                        llvm::StringRef printName) {
+  RegisterImpl *impl = new RegisterImpl(static_cast<Mnemonic>(-1), -1, type,
+                                        static_cast<ABIKind>(-1),
+                                        callingConvention, -1, "", printName);
+
+  auto [it, inserted] =
+      tempStorage->insert({printName, std::unique_ptr<RegisterImpl>(impl)});
+  assert(inserted && "Register with this name already exists");
+
+  return it->second.get();
+}
+} // namespace
+
+Register Register::getAnonymousRegister(RegisterType type,
+                                        CallingConvension callingConvention,
+                                        llvm::StringRef name) {
+  assert(!name.empty() > 0 && "Anonymous register must have a non-empty name");
+
+  auto it = tempStorage->find(name);
+  if (it != tempStorage->end())
+    return Register(it->second.get());
+
+  RegisterImpl *impl = createAnonymousRegister(type, callingConvention, name);
+  return Register(impl);
+}
+
+Register Register::getAnonymousRegister(llvm::StringRef name) {
+  assert(!name.empty() > 0 && "Anonymous register must have a non-empty name");
+
+  auto it = tempStorage->find(name);
+  assert(it != tempStorage->end() &&
+         "Register with this name does not exist in the temporary storage");
+  return Register(it->second.get());
 }
 
 } // namespace kecc::as

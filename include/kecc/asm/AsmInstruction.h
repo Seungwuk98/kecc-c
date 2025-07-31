@@ -88,7 +88,7 @@ private:
   std::string label;
 };
 
-class ASMBuilder;
+class AsmBuilder;
 
 class DataSize {
 public:
@@ -151,6 +151,8 @@ class Instruction : public PointerCastBase<Instruction> {
 public:
   virtual ~Instruction() = default;
   TypeID getId() const { return typeId; }
+  Block *getParentBlock() const { return parent; }
+  Block::Node *getNode() const { return node; }
 
   virtual void print(llvm::raw_ostream &os) const = 0;
 
@@ -158,8 +160,10 @@ protected:
   Instruction(TypeID id) : typeId(id) {}
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   void setNode(Block::Node *node) { this->node = node; }
+  void setParent(Block *parent) { this->parent = parent; }
+  Block *parent;
   Block::Node *node;
   TypeID typeId;
 };
@@ -206,7 +210,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Add(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -219,7 +223,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Sub(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -232,7 +236,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Sll(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -245,7 +249,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Srl(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -258,7 +262,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Sra(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -271,7 +275,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Mul(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -284,7 +288,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Div(Register rd, Register rs1, std::optional<Register> rs2, DataSize dataSize,
       bool isSigned);
   DataSize dataSize;
@@ -299,7 +303,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Rem(Register rd, Register rs1, std::optional<Register> rs2, DataSize dataSize,
       bool isSigned);
   DataSize dataSize;
@@ -313,7 +317,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Slt(Register rd, Register rs1, std::optional<Register> rs2, bool isSigned);
   bool isSignedV;
 };
@@ -323,7 +327,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Xor(Register rd, Register rs1, std::optional<Register> rs2);
 };
 
@@ -332,7 +336,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Or(Register rd, Register rs1, std::optional<Register> rs2);
 };
 
@@ -341,7 +345,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   And(Register rd, Register rs1, std::optional<Register> rs2);
 };
 
@@ -352,7 +356,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Fadd(Register rd, Register rs1, std::optional<Register> rs2,
        DataSize dataSize);
   DataSize dataSize;
@@ -365,7 +369,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Fsub(Register rd, Register rs1, std::optional<Register> rs2,
        DataSize dataSize);
   DataSize dataSize;
@@ -378,7 +382,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Fmul(Register rd, Register rs1, std::optional<Register> rs2,
        DataSize dataSize);
   DataSize dataSize;
@@ -391,7 +395,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Fdiv(Register rd, Register rs1, std::optional<Register> rs2,
        DataSize dataSize);
   DataSize dataSize;
@@ -404,7 +408,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Feq(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -417,7 +421,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Flt(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
@@ -430,7 +434,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   FmvIntToFloat(Register rd, Register rs1, std::optional<Register> rs2,
                 DataSize floatDataSize);
   DataSize floatDataSize;
@@ -443,7 +447,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   FmvFloatToInt(Register rd, Register rs1, std::optional<Register> rs2,
                 DataSize floatDataSize);
   DataSize floatDataSize;
@@ -458,7 +462,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   FcvtIntToFloat(Register rd, Register rs1, std::optional<Register> rs2,
                  DataSize intDataSize, DataSize floatDataSize, bool isSigned);
   DataSize intDataSize;
@@ -475,7 +479,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   FcvtFloatToInt(Register rd, Register rs1, std::optional<Register> rs2,
                  DataSize floatDataSize, DataSize intDataSize, bool isSigned);
   DataSize floatDataSize;
@@ -492,7 +496,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   FcvtFloatToFloat(Register rd, Register rs1, std::optional<Register> rs2,
                    DataSize from, DataSize to);
   DataSize from;
@@ -534,7 +538,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Load(Register rd, Register rs1, Immediate *imm, DataSize dataSize,
        bool isSigned);
   DataSize dataSize;
@@ -548,7 +552,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Addi(Register rd, Register rs1, Immediate *imm, DataSize dataSize);
   DataSize dataSize;
 };
@@ -558,7 +562,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   using Base::Base;
 };
 
@@ -567,7 +571,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   using Base::Base;
 };
 
@@ -576,7 +580,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   using Base::Base;
 };
 
@@ -587,7 +591,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Slli(Register rd, Register rs1, Immediate *imm, DataSize dataSize);
   DataSize dataSize;
 };
@@ -599,7 +603,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Srli(Register rd, Register rs1, Immediate *imm, DataSize dataSize);
   DataSize dataSize;
 };
@@ -611,7 +615,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Srai(Register rd, Register rs1, Immediate *imm, DataSize dataSize);
   DataSize dataSize;
 };
@@ -623,7 +627,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Slti(Register rd, Register rs1, Immediate *imm, bool isSigned);
   bool isSignedV;
 };
@@ -661,7 +665,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Store(Register rs1, Register rs2, Immediate *imm, DataSize dataSize);
   DataSize dataSize;
 };
@@ -696,7 +700,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   using Base::Base;
 };
 
@@ -705,7 +709,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   using Base::Base;
 };
 
@@ -715,7 +719,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Blt(Register rs1, Register rs2, llvm::StringRef imm, bool isSigned);
   bool isSignedV;
 };
@@ -727,7 +731,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Bge(Register rs1, Register rs2, llvm::StringRef imm, bool isSigned);
   bool isSignedV;
 };
@@ -761,7 +765,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   using Base::Base;
 };
 } // namespace utype
@@ -789,7 +793,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   La(Register rd, llvm::StringRef symbol);
   Register rd;
   std::string symbol;
@@ -803,7 +807,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Li(Register rd, std::size_t imm);
   Register rd;
   std::size_t imm;
@@ -817,7 +821,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Mv(Register rd, Register rs);
   Register rd;
   Register rs;
@@ -832,7 +836,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Fmv(DataSize dataSize, Register rd, Register rs);
   DataSize dataSize;
   Register rd;
@@ -848,7 +852,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Neg(DataSize dataSize, Register rd, Register rs);
   DataSize dataSize;
   Register rd;
@@ -863,7 +867,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   SextW(Register rd, Register rs);
   Register rd;
   Register rs;
@@ -877,7 +881,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Seqz(Register rd, Register rs);
   Register rd;
   Register rs;
@@ -891,7 +895,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Snez(Register rd, Register rs);
   Register rd;
   Register rs;
@@ -906,7 +910,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Fneg(DataSize dataSize, Register rd, Register rs);
   DataSize dataSize;
   Register rd;
@@ -920,7 +924,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   J(llvm::StringRef label);
   std::string label;
 };
@@ -932,7 +936,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Jr(Register rs);
   Register rs;
 };
@@ -944,7 +948,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Jalr(Register rs);
   Register rs;
 };
@@ -954,7 +958,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   using Base::Base;
 };
 
@@ -965,7 +969,7 @@ public:
   std::string toString() const override;
 
 private:
-  friend class ASMBuilder;
+  friend class AsmBuilder;
   Call(llvm::StringRef label);
   std::string label;
 };
