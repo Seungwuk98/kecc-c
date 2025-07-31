@@ -85,6 +85,15 @@ public:
   llvm::StringRef getPassName() const override { return "constant-fold"; }
 };
 
+class OutlineMultipleResults : public Pass {
+public:
+  PassResult run(Module *module) override;
+
+  llvm::StringRef getPassName() const override {
+    return "outline-multiple-results";
+  }
+};
+
 class CanonicalizeStructImpl;
 class CanonicalizeStruct : public Pass {
 public:
@@ -97,8 +106,12 @@ public:
   llvm::StringRef getPassName() const override { return "canonicalize-struct"; }
 
 private:
+  void convertAllFuncT(Module *module);
+
   std::unique_ptr<CanonicalizeStructImpl> impl;
 };
+
+void registerCanonicalizeStructPasses();
 
 } // namespace kecc::ir
 

@@ -1,5 +1,7 @@
 #include "doctest/doctest.h"
 #include "kecc/ir/IRTypes.h"
+#include "kecc/ir/WalkSupport.h"
+#include "kecc/utils/LogicalResult.h"
 
 namespace kecc::ir {
 TEST_CASE("IR Types") {
@@ -47,6 +49,89 @@ TEST_CASE("IR Types") {
     auto i32PointerCopy = PointerT::get(&context, i32);
 
     CHECK(i32Pointer == i32PointerCopy);
+  }
+}
+
+TEST_CASE("Type walk") {
+  IRContext context_;
+  IRContext *context = &context_;
+
+  SUBCASE("Walk") {
+    auto i32 = IntT::get(context, 32, true);
+    auto f32 = FloatT::get(context, 32);
+    auto i32_f32 = TupleT::get(context, {i32, f32});
+
+    llvm::SmallVector<Type> visit;
+    i32_f32.walk([&](Type type) -> WalkResult {
+      visit.push_back(type);
+      return WalkResult::advance();
+    });
+
+    CHECK_EQ(visit.size(), 3);
+    CHECK_EQ(visit[0], i32_f32);
+    CHECK_EQ(visit[1], i32);
+    CHECK_EQ(visit[2], f32);
+
+    visit.clear();
+
+    i32_f32.walk<TypeWalker::PostOrder>([&](Type type) -> WalkResult {
+      visit.push_back(type);
+      return WalkResult::advance();
+    });
+
+    CHECK_EQ(visit.size(), 3);
+    CHECK_EQ(visit[0], i32);
+    CHECK_EQ(visit[1], f32);
+    CHECK_EQ(visit[2], i32_f32);
+  }
+
+  SUBCASE("Replace") {
+    auto i32 = IntT::get(context, 32, true);
+    auto f32 = FloatT::get(context, 32);
+    auto structX = NameStruct::get(context, "X");
+    auto structY = NameStruct::get(context, "Y");
+    auto funcT = FunctionT::get(context, {structX, structY}, {i32, structY});
+
+    auto func2T = FunctionT::get(context, {structY, funcT},
+                                 {f32, PointerT::get(context, funcT)});
+
+    auto replaceFn = [&](Type type) -> ReplaceResult<Type> {
+      if (auto funcT = type.dyn_cast<FunctionT>()) {
+        llvm::SmallVector<Type> retTypes;
+        llvm::SmallVector<Type> argTypes;
+
+        for (auto retType : funcT.getReturnTypes()) {
+          if (retType.isa<NameStruct>()) {
+            argTypes.emplace_back(PointerT::get(context, retType));
+          } else {
+            retTypes.emplace_back(retType);
+          }
+        }
+
+        for (auto argType : funcT.getArgTypes()) {
+          if (argType.isa<NameStruct>())
+            argType = PointerT::get(context, argType);
+          argTypes.emplace_back(argType);
+        }
+
+        if (retTypes.empty())
+          retTypes.emplace_back(UnitT::get(context));
+        return {FunctionT::get(context, retTypes, argTypes),
+                utils::LogicalResult::success()};
+      }
+      return {type, utils::LogicalResult::success()};
+    };
+
+    auto replaced = func2T.replace(replaceFn);
+
+    auto [replacedFuncT, result] = replaceFn(funcT);
+
+    Type replacedFunc2T =
+        FunctionT::get(context, {structY, replacedFuncT},
+                       {f32, PointerT::get(context, replacedFuncT)});
+    replacedFunc2T = replaceFn(replacedFunc2T).first;
+
+    CHECK_EQ(replaced, replacedFunc2T);
   }
 }
 } // namespace kecc::ir

@@ -88,6 +88,8 @@ public:
   void setName(llvm::StringRef newName) { name = newName.str(); }
   void setFunctionType(Type newType) { functionType = newType; }
 
+  bool hasDefinition() const;
+
 private:
   std::string name;
   Type functionType;

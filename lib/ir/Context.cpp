@@ -12,53 +12,13 @@ namespace kecc::ir {
 IRContext::IRContext()
     : typeStorage(std::make_unique<TypeStorage>(this)), diagEngine(srcMgr) {
   // Register built-in types
-  registerType<IntT>();
-  registerType<FloatT>();
-  registerType<NameStruct>();
-  registerType<UnitT>();
-  registerType<FunctionT>();
-  registerType<PointerT>();
-  registerType<ConstQualifier>();
-  registerType<TupleT>();
-  registerType<ArrayT>();
+  registerBuiltinTypes(this);
 
   // Register built-in attributes
-  registerAttr<StringAttr>();
-  registerAttr<ConstantIntAttr>();
-  registerAttr<ConstantFloatAttr>();
-  registerAttr<ConstantStringFloatAttr>();
-  registerAttr<ConstantUndefAttr>();
-  registerAttr<ConstantUnitAttr>();
-  registerAttr<ConstantVariableAttr>();
-  registerAttr<ArrayAttr>();
-  registerAttr<TypeAttr>();
-  registerAttr<EnumAttr>();
-  registerAttr<ASTInitializerList>();
-  registerAttr<ASTGroupOp>();
-  registerAttr<ASTUnaryOp>();
-  registerAttr<ASTInteger>();
-  registerAttr<ASTFloat>();
+  registerBuiltinAttributes(this);
 
   // Register built-in instructions
-  registerInst<Phi>();
-  registerInst<inst::Nop>();
-  registerInst<inst::Load>();
-  registerInst<inst::Store>();
-  registerInst<inst::Call>();
-  registerInst<inst::TypeCast>();
-  registerInst<inst::Gep>();
-  registerInst<inst::Binary>();
-  registerInst<inst::Unary>();
-  registerInst<inst::Jump>();
-  registerInst<inst::Branch>();
-  registerInst<inst::Switch>();
-  registerInst<inst::Return>();
-  registerInst<inst::Unreachable>();
-  registerInst<inst::Constant>();
-  registerInst<inst::StructDefinition>();
-  registerInst<inst::GlobalVariableDefinition>();
-  registerInst<inst::LocalVariable>();
-  registerInst<inst::Unresolved>();
+  inst::registerBuiltinInstructions(this);
 }
 
 IRContext::~IRContext() {

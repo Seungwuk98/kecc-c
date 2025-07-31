@@ -89,6 +89,15 @@ void Call::build(IRBuilder &builder, InstructionState &state, Value function,
   }
 }
 
+void Call::build(IRBuilder &builder, InstructionState &state, Value function,
+                 llvm::ArrayRef<Value> args, llvm::ArrayRef<Type> resultTypes) {
+  state.setTypes(resultTypes);
+  state.pushOperand(function);
+  for (const auto &arg : args) {
+    state.pushOperand(arg);
+  }
+}
+
 void Call::printer(Call op, IRPrintContext &context) {
   for (auto idx = 0u; idx < op.getNumResults(); ++idx) {
     if (idx > 0) {
@@ -729,5 +738,79 @@ void OutlineConstant::printer(OutlineConstant op, IRPrintContext &context) {
 }
 
 Value OutlineConstant::Adaptor::getConstant() const { return operands[0]; }
+
+//============================================================================//
+/// inline call
+//============================================================================//
+
+void InlineCall::build(IRBuilder &builder, InstructionState &state,
+                       llvm::StringRef name, FunctionT type,
+                       llvm::ArrayRef<Value> args) {
+  auto retTypes = type.getReturnTypes();
+  state.setTypes(retTypes);
+
+  state.pushAttribute(StringAttr::get(builder.getContext(), name));
+  state.pushAttribute(TypeAttr::get(builder.getContext(), type));
+
+  state.setOperands(args);
+}
+
+llvm::StringRef InlineCall::getName() const {
+  return this->getStorage()->getAttribute(0).cast<StringAttr>().getValue();
+}
+
+FunctionT InlineCall::getFunctionType() const {
+  return this->getStorage()
+      ->getAttribute(1)
+      .cast<TypeAttr>()
+      .getType()
+      .cast<FunctionT>();
+}
+llvm::ArrayRef<Operand> InlineCall::getArguments() const {
+  return this->getStorage()->getOperands();
+}
+
+void InlineCall::printer(InlineCall op, IRPrintContext &context) {
+  for (auto idx = 0u; idx < op.getNumResults(); ++idx) {
+    if (idx > 0)
+      context.getOS() << ", ";
+    auto value = op.getStorage()->getResult(idx);
+    value.printAsOperand(context, true);
+  }
+
+  context.getOS() << " = inline call " << op.getName() << ":"
+                  << op.getFunctionType() << "(";
+
+  for (auto I = op.getArguments().begin(), E = op.getArguments().end(); I != E;
+       ++I) {
+    if (I != op.getArguments().begin())
+      context.getOS() << ", ";
+    I->printAsOperand(context);
+  }
+  context.getOS() << ')';
+}
+
+void registerBuiltinInstructions(IRContext *context) {
+  context->registerInst<Phi>();
+  context->registerInst<inst::Nop>();
+  context->registerInst<inst::Load>();
+  context->registerInst<inst::Store>();
+  context->registerInst<inst::Call>();
+  context->registerInst<inst::TypeCast>();
+  context->registerInst<inst::Gep>();
+  context->registerInst<inst::Binary>();
+  context->registerInst<inst::Unary>();
+  context->registerInst<inst::Jump>();
+  context->registerInst<inst::Branch>();
+  context->registerInst<inst::Switch>();
+  context->registerInst<inst::Return>();
+  context->registerInst<inst::Unreachable>();
+  context->registerInst<inst::Constant>();
+  context->registerInst<inst::StructDefinition>();
+  context->registerInst<inst::GlobalVariableDefinition>();
+  context->registerInst<inst::LocalVariable>();
+  context->registerInst<inst::Unresolved>();
+  context->registerInst<inst::InlineCall>();
+}
 
 } // namespace kecc::ir::inst

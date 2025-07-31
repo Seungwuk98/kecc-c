@@ -50,7 +50,7 @@ Block::InsertionPoint Block::getLastInsertionPoint() {
   return InsertionPoint(this, lastIt);
 }
 
-Block::InsertionPoint Block::getFirstInsertionPoint() {
+Block::InsertionPoint Block::getStartInsertionPoint() {
   auto firstInst = begin();
   return InsertionPoint(this, --firstInst);
 }
@@ -107,6 +107,14 @@ void Block::print(IRPrintContext &printContext) const {
   }
 }
 
+void Block::dump() const { print(llvm::errs()); }
+
+void Block::print(llvm::raw_ostream &os) const {
+  IRPrintContext context(os);
+  getParentFunction()->registerAllInstInfo(context);
+  print(context);
+}
+
 void Block::remove(InstructionStorage *inst) {
   auto it = find(inst);
   if (it == end()) {
@@ -118,11 +126,9 @@ void Block::remove(InstructionStorage *inst) {
 Block::Iterator Block::find(InstructionStorage *inst) const {
   auto it = begin();
   for (; it != end(); ++it) {
-    if (*it == inst) {
+    if (*it == inst)
       return it;
-    }
   }
-
   return it;
 }
 

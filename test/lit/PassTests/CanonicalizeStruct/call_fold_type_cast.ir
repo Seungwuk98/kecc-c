@@ -1,0 +1,86 @@
+// RUN: kecc-opt %s --canonicalize-struct --fold-type-cast=func-ptr-only | FileCheck %s
+
+
+struct S : { x: i32, y: f32, z: i32 }
+struct S2 : { x: i64, y: i64 }
+struct SS : { x: i32 }
+struct SS2 : { x: i8, y: i8, z: i8 }
+struct B : { x: i64, y: i64, z: i64 }
+struct BB : { x: [100 x i64] }
+
+fun struct S, struct B @callee_func0 () 
+// CHECK-LABEL: fun i64, i64 @callee_func0 (struct B*)
+
+
+fun unit @callee_func1 (struct S, struct B) 
+// CHECK-LABEL: fun unit @callee_func1 (i64, i64, struct B*)
+
+
+fun unit @caller_func0 (struct S, struct B) {
+// CHECK: fun unit @caller_func0 (i64, i64, struct B*) 
+init:
+  bid: b0
+  allocations:
+    %l0:struct S 
+    %l1:struct B
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:struct S 
+// CHECK-NEXT:     %l1:struct B
+// CHECK-NEXT:     %l2:[2 x i64]
+// CHECK-NEXT:     %l3:struct B 
+
+block b0:
+// CHECK-LABEL: block b0: 
+  %b0:p0:struct S 
+  // CHECK-NEXT: %b0:p0:i64
+  // CHECK-NEXT: %b0:p1:i64
+  %b0:p1:struct B 
+  // CHECK-NEXT: %b0:p2:struct B*
+
+  //===--------------------------------------------------------------------===//
+  /// store small
+  //===--------------------------------------------------------------------===//
+  %b0:i0:unit = store %b0:p0:struct S %l0:struct S* 
+  /// store p0 to l2 
+  // CHECK-NEXT: %b0:i0:i64* = typecast %l2:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+
+  /// store p1 to l2 
+  // CHECK-NEXT: %b0:i2:i64* = getelementptr %l2:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+
+  /// memcpy l2 to l0
+  // CHECK-NEXT: %b0:i4:unit* = typecast %l0:struct S* to unit*
+  // CHECK-NEXT: %b0:i5:unit* = typecast %l2:[2 x i64]* to unit*
+  // CHECK-NEXT: %b0:i6:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i4:unit*, %b0:i5:unit*, 12:i64)
+
+  //===--------------------------------------------------------------------===//
+  /// store big 
+  //===--------------------------------------------------------------------===//
+  %b0:i1:unit = store %b0:p1:struct B %l1:struct B*
+  /// memcy p1 to l1
+  // CHECK-NEXT: %b0:i7:unit* = typecast %l1:struct B* to unit*
+  // CHECK-NEXT: %b0:i8:unit* = typecast %b0:p2:struct B* to unit*
+  // CHECK-NEXT: %b0:i9:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i7:unit*, %b0:i8:unit*, 24:i64)
+
+ 
+  //===--------------------------------------------------------------------===//
+  /// call 
+  //===--------------------------------------------------------------------===//
+  %b0:i2:struct S, %b0:i3:struct B = call @callee_func0:[ret: struct S, struct B params:()]*()
+  /// alloca new value l3 for calling function 
+  // CHECK-NEXT: %b0:i10:i64, %b0:i11:i64 = call @callee_func0:[ret:i64, i64 params:(struct B*)]*(%l3:struct B*)
+
+  //===--------------------------------------------------------------------===//
+  /// call 
+  //===--------------------------------------------------------------------===//
+  %b0:i4:unit = call @callee_func1:[ret:unit params:(struct S, struct B)]*(%b0:i2:struct S, %b0:i3:struct B)
+  // CHECK-NEXT: %b0:i12:unit = call @callee_func1:[ret:unit params:(i64, i64, struct B*)]*(%b0:i10:i64, %b0:i11:i64, %l3:struct B*)
+
+  ret
+  // CHECK-NEXT: ret
+}
+
+

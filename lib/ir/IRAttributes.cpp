@@ -1,11 +1,11 @@
 #include "kecc/ir/IRAttributes.h"
 #include "kecc/ir/Attribute.h"
-#include "kecc/ir/Block.h"
 #include "kecc/ir/Context.h"
 #include "kecc/ir/Type.h"
 #include "kecc/ir/Value.h"
 #include "kecc/utils/LLVM.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -403,8 +403,6 @@ unsigned EnumAttr::getEnumValueAsUnsigned() const {
 /// Initializer
 //==------------------------------------------------------------------------==//
 
-using RangeKey = std::pair<intptr_t, intptr_t>;
-
 bool InitializerAttr::classof(Attribute attr) {
   return attr.isa<ASTInitializerList, ASTUnaryOp, ASTInteger, ASTFloat>();
 }
@@ -422,12 +420,12 @@ Attribute InitializerAttr::interpret() const {
       .Default([&](Attribute) { return nullptr; });
 }
 
-static RangeKey convertToRangeKey(const llvm::SMRange &range) {
+RangeKey convertToRangeKey(const llvm::SMRange &range) {
   return {reinterpret_cast<intptr_t>(range.Start.getPointer()),
           reinterpret_cast<intptr_t>(range.End.getPointer())};
 }
 
-static llvm::SMRange convertToRange(const RangeKey &key) {
+llvm::SMRange convertToRange(const RangeKey &key) {
   return {
       llvm::SMLoc::getFromPointer(reinterpret_cast<const char *>(key.first)),
       llvm::SMLoc::getFromPointer(reinterpret_cast<const char *>(key.second))};
@@ -612,17 +610,17 @@ ConstantAttr ASTGroupOp::interpret() const {
 /// AST Unary Operation
 //==------------------------------------------------------------------------==//
 
-class ASTUnaryOpImpl : public AttributeImplTemplate<
-                           std::tuple<RangeKey, unsigned, InitializerAttr>> {
+class ASTUnaryOpImpl
+    : public AttributeImplTemplate<
+          std::tuple<RangeKey, ASTUnaryOp::OpKind, InitializerAttr>> {
 public:
   static KeyTy getKey(llvm::SMRange range, ASTUnaryOp::OpKind kind,
                       InitializerAttr value) {
-    return {convertToRangeKey(range), static_cast<unsigned>(kind), value};
+    return {convertToRangeKey(range), kind, value};
   }
 
   static ASTUnaryOpImpl *create(TypeStorage *storage, const KeyTy &key) {
-    return create(storage, convertToRange(std::get<0>(key)),
-                  static_cast<ASTUnaryOp::OpKind>(std::get<1>(key)),
+    return create(storage, convertToRange(std::get<0>(key)), std::get<1>(key),
                   std::get<2>(key));
   }
 
@@ -637,9 +635,7 @@ public:
   llvm::SMRange getRange() const {
     return convertToRange(std::get<0>(getKeyValue()));
   }
-  ASTUnaryOp::OpKind getOpKind() const {
-    return static_cast<ASTUnaryOp::OpKind>(std::get<1>(getKeyValue()));
-  }
+  ASTUnaryOp::OpKind getOpKind() const { return std::get<1>(getKeyValue()); }
   InitializerAttr getOperand() const { return std::get<2>(getKeyValue()); }
 
 private:
@@ -683,9 +679,9 @@ ConstantAttr ASTUnaryOp::interpret() const {
 /// AST Integer
 //==------------------------------------------------------------------------==//
 
-class ASTIntegerImpl
-    : public AttributeImplTemplate<
-          std::tuple<RangeKey, unsigned, llvm::StringRef, unsigned>> {
+class ASTIntegerImpl : public AttributeImplTemplate<
+                           std::tuple<RangeKey, ASTInteger::IntegerBase,
+                                      llvm::StringRef, ASTInteger::Suffix>> {
 public:
   static ASTIntegerImpl *create(TypeStorage *storage, const KeyTy &key) {
     return create(storage, convertToRange(std::get<0>(key)),
@@ -699,14 +695,12 @@ public:
                                 llvm::StringRef value,
                                 ASTInteger::Suffix suffix) {
     return new (storage->allocate<ASTIntegerImpl>())
-        ASTIntegerImpl(convertToRangeKey(range), static_cast<unsigned>(base),
-                       value, static_cast<unsigned>(suffix));
+        ASTIntegerImpl(convertToRangeKey(range), base, value, suffix);
   }
 
   static KeyTy getKey(llvm::SMRange range, ASTInteger::IntegerBase base,
                       llvm::StringRef value, ASTInteger::Suffix suffix) {
-    return {convertToRangeKey(range), static_cast<int>(base), value,
-            static_cast<int>(suffix)};
+    return {convertToRangeKey(range), base, value, suffix};
   }
 
   llvm::SMRange getRange() const {
@@ -721,7 +715,8 @@ public:
   }
 
 private:
-  ASTIntegerImpl(RangeKey key, int base, llvm::StringRef value, int suffix)
+  ASTIntegerImpl(RangeKey key, ASTInteger::IntegerBase base,
+                 llvm::StringRef value, ASTInteger::Suffix suffix)
       : AttributeImplTemplate({key, base, value, suffix}) {}
 };
 
@@ -777,12 +772,13 @@ ConstantIntAttr ASTInteger::interpret() const {
 /// AST Float
 //==------------------------------------------------------------------------==//
 
-class ASTFloatImpl : public AttributeImplTemplate<
-                         std::tuple<RangeKey, llvm::StringRef, unsigned>> {
+class ASTFloatImpl
+    : public AttributeImplTemplate<
+          std::tuple<RangeKey, llvm::StringRef, ASTFloat::Suffix>> {
 public:
   static KeyTy getKey(llvm::SMRange range, llvm::StringRef value,
                       ASTFloat::Suffix suffix) {
-    return {convertToRangeKey(range), value, static_cast<unsigned>(suffix)};
+    return {convertToRangeKey(range), value, suffix};
   }
 
   static ASTFloatImpl *create(TypeStorage *storage, const KeyTy &key) {
@@ -792,8 +788,8 @@ public:
 
   static ASTFloatImpl *create(TypeStorage *storage, llvm::SMRange range,
                               llvm::StringRef value, ASTFloat::Suffix suffix) {
-    auto *impl = new (storage->allocate<ASTFloatImpl>()) ASTFloatImpl(
-        convertToRangeKey(range), value, static_cast<unsigned>(suffix));
+    auto *impl = new (storage->allocate<ASTFloatImpl>())
+        ASTFloatImpl(convertToRangeKey(range), value, suffix);
     return impl;
   }
 
@@ -806,7 +802,7 @@ public:
   }
 
 private:
-  ASTFloatImpl(RangeKey key, llvm::StringRef value, unsigned suffix)
+  ASTFloatImpl(RangeKey key, llvm::StringRef value, ASTFloat::Suffix suffix)
       : AttributeImplTemplate({key, value, suffix}) {}
 };
 
@@ -829,6 +825,24 @@ ConstantFloatAttr ASTFloat::interpret() const {
     return nullptr;
 
   return ConstantFloatAttr::get(getContext(), floatValue);
+}
+
+void registerBuiltinAttributes(IRContext *context) {
+  context->registerAttr<StringAttr>();
+  context->registerAttr<ConstantIntAttr>();
+  context->registerAttr<ConstantFloatAttr>();
+  context->registerAttr<ConstantStringFloatAttr>();
+  context->registerAttr<ConstantUndefAttr>();
+  context->registerAttr<ConstantUnitAttr>();
+  context->registerAttr<ConstantVariableAttr>();
+  context->registerAttr<ArrayAttr>();
+  context->registerAttr<TypeAttr>();
+  context->registerAttr<EnumAttr>();
+  context->registerAttr<ASTInitializerList>();
+  context->registerAttr<ASTGroupOp>();
+  context->registerAttr<ASTUnaryOp>();
+  context->registerAttr<ASTInteger>();
+  context->registerAttr<ASTFloat>();
 }
 
 } // namespace kecc::ir

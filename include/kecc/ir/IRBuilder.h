@@ -67,6 +67,10 @@ public:
     Block::InsertionPoint savedInsertionPoint;
   };
 
+  void setInsertionPointStart(Block *block) {
+    insertionPoint = block->getStartInsertionPoint();
+  }
+
   void setInsertionPoint(Block *block) {
     insertionPoint = block->getLastInsertionPoint();
   }

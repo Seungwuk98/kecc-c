@@ -1,0 +1,133 @@
+// RUN: kecc-opt %s --canonicalize-struct | FileCheck %s
+
+struct S : { x: i32, y: f32, z: i32 }
+struct SS : { x: i32 }
+struct B : { x: i64, y: i64, z: i64 }
+struct BB : { x: [100 x i64] }
+// CHECK: struct S : { x:i32, y:f32, z:i32 }
+// CHECK: struct SS : { x:i32 }
+// CHECK: struct B : { x:i64, y:i64, z:i64 }
+// CHECK: struct BB : { x:[100 x i64] }
+
+fun struct S @test_func_small (struct S) {
+// CHECK: fun i64, i64 @test_func_small (i64, i64) 
+init:
+  bid: b0
+  allocations: 
+// CHECK-NEXT: init:
+// CHECK-NEXT:  bid: b0
+// CHECK-NEXT:  allocations: 
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct S
+  // CHECK-NEXT: %b0:p0:i64 
+  // CHECK-NEXT: %b0:p1:i64
+  ret %b0:p0:struct S
+  // CHECK-NEXT: ret %b0:p0:i64, %b0:p1:i64
+}
+
+fun struct B @test_func_big (struct B) {
+// CHECK: fun unit @test_func_big (struct B*, struct B*)
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  // CHECK-NEXT: %b0:p0:struct B*:ret_ptr_0
+  %b0:p0:struct B 
+  // CHECK-NEXT: %b0:p1:struct B*
+  // CHECK-NEXT: %b0:i0:unit* = typecast %b0:p0:struct B* to unit*
+  // CHECK-NEXT: %b0:i1:unit* = typecast %b0:p1:struct B* to unit*
+  // CHECK-NEXT: %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 24:i64) 
+  
+  ret %b0:p0:struct B
+  // CHECK-NEXT: ret
+}
+
+fun struct SS @test_func_very_small (struct SS) {
+// CHECK: fun i64 @test_func_very_small (i64) 
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct SS
+  // CHECK-NEXT: %b0:p0:i64
+  ret %b0:p0:struct SS
+  // CHECK-NEXT: ret %b0:p0:i64
+}
+
+fun struct B, struct BB @test_func_very_big (struct B, struct BB) {
+// CHECK: fun unit @test_func_very_big (struct BB*, struct B*, struct B*, struct BB*)
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  // CHECK-NEXT: %b0:p0:struct BB*:ret_ptr_1
+  // CHECK-NEXT: %b0:p1:struct B*:ret_ptr_0
+  %b0:p0:struct B 
+  %b0:p1:struct BB 
+  // CHECK-NEXT: %b0:p2:struct B*
+  // CHECK-NEXT: %b0:p3:struct BB*
+
+  /// store return idx 0 
+  // CHECK-NEXT: %b0:i0:unit* = typecast %b0:p1:struct B* to unit*
+  // CHECK-NEXT: %b0:i1:unit* = typecast %b0:p2:struct B* to unit*
+  // CHECK-NEXT: %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 24:i64)
+
+  /// store return idx 1
+  // CHECK-NEXT: %b0:i3:unit* = typecast %b0:p0:struct BB* to unit*
+  // CHECK-NEXT: %b0:i4:unit* = typecast %b0:p3:struct BB* to unit*
+  // CHECK-NEXT: %b0:i5:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i3:unit*, %b0:i4:unit*, 800:i64)
+  ret %b0:p0:struct B, %b0:p1:struct BB
+  // CHECK-NEXT: ret
+}
+
+fun struct B, struct S, struct BB @test_func_mix (struct B, struct S, struct BB) {
+// CHECK: fun i64, i64 @test_func_mix (struct BB*, struct B*, struct B*, i64, i64, struct BB*)
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:  bid: b0
+// CHECK-NEXT:  allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  // CHECK-NEXT: %b0:p0:struct BB*:ret_ptr_2
+  // CHECK-NEXT: %b0:p1:struct B*:ret_ptr_0
+  %b0:p0:struct B:x 
+  // CHECK-NEXT: %b0:p2:struct B*:x
+  %b0:p1:struct S:y
+  // CHECK-NEXT: %b0:p3:i64:y
+  // CHECK-NEXT: %b0:p4:i64:y
+  %b0:p2:struct BB:z
+  // CHECK-NEXT: %b0:p5:struct BB*:z
+
+  /// store return idx 0
+  // CHECK-NEXT: %b0:i0:unit* = typecast %b0:p1:struct B* to unit*
+  // CHECK-NEXT: %b0:i1:unit* = typecast %b0:p2:struct B* to unit*
+  // CHECK-NEXT: %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 24:i64)
+
+  /// store return idx 2
+  // CHECK-NEXT: %b0:i3:unit* = typecast %b0:p0:struct BB* to unit
+  // CHECK-NEXT: %b0:i4:unit* = typecast %b0:p5:struct BB* to unit
+  // CHECK-NEXT: %b0:i5:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i3:unit*, %b0:i4:unit*, 800:i64)
+
+  ret %b0:p0:struct B, %b0:p1:struct S, %b0:p2:struct BB
+  // CHECK-NEXT: ret %b0:p3:i64, %b0:p4:i64
+}

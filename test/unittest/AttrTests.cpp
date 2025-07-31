@@ -55,4 +55,52 @@ TEST_CASE("IR Attrs") {
   }
 }
 
+TEST_CASE("Attr walks") {
+  IRContext context_;
+  IRContext *context = &context_;
+
+  SUBCASE("Type attr walk") {
+    auto i32 = IntT::get(context, 32, true);
+    auto f32 = FloatT::get(context, 32);
+    auto i32_f32 = TupleT::get(context, {i32, f32});
+
+    auto attr = TypeAttr::get(context, i32_f32);
+
+    llvm::SmallVector<Type> visit;
+    attr.walk([&](Type type) -> WalkResult {
+      visit.push_back(type);
+      return WalkResult::advance();
+    });
+
+    CHECK_EQ(visit.size(), 3);
+    CHECK(visit[0] == i32_f32);
+    CHECK(visit[1] == i32);
+    CHECK(visit[2] == f32);
+  }
+
+  SUBCASE("Type attr replace") {
+    auto i32 = IntT::get(context, 32, true);
+    auto f32 = FloatT::get(context, 32);
+    auto i32_f32 = TupleT::get(context, {i32, f32});
+    auto i32_f32__i32_f32 = TupleT::get(context, {i32_f32, i32_f32});
+
+    auto attr = TypeAttr::get(context, i32_f32__i32_f32);
+
+    auto replaced = attr.replace([&](Type type) -> ReplaceResult<Type> {
+      if (auto floatT = type.dyn_cast<FloatT>()) {
+        return {PointerT::get(context, floatT),
+                utils::LogicalResult::success()};
+      }
+      return {type, utils::LogicalResult::success()};
+    });
+    CHECK(replaced);
+
+    auto pointerF32 = PointerT::get(context, f32);
+    auto i32_f32Ptr = TupleT::get(context, {i32, pointerF32});
+    auto expectedType = TupleT::get(context, {i32_f32Ptr, i32_f32Ptr});
+    auto expectedAttr = TypeAttr::get(context, expectedType);
+    CHECK_EQ(replaced, expectedAttr);
+  }
+}
+
 } // namespace kecc::ir

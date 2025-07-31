@@ -7,6 +7,7 @@
 #include "kecc/ir/IRTypes.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Error.h"
 
 namespace kecc {
@@ -489,6 +490,8 @@ Parser::parseRegisterId(ir::Block *parentBlock) {
         reportError(nameTok->getRange(), "Expected a valid identifier");
         return {};
       }
+    } else {
+      lexer.rollback(peekToken());
     }
 
     auto blockId = bidTok->getNumberFromId();
@@ -519,6 +522,8 @@ Parser::parseRegisterId(ir::Block *parentBlock) {
         reportError(nameTok->getRange(), "Expected a valid identifier");
         return {};
       }
+    } else {
+      lexer.rollback(peekToken());
     }
 
     auto blockId = parentBlock->getId();
@@ -959,12 +964,33 @@ struct ParserDetail {
                                    ir::Block *parentBlock) {
     Parser::RangeHelper rh(parser, startTok);
 
+    auto peekTok = parser.peekConstantToken();
+    if (peekTok->is<Token::Tok_unknown>()) {
+      parser.lexer.rollback(peekTok);
+      peekTok = parser.peekRidToken();
+      if (peekTok->is<Token::Tok_unknown>()) {
+        parser.lexer.rollback(peekTok);
+        return parser.builder.create<ir::inst::Return>(rh.getRange());
+      }
+    }
+
+    parser.lexer.rollback(peekTok);
+
     ir::Value value = parser.parseOperand(parentBlock);
     if (parser.diag.hasError())
       return nullptr;
 
+    llvm::SmallVector<ir::Value> values(1, value);
+    while (parser.consumeIf<Token::Tok_comma>()) {
+      auto nextValue = parser.parseOperand(parentBlock);
+      if (parser.diag.hasError())
+        return nullptr;
+
+      values.emplace_back(nextValue);
+    }
+
     auto returnInst =
-        parser.builder.create<ir::inst::Return>(rh.getRange(), value);
+        parser.builder.create<ir::inst::Return>(rh.getRange(), values);
     return returnInst;
   }
 

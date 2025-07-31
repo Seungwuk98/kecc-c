@@ -13,7 +13,7 @@ template <typename... Ts> struct IsTuple<std::tuple<Ts...>> {
   static constexpr bool value = true;
 };
 
-template <typename T> bool IsTupleV = IsTuple<T>::value;
+template <typename T> constexpr bool IsTupleV = IsTuple<T>::value;
 
 template <typename T> struct IsPair {
   static constexpr bool value = false;
@@ -23,7 +23,7 @@ template <typename F, typename S> struct IsPair<std::pair<F, S>> {
   static constexpr bool value = true;
 };
 
-template <typename T> bool IsPairV = IsPair<T>::value;
+template <typename T> constexpr bool IsPairV = IsPair<T>::value;
 
 } // namespace kecc::utils
 

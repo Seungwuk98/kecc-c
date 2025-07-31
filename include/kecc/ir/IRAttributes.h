@@ -139,11 +139,16 @@ public:
     return static_cast<T>(getEnumValueAsUnsigned());
   }
 
+  static EnumAttr get(IRContext *context, TypeID typeId, unsigned value);
+
   unsigned getEnumValueAsUnsigned() const;
 
 private:
-  static EnumAttr get(IRContext *context, TypeID typeId, unsigned value);
 };
+
+using RangeKey = std::pair<intptr_t, intptr_t>;
+RangeKey convertToRangeKey(const llvm::SMRange &range);
+llvm::SMRange convertToRange(const RangeKey &key);
 
 class InitializerAttr : public Attribute {
 public:
@@ -162,6 +167,10 @@ class ASTInitializerList
 public:
   using Base::Base;
 
+  static ASTInitializerList get(IRContext *context, RangeKey range,
+                                llvm::ArrayRef<InitializerAttr> values) {
+    return get(context, convertToRange(range), values);
+  }
   static ASTInitializerList get(IRContext *context, llvm::SMRange range,
                                 llvm::ArrayRef<InitializerAttr> values);
 
@@ -180,6 +189,11 @@ class ASTGroupOp
 public:
   using Base::Base;
 
+  static ASTGroupOp get(IRContext *context, RangeKey range,
+                        InitializerAttr value) {
+    return get(context, convertToRange(range), value);
+  }
+
   static ASTGroupOp get(IRContext *context, llvm::SMRange range,
                         InitializerAttr value);
 
@@ -196,6 +210,10 @@ public:
   enum OpKind { Plus, Minus };
   using Base::Base;
 
+  static ASTUnaryOp get(IRContext *context, RangeKey range, OpKind kind,
+                        InitializerAttr operand) {
+    return get(context, convertToRange(range), kind, operand);
+  }
   static ASTUnaryOp get(IRContext *context, llvm::SMRange range, OpKind kind,
                         InitializerAttr operand);
 
@@ -217,6 +235,10 @@ public:
   };
   using Base::Base;
 
+  static ASTInteger get(IRContext *context, RangeKey range, IntegerBase base,
+                        llvm::StringRef value, Suffix suffix) {
+    return get(context, convertToRange(range), base, value, suffix);
+  }
   static ASTInteger get(IRContext *context, llvm::SMRange range,
                         IntegerBase base, llvm::StringRef value, Suffix suffix);
 
@@ -234,6 +256,10 @@ public:
   enum Suffix { Float_F, Float_f, Double };
   using Base::Base;
 
+  static ASTFloat get(IRContext *context, RangeKey range, llvm::StringRef value,
+                      Suffix suffix) {
+    return get(context, convertToRange(range), value, suffix);
+  }
   static ASTFloat get(IRContext *context, llvm::SMRange range,
                       llvm::StringRef value, Suffix suffix);
 
@@ -243,7 +269,29 @@ public:
   ConstantFloatAttr interpret() const;
 };
 
+void registerBuiltinAttributes(IRContext *context);
+
 } // namespace kecc::ir
+
+namespace llvm {
+
+template <>
+struct DenseMapInfo<kecc::ir::ASTUnaryOp::OpKind>
+    : public DenseMapInfo<unsigned> {};
+
+template <>
+struct DenseMapInfo<kecc::ir::ASTInteger::IntegerBase>
+    : public DenseMapInfo<unsigned> {};
+
+template <>
+struct DenseMapInfo<kecc::ir::ASTInteger::Suffix>
+    : public DenseMapInfo<unsigned> {};
+
+template <>
+struct DenseMapInfo<kecc::ir::ASTFloat::Suffix>
+    : public DenseMapInfo<unsigned> {};
+
+} // namespace llvm
 
 DECLARE_KECC_TYPE_ID(kecc::ir::StringAttr)
 DECLARE_KECC_TYPE_ID(kecc::ir::ConstantIntAttr)

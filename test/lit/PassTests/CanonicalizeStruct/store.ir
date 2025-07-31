@@ -1,0 +1,138 @@
+// RUN: kecc-opt %s --canonicalize-struct | FileCheck %s
+
+struct S : { x: i32, y: f32, z: i32 }
+struct S2 : { x: i64, y: i64 }
+struct SS : { x: i32 }
+struct SS2 : { x: i8, y: i8, z: i8 }
+struct B : { x: i64, y: i64, z: i64 }
+struct BB : { x: [100 x i64] }
+
+fun i32 @small_store (struct S) {
+// CHECK: fun i32 @small_store (i64, i64)
+init:
+  bid: b0
+  allocations: 
+    %l0:struct S
+// CHECK-NEXT: init:
+// CHECK-NEXT:  bid: b0
+// CHECK-NEXT:  allocations: 
+  // CHECK-NEXT:   %l0:struct S 
+  // CHECK-NEXT:   %l1:[2 x i64]
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct S:x
+  // CHECK-NEXT: %b0:p0:i64:x
+  // CHECK-NEXT: %b0:p1:i64:x
+
+  /// store p0 to l1
+  // CHECK-NEXT: %b0:i0:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+  // CHECK-NEXT: %b0:i2:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+
+  /// memcpy l1 to l0
+  // CHECK-NEXT: %b0:i4:unit* = typecast %l0:struct S* to unit*
+  // CHECK-NEXT: %b0:i5:unit* = typecast %l1:[2 x i64]* to unit*
+  // CHECK-NEXT: %b0:i6:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i4:unit*, %b0:i5:unit*, 12:i64)
+  
+  %b0:i0:unit = store %b0:p0:struct S %l0:struct S*
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+
+fun i32 @small_store2 (struct S2) {
+// CHECK: fun i32 @small_store2 (i64, i64) 
+init:
+  bid: b0
+  allocations:
+    %l0:struct S2
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:struct S2
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct S2:x
+  // CHECK-NEXT: %b0:p0:i64:x
+  // CHECK-NEXT: %b0:p1:i64:x
+
+  /// no need to use memcpy
+  
+  /// store p0 to l0 directly
+  // CHECK-NEXT: %b0:i0:i64* = typecast %l0:struct S2* to i64*
+  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+  
+  /// store p1 to l0 directly
+  // CHECK-NEXT: %b0:i2:i64* = getelementptr %l0:struct S2* offset 8:i64
+  // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+
+  %b0:i0:unit = store %b0:p0:struct S2 %l0:struct S2*
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+
+fun i32 @very_small_store (struct SS) {
+// CHECK: fun i32 @very_small_store (i64) 
+init:
+  bid: b0
+  allocations:
+    %l0:struct SS 
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:struct SS
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct SS:x 
+  // CHECK-NEXT: %b0:p0:i64:x
+
+  /// truc p0 to sizeof(struct SS) = 32
+  // CHECK-NEXT: %b0:i0:i32 = typecast %b0:p0:i64 to i32
+  
+  /// cast l0 to i32*
+  // CHECK-NEXT: %b0:i1:i32* = typecast %l0:struct SS* to i32*
+  
+  /// store i0 into i1
+  // CHECK-NEXT: %b0:i2:unit = store %b0:i0:i32 %b0:i1:i32*
+
+  %b0:i0:unit = store %b0:p0:struct SS %l0:struct SS*
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+
+fun i32 @very_small_store2 (struct SS2) {
+// CHECK: fun i32 @very_small_store2 (i64)
+init:
+  bid: b0
+  allocations:
+    %l0:struct SS2
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:struct SS2 
+// CHECK-NEXT:     %l1:i64
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct SS2:x
+  // CHECK-NEXT: %b0:p0:i64
+
+  /// store p0 to l1
+  // CHECK-NEXT: %b0:i0:unit = store %b0:p0:i64 %l1:i64*
+
+  /// cast l0 to unit*
+  // CHECK-NEXT: %b0:i1:unit* = typecast %l0:struct SS2* to unit*
+  
+  /// cast l1 to unit*
+  // CHECK-NEXT: %b0:i2:unit* = typecast %l1:i64* to unit*
+
+  /// memcpy sizeof(struct SS2)=3 bytes of l1 data to l0 
+  // CHECK-NEXT: %b0:i3:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i1:unit*, %b0:i2:unit*, 3:i64)
+
+  %b0:i0:unit = store %b0:p0:struct SS2 %l0:struct SS2*
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+

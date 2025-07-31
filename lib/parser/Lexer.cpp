@@ -79,9 +79,9 @@ Token *Lexer::tryLex(llvm::StringRef data, Token::Kind success) {
 void Lexer::rollback(Token *token) {
   assert(token != nullptr && "Cannot rollback to a null token.");
   auto index = token->getIndex();
-  tokenCursor = index;
+  tokenCursor = index - 1;
 
-  while (tokens.size() > index) {
+  while (tokens.size() >= index) {
     tokens.pop_back();
   }
 

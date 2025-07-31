@@ -21,12 +21,10 @@ void Instruction::print(IRPrintContext &context) const {
 }
 
 void Instruction::print(llvm::raw_ostream &os) const {
-  IRPrintContext printContext(os);
-  getParentBlock()->getParentFunction()->registerAllInstInfo(printContext);
-  print(printContext);
+  return getStorage()->print(os);
 }
 
-void Instruction::dump() const { print(llvm::errs()); }
+void Instruction::dump() const { return getStorage()->dump(); }
 
 IRContext *Instruction::getContext() const {
   return getStorage()->getAbstractInstruction()->getContext();
@@ -285,6 +283,14 @@ WalkResult InstructionStorage::walk(
 void InstructionStorage::print(IRPrintContext &printContext) const {
   getAbstractInstruction()->getPrintFn()(this, printContext);
 }
+
+void InstructionStorage::print(llvm::raw_ostream &os) const {
+  IRPrintContext printContext(os);
+  getParentBlock()->getParentFunction()->registerAllInstInfo(printContext);
+  print(printContext);
+}
+
+void InstructionStorage::dump() const { print(llvm::errs()); }
 
 void InstructionStorage::replaceOperand(Value oldV, Value newV) {
   Operand *operands = getTrailingObjects<Operand>();

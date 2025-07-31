@@ -32,6 +32,7 @@ public:
   InstructionStorage *getInstruction() const;
 
   Type getType() const { return type; }
+  void setType(Type newType) { type = newType; }
 
   std::uint8_t getValueNumber() const { return valueNumber; }
 
@@ -48,6 +49,7 @@ class Value {
 public:
   Value() : impl(nullptr) {}
   Value(ValueImpl *impl) : impl(impl) {}
+  Value(const Value &other) : impl(other.impl) {}
 
   InstructionStorage *getInstruction() const;
 

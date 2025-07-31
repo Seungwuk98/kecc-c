@@ -1,0 +1,50 @@
+// RUN: kecc-opt %s --outline-multiple-results
+
+fun i64, i64, i64, i64 @callee () {
+// CHECK: fun i64, i64 @callee (i64*, i64*)
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  // CHECK-NEXT: %b0:p0:i64*
+  // CHECK-NEXT: %b0:p1:i64*
+  // CHECK-NEXT: %b0:i0:unit = store 2:i64 %b0:p0:i64*
+  // CHECK-NEXT: %b0:i1:unit = store 3:i64 %b0:p1:i64*
+  ret 0:i64, 1:i64, 2:i64, 3:i64
+  // CHECK-NEXT: ret 0:i64, 1:i64
+}
+
+fun i64 @caller () {
+// CHECK: fun i64 @caller ()
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i64
+// CHECK-NEXT:     %l1:i64
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:i64, %b0:i1:i64, %b0:i2:i64, %b0:i3:i64 = call @callee:[ret:i64, i64, i64, i64 params:()]*()
+  // CHECK-NEXT: %b0:i0:i64, %b0:i1:i64 = call @callee:[ret:i64, i64 params:(i64*, i64*)]*(%l0:i64*, %l1:i64*)
+  // CHECK-NEXT: %b0:i2:i64 = load %l0:i64*
+  // CHECK-NEXT: %b0:i3:i64 = load %l1:i64*
+
+  %b0:i4:i64 = add %b0:i0:i64 %b0:i1:i64
+  %b0:i5:i64 = add %b0:i2:i64 %b0:i3:i64 
+  %b0:i6:i64 = add %b0:i4:i64 %b0:i5:i64
+  // CHECK-NEXT: %b0:i4:i64 = add %b0:i0:i64 %b0:i1:i64
+  // CHECK-NEXT: %b0:i5:i64 = add %b0:i2:i64 %b0:i3:i64 
+  // CHECK-NEXT: %b0:i6:i64 = add %b0:i4:i64 %b0:i5:i64
+
+
+  ret %b0:i6:i64
+  // CHECK-NEXT: ret %b0:i6:i64
+}

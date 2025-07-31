@@ -3,6 +3,7 @@
 
 #include "kecc/ir/Context.h"
 #include "kecc/ir/TypeAttributeSupport.h"
+#include "kecc/ir/TypeWalk.h"
 #include "kecc/utils/MLIR.h"
 #include <string>
 
@@ -44,24 +45,70 @@ public:
     return llvm::DenseMapInfo<AttributeImpl *>::getHashValue(attr.impl);
   }
 
+  void
+  walkSubElements(const llvm::function_ref<void(Type)> typeWalkFn,
+                  const llvm::function_ref<void(Attribute)> attrWalkFn) const;
+
+  Attribute replaceSubElements(llvm::ArrayRef<Type> typeReplaced,
+                               llvm::ArrayRef<Attribute> attrReplaced) const;
+
+  template <TypeWalker::Order Order = TypeWalker::PreOrder, typename... WalkFns>
+  WalkResult walk(WalkFns &&...walkFns) const {
+    TypeWalker walker(Order);
+    (walker.addWalkFn(std::forward<WalkFns>(walkFns)), ...);
+    return walker.walk(*this);
+  }
+
+  template <typename... ReplaceFns>
+  Attribute replace(ReplaceFns &&...replaceFns) const {
+    TypeReplacer replacer;
+    (replacer.addReplaceFn(std::forward<ReplaceFns>(replaceFns)), ...);
+    return replacer.replace(*this);
+  }
+
+  static Attribute getFromVoidPointer(void *impl) {
+    return static_cast<AttributeImpl *>(impl);
+  }
+
 private:
   AttributeImpl *impl;
 };
 
 class AbstractAttribute {
 public:
+  using WalkSubElementsFn =
+      std::function<void(Attribute, llvm::function_ref<void(Type)>,
+                         llvm::function_ref<void(Attribute)>)>;
+  using ReplaceSubElementFn = std::function<Attribute(
+      Attribute, llvm::ArrayRef<Type>, llvm::ArrayRef<Attribute>)>;
+
   TypeID getId() const { return id; }
   IRContext *getContext() const { return context; }
 
+  const WalkSubElementsFn &getWalkSubElementsFn() const {
+    return walkSubElementsFn;
+  }
+  const ReplaceSubElementFn &getReplaceSubElementsFn() const {
+    return replaceSubElementsFn;
+  }
+
   template <typename T> static AbstractAttribute build(IRContext *context) {
     TypeID typeId = TypeID::get<T>();
-    return AbstractAttribute(typeId, context);
+    return AbstractAttribute(typeId, context, T::getWalkSubElementsFn(),
+                             T::getReplaceSubElementsFn());
   }
 
 private:
-  AbstractAttribute(TypeID id, IRContext *context) : id(id), context(context) {}
+  AbstractAttribute(TypeID id, IRContext *context,
+                    WalkSubElementsFn walkSubElementsFn,
+                    ReplaceSubElementFn replaceSubElementsFn)
+      : id(id), context(context),
+        walkSubElementsFn(std::move(walkSubElementsFn)),
+        replaceSubElementsFn(std::move(replaceSubElementsFn)) {}
   TypeID id;
   IRContext *context;
+  const WalkSubElementsFn walkSubElementsFn;
+  const ReplaceSubElementFn replaceSubElementsFn;
 };
 
 class AttributeImpl {

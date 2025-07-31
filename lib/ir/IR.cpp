@@ -174,7 +174,11 @@ void Function::print(IRPrintContext &printContext) const {
 
   registerAllInstInfo(printContext);
 
-  printContext.getOS() << ") {";
+  printContext.getOS() << ")";
+  if (!hasDefinition())
+    return;
+
+  printContext.getOS() << " {";
   printContext.printIndent();
   printContext.getOS() << "init:";
   {
@@ -256,5 +260,7 @@ void Function::dropReferences() {
     });
   }
 }
+
+bool Function::hasDefinition() const { return !empty(); }
 
 } // namespace kecc::ir

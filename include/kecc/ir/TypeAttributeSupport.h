@@ -2,10 +2,15 @@
 #define KECC_IR_TYPE_ATTRIBUTE_SUPPORT_H
 
 #include "kecc/ir/Context.h"
+#include "kecc/ir/TypeWalk.h"
 #include "kecc/utils/MLIR.h"
 #include "llvm/ADT/SmallVector.h"
 
 namespace kecc::ir {
+
+class Type;
+class Attribute;
+
 using StructSizeMap =
     llvm::DenseMap<llvm::StringRef,
                    std::tuple<size_t, size_t, llvm::SmallVector<size_t>>>;
@@ -54,6 +59,22 @@ struct TypeAttrTemplate : public ParentType {
     return [](BaseType obj, const StructSizeMap &sizeMap) {
       return ConcreteType::calculateSizeAndAlign(
           obj.template cast<ConcreteType>(), sizeMap);
+    };
+  }
+
+  static auto getWalkSubElementsFn() {
+    return [](BaseType obj, llvm::function_ref<void(Type)> typeWalkFn,
+              llvm::function_ref<void(Attribute)> attrWalkFn) {
+      detail::walkSubElementImpl(obj.template cast<ConcreteType>(), typeWalkFn,
+                                 attrWalkFn);
+    };
+  }
+
+  static auto getReplaceSubElementsFn() {
+    return [](BaseType obj, llvm::ArrayRef<Type> replacedType,
+              llvm::ArrayRef<Attribute> attributeType) -> BaseType {
+      return detail::replaceSubElementImpl(obj.template cast<ConcreteType>(),
+                                           replacedType, attributeType);
     };
   }
 };

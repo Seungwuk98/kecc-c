@@ -55,6 +55,31 @@ public:
     }
     os << ")>";
   }
+
+  static std::pair<size_t, size_t>
+  calculateSizeAndAlign(TensorT type, const StructSizeMap &sizeMap) {
+    // memory of tensor [1, 2, 3]
+    //
+    // 3 (length) | 1, 2, 3 (shape) | values * 6
+    auto shape = type.getShape();
+    auto byteForShape =
+        shape.size() * type.getContext()->getArchitectureBitSize();
+
+    auto elementType = type.getElementType();
+    auto valueSize = 1;
+    for (size_t dim : shape)
+      valueSize *= dim;
+
+    IRContext *context = type.getContext();
+
+    auto intT = IntT::get(context, context->getArchitectureBitSize(), true);
+    auto shapeArrayIntT = ArrayT::get(context, shape.size(), intT);
+    auto valueArrayT = ArrayT::get(context, valueSize, elementType);
+
+    auto tupleT = TupleT::get(context, {intT, shapeArrayIntT, valueArrayT});
+
+    return tupleT.getSizeAndAlign(sizeMap);
+  }
 };
 
 namespace inst {

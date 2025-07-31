@@ -6,6 +6,7 @@ add_library(KeccIR
   Block.cpp
   Context.cpp
   Type.cpp
+  TypeWalk.cpp
   IRTypes.cpp
   IRBuilder.cpp
   Instruction.cpp

@@ -68,6 +68,8 @@ public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value function,
                     llvm::ArrayRef<Value> args);
+  static void build(IRBuilder &builder, InstructionState &state, Value function,
+                    llvm::ArrayRef<Value> args, llvm::ArrayRef<Type> types);
 
   Value getFunction() const;
   llvm::ArrayRef<Operand> getArguments() const;
@@ -421,6 +423,32 @@ public:
     llvm::ArrayRef<Value> operands;
   };
 };
+
+class InlineCall : public InstructionTemplate<InlineCall, Instruction,
+                                              VariadicResults, SideEffect> {
+public:
+  using Base::Base;
+  static void build(IRBuilder &builder, InstructionState &state,
+                    llvm::StringRef name, FunctionT type,
+                    llvm::ArrayRef<Value> args);
+
+  llvm::StringRef getName() const;
+  FunctionT getFunctionType() const;
+  llvm::ArrayRef<Operand> getArguments() const;
+
+  static void printer(InlineCall op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    llvm::ArrayRef<Value> getArguments() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
+};
+
+void registerBuiltinInstructions(IRContext *context);
 
 } // namespace kecc::ir::inst
 

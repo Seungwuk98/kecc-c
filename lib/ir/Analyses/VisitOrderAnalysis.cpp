@@ -54,6 +54,8 @@ std::unique_ptr<VisitOrderAnalysis> VisitOrderAnalysis::create(Module *module) {
                  std::pair<std::vector<Block *>, std::vector<Block *>>>
       preOrderMap;
   for (Function *func : *module->getIR()) {
+    if (!func->hasDefinition())
+      continue;
     auto preDFS = DFS::create<DFS::PreOrder>(module, func);
     auto preOrder = preDFS->getOrder();
     std::vector<Block *> reversePreOrder(preOrder.rbegin(), preOrder.rend());

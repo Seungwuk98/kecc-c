@@ -103,6 +103,9 @@ private:
   Token *peekRidToken(size_t offset = 0) {
     return lexer.peekToken(offset, Lexer::LexMode::RegisterId);
   }
+  Token *peekConstantToken(size_t offset = 0) {
+    return lexer.peekToken(offset, Lexer::LexMode::Constant);
+  }
   Token *peekInitializerToken(size_t offset = 0) {
     return lexer.peekToken(offset, Lexer::LexMode::Initializer);
   }

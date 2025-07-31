@@ -12,7 +12,9 @@ concept DetectGetKey = requires(T obj, Args &&...args) {
 };
 
 template <typename T>
-concept DetectKeyTy = requires(T obj) { typename T::KeyTy; };
+concept DetectGetKeyValue = requires(T *obj) {
+  { obj->getKeyValue() } -> std::convertible_to<typename T::KeyTy>;
+};
 
 } // namespace kecc::ir
 

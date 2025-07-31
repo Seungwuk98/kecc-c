@@ -84,7 +84,7 @@ public:
   void setParentFunction(Function *func) { parentFunction = func; }
 
   InsertionPoint getLastInsertionPoint();
-  InsertionPoint getFirstInsertionPoint();
+  InsertionPoint getStartInsertionPoint();
   InsertionPoint getLastTempInsertionPoint();
 
   int getId() const { return blockId; }
@@ -97,6 +97,8 @@ public:
 
   void registerRid(IRPrintContext &printContext) const;
   void print(IRPrintContext &printContext) const;
+  void dump() const;
+  void print(llvm::raw_ostream &os) const;
   void remove(InstructionStorage *inst);
 
   void dropReferences();

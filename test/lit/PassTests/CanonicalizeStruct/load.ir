@@ -1,0 +1,199 @@
+// RUN: kecc-opt %s --canonicalize-struct | FileCheck %s
+
+
+struct S : { x: i32, y: f32, z: i32 }
+struct S2 : { x: i64, y: i64 }
+struct SS : { x: i32 }
+struct SS2 : { x: i8, y: i8, z: i8 }
+struct B : { x: i64, y: i64, z: i64 }
+struct BB : { x: [100 x i64] }
+
+
+fun i32 @small_load (struct S) {
+// CHECK: fun i32 @small_load (i64, i64)
+init:
+  bid: b0
+  allocations:
+    %l0:struct S
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:struct S
+// CHECK-NEXT:     %l1:[2 x i64]
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct S
+  // CHECK-NEXT: %b0:p0:i64
+  // CHECK-NEXT: %b0:p1:i64
+
+  //===--------------------------------------------------------------------===//
+  /// store
+  //===--------------------------------------------------------------------===//
+  
+  %b0:i0:unit = store %b0:p0:struct S %l0:struct S*
+  /// store p0 to l1
+  // CHECK-NEXT: %b0:i0:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+
+  /// store p1 to l1
+  // CHECK-NEXT: %b0:i2:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+
+  /// memcpy l1 to l0
+  // CHECK-NEXT: %b0:i4:unit* = typecast %l0:struct S* to unit*
+  // CHECK-NEXT: %b0:i5:unit* = typecast %l1:[2 x i64]* to unit*
+  // CHECK-NEXT: %b0:i6:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i4:unit*, %b0:i5:unit*, 12:i64)
+
+  //===--------------------------------------------------------------------===//
+  /// load 
+  //===--------------------------------------------------------------------===//
+
+  %b0:i1:struct S = load %l0:struct S*
+  /// memcpy %l0 to %l1
+  // CHECK-NEXT: %b0:i7:unit* = typecast %l1:[2 x i64]* to unit*
+  // CHECK-NEXT: %b0:i8:unit* = typecast %l0:struct S* to unit*
+  // CHECK-NEXT: %b0:i9:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i7:unit*, %b0:i8:unit*, 12:i64)
+
+  /// load first i64 from l1
+  // CHECK-NEXT: %b0:i10:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i11:i64 = load %b0:i10:i64*
+
+  /// load second i64 from l1
+  // CHECK-NEXT: %b0:i12:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i13:i64 = load %b0:i12:i64*
+
+  //===--------------------------------------------------------------------===//
+  /// store 
+  //===--------------------------------------------------------------------===//
+  
+  %b0:i2:unit = store %b0:i1:struct S %l0:struct S*
+  /// store i11 to l1
+  // CHECK-NEXT: %b0:i14:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i15:unit = store %b0:i11:i64 %b0:i14:i64*
+  
+  /// store i13 to l1
+  // CHECK-NEXT: %b0:i16:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i17:unit = store %b0:i13:i64 %b0:i16:i64*
+
+  /// memcpy l1 to l0
+  // CHECK-NEXT: %b0:i18:unit* = typecast %l0:struct S* to unit*
+  // CHECK-NEXT: %b0:i19:unit* = typecast %l1:[2 x i64]* to unit*
+  // CHECK-NEXT: %b0:i20:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i18:unit*, %b0:i19:unit*, 12:i64)
+
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+
+fun i32 @small_load2 (struct S2) {
+// CHECK: fun i32 @small_load2 (i64, i64)
+init:
+  bid: b0
+  allocations: 
+    %l0:struct S2
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations: 
+// CHECK-NEXT:     %l0:struct S2
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct S2
+  // CHECK-NEXT: %b0:p0:i64
+  // CHECK-NEXT: %b0:p1:i64
+
+  //===--------------------------------------------------------------------===//
+  /// store 
+  //===--------------------------------------------------------------------===//
+  %b0:i0:unit = store %b0:p0:struct S2 %l0:struct S2*
+
+  /// store p0 to l0
+  // CHECK-NEXT: %b0:i0:i64* = typecast %l0:struct S2* to i64*
+  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+
+  /// store p1 to 8(l0)
+  // CHECK-NEXT: %b0:i2:i64* = getelementptr %l0:struct S2* offset 8:i64
+  // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+
+  //===--------------------------------------------------------------------===//
+  /// load 
+  //===--------------------------------------------------------------------===//
+  %b0:i1:struct S2 = load %l0:struct S2*
+  
+  /// load first value from l0
+  // CHECK-NEXT: %b0:i4:i64* = typecast %l0:struct S2* to i64*
+  // CHECK-NEXT: %b0:i5:i64 = load %b0:i4:i64*
+
+  /// load second value from 8(l0)
+  // CHECK-NEXT: %b0:i6:i64* = getelementptr %l0:struct S2* offset 8:i64
+  // CHECK-NEXT: %b0:i7:i64 = load %b0:i6:i64*
+
+  //===--------------------------------------------------------------------===//
+  /// store 
+  //===--------------------------------------------------------------------===//
+  %b0:i2:unit = store %b0:i1:struct S2 %l0:struct S2*
+
+  /// store i5 to l0
+  // CHECK-NEXT: %b0:i8:i64* = typecast %l0:struct S2* to i64* 
+  // CHECK-NEXT: %b0:i9:unit = store %b0:i5:i64 %b0:i8:i64*
+
+  /// store i7 to l0
+  // CHECK-NEXT: %b0:i10:i64* = getelementptr %l0:struct S2* offset 8:i64
+  // CHECK-NEXT: %b0:i11:unit = store %b0:i7:i64 %b0:i10:i64*
+
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+
+fun i32 @big_load (struct B) {
+// CHECK: fun i32 @big_load (struct B*)
+init:
+  bid: b0
+  allocations:
+    %l0:struct B
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:struct B
+// CHECK-NEXT:     %l1:struct B
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:struct B
+  // CHECK-NEXT: %b0:p0:struct B*
+
+  //===--------------------------------------------------------------------===//
+  /// store 
+  //===--------------------------------------------------------------------===//
+  %b0:i0:unit = store %b0:p0:struct B %l0:struct B*
+
+  /// memcpy p0 to l0
+  // CHECK-NEXT: %b0:i0:unit* = typecast %l0:struct B* to unit*
+  // CHECK-NEXT: %b0:i1:unit* = typecast %b0:p0:struct B* to unit* 
+  // CHECK-NEXT: %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 24:i64)
+
+  //===--------------------------------------------------------------------===//
+  /// load 
+  //===--------------------------------------------------------------------===//
+  %b0:i1:struct B = load %l0:struct B*
+
+  /// new memory alloca l1
+  /// memcpy l0 to l1
+  // CHECK-NEXT: %b0:i3:unit* = typecast %l1:struct B* to unit*
+  // CHECK-NEXT: %b0:i4:unit* = typecast %l0:struct B* to unit* 
+  // CHECK-NEXT: %b0:i5:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i3:unit*, %b0:i4:unit*, 24:i64)
+
+  //===--------------------------------------------------------------------===//
+  /// store 
+  //===--------------------------------------------------------------------===//
+  %b0:i2:unit = store %b0:i1:struct B %l0:struct B*
+
+  /// memcpy l1 to l0
+  // CHECK-NEXT: %b0:i6:unit* = typecast %l0:struct B* to unit*
+  // CHECK-NEXT: %b0:i7:unit* = typecast %l1:struct B* to unit*
+  // CHECK-NEXT: %b0:i8:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i6:unit*, %b0:i7:unit*, 24:i64)
+
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}
+

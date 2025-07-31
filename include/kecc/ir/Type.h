@@ -52,10 +52,30 @@ public:
 
   std::pair<size_t, size_t> getSizeAndAlign(const StructSizeMap &sizeMap) const;
 
-  WalkResult walk(const llvm::function_ref<WalkResult(Type)> callback) const;
-  Type replace(const llvm::function_ref<Type(Type)> replaceFn) const;
-  void walkSubElements(const llvm::function_ref<void(Type)> callback) const;
-  Type replaceSubElements(llvm::ArrayRef<Type> replaced) const;
+  template <TypeWalker::Order order = TypeWalker::Order::PreOrder,
+            typename... WalkFns>
+  WalkResult walk(WalkFns &&...walkFns) const {
+    TypeWalker walker(order);
+    (walker.addWalkFn(std::forward<WalkFns>(walkFns)), ...);
+    return walker.walk(*this);
+  }
+
+  template <typename... ReplaceFns>
+  Type replace(ReplaceFns &&...replaceFn) const {
+    TypeReplacer replacer;
+    (replacer.addReplaceFn(std::forward<ReplaceFns>(replaceFn)), ...);
+    return replacer.replace(*this);
+  }
+
+  void
+  walkSubElements(const llvm::function_ref<void(Type)> typeWalkFn,
+                  const llvm::function_ref<void(Attribute)> attrWalkFn) const;
+  Type replaceSubElements(llvm::ArrayRef<Type> typeReplaced,
+                          llvm::ArrayRef<Attribute> attrReplaced) const;
+
+  static Type getFromVoidPointer(void *impl) {
+    return static_cast<TypeImpl *>(impl);
+  }
 
 private:
   TypeImpl *impl;
@@ -64,29 +84,48 @@ private:
 class AbstractType {
 public:
   using PrintFn = std::function<void(Type, llvm::raw_ostream &)>;
-  using GetBitSizeFn =
+  using GetSizeAndAlignFn =
       std::function<std::pair<size_t, size_t>(Type, const StructSizeMap &)>;
+  using WalkSubElementsFn =
+      std::function<void(Type, llvm::function_ref<void(Type)>,
+                         llvm::function_ref<void(Attribute)>)>;
+  using ReplaceSubElementsFn = std::function<Type(Type, llvm::ArrayRef<Type>,
+                                                  llvm::ArrayRef<Attribute>)>;
 
   TypeID getId() const { return id; }
   IRContext *getContext() const { return context; }
   const PrintFn &getPrintFn() const { return printFn; }
+  const GetSizeAndAlignFn &getGetBitSizeFn() const { return getBitSizeFn; }
+  const WalkSubElementsFn &getWalkSubElementsFn() const {
+    return walkSubElementsFn;
+  }
+  const ReplaceSubElementsFn &getReplaceSubElementsFn() const {
+    return replaceSubElementsFn;
+  }
 
   template <typename T> static AbstractType build(IRContext *context) {
     TypeID typeId = TypeID::get<T>();
     return AbstractType(typeId, context, T::getPrintFn(),
-                        T::getSizeAndAlignFn());
+                        T::getSizeAndAlignFn(), T::getWalkSubElementsFn(),
+                        T::getReplaceSubElementsFn());
   }
 
 private:
   AbstractType(TypeID id, IRContext *context, PrintFn printFn,
-               GetBitSizeFn getBitSizeFn)
+               GetSizeAndAlignFn getBitSizeFn,
+               WalkSubElementsFn walkSubElementsFn,
+               ReplaceSubElementsFn replaceSubElementsFn)
       : id(id), context(context), printFn(std::move(printFn)),
-        getBitSizeFn(std::move(getBitSizeFn)) {}
+        getBitSizeFn(std::move(getBitSizeFn)),
+        walkSubElementsFn(std::move(walkSubElementsFn)),
+        replaceSubElementsFn(std::move(replaceSubElementsFn)) {}
 
   TypeID id;
   IRContext *context;
   PrintFn printFn;
-  GetBitSizeFn getBitSizeFn;
+  GetSizeAndAlignFn getBitSizeFn;
+  WalkSubElementsFn walkSubElementsFn;
+  ReplaceSubElementsFn replaceSubElementsFn;
 };
 
 class TypeImpl {
@@ -98,6 +137,22 @@ public:
 
   const AbstractType::PrintFn &getPrintFn() const {
     return abstractType->getPrintFn();
+  }
+
+  const AbstractType::GetSizeAndAlignFn &getGetBitSizeFn() const {
+    return abstractType->getGetBitSizeFn();
+  }
+
+  const AbstractType::WalkSubElementsFn &getWalkSubElementsFn() const {
+    return abstractType->getWalkSubElementsFn();
+  }
+
+  const AbstractType::ReplaceSubElementsFn &getReplaceSubElementsFn() const {
+    return abstractType->getReplaceSubElementsFn();
+  }
+
+  const AbstractType::GetSizeAndAlignFn &getSizeAndAlignFn() const {
+    return abstractType->getGetBitSizeFn();
   }
 
 private:
@@ -128,9 +183,10 @@ template <typename KeyType> struct TypeImplTemplate : public TypeImpl {
 
   bool isEqual(const KeyTy &otherKey) const { return key == otherKey; }
 
+  const KeyTy &getKeyValue() const { return key; }
+
 protected:
   TypeImplTemplate(KeyTy key) : key(key) {}
-  const KeyTy &getKeyValue() const { return key; }
 
 private:
   KeyTy key;

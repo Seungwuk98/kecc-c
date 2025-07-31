@@ -9,6 +9,7 @@
 #include "kecc/utils/List.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/TrailingObjects.h"
 #include "llvm/Support/raw_ostream.h"
@@ -182,6 +183,8 @@ public:
   template <typename Inst> Inst getDefiningInst();
 
   void print(IRPrintContext &context) const;
+  void print(llvm::raw_ostream &os) const;
+  void dump() const;
 
   void replaceOperand(Value oldV, Value newV);
   Block *getParentBlock() const { return parentBlock; }
@@ -523,21 +526,19 @@ struct CastInfo<
 };
 
 template <typename Inst>
-struct CastInfo<
-    Inst, kecc::ir::InstructionStorage *,
-    std::enable_if_t<
-        std::is_same_v<kecc::ir::Instruction, std::remove_const_t<Inst>> ||
-        std::is_base_of_v<kecc::ir::Instruction, Inst>>>
-    : NullableValueCastFailed<Inst>,
-      DefaultDoCastIfPossible<Inst, kecc::ir::InstructionStorage *,
-                              CastInfo<Inst, kecc::ir::InstructionStorage *>> {
+struct CastInfo<Inst, kecc::ir::InstructionStorage *>
+    : ValueFromPointerCast<Inst, kecc::ir::InstructionStorage,
+                           CastInfo<Inst, kecc::ir::InstructionStorage *>> {
   static inline bool isPossible(kecc::ir::InstructionStorage *storage) {
     return Inst::classof(kecc::ir::Instruction(storage));
   }
-  static inline Inst doCast(kecc::ir::InstructionStorage *storage) {
-    return Inst(storage);
-  }
 };
+
+template <typename Inst>
+struct CastInfo<Inst, const kecc::ir::InstructionStorage *>
+    : ConstStrippingForwardingCast<
+          Inst, const kecc::ir::InstructionStorage *,
+          CastInfo<Inst, kecc::ir::InstructionStorage *>> {};
 
 } // namespace llvm
 

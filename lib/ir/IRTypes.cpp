@@ -1,4 +1,5 @@
 #include "kecc/ir/IRTypes.h"
+#include "kecc/ir/Attribute.h"
 #include "kecc/ir/Context.h"
 #include "kecc/ir/Type.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -51,8 +52,8 @@ void IntT::printer(IntT type, llvm::raw_ostream &os) {
 bool IntT::isSigned() const { return getImpl()->isSigned(); }
 int IntT::getBitWidth() const { return getImpl()->getBitWidth(); }
 
-std::pair<size_t, size_t> IntT::calcuateSizeAndAlign(IntT type,
-                                                     const StructSizeMap &) {
+std::pair<size_t, size_t> IntT::calculateSizeAndAlign(IntT type,
+                                                      const StructSizeMap &) {
   auto size = (type.getBitWidth() + BITS_OF_BYTE - 1) / BITS_OF_BYTE;
   auto align = size;
   return {size, align};
@@ -84,8 +85,8 @@ void FloatT::printer(FloatT type, llvm::raw_ostream &os) {
 
 int FloatT::getBitWidth() const { return getImpl()->getBitWidth(); }
 
-std::pair<size_t, size_t> FloatT::calcuateSizeAndAlign(FloatT type,
-                                                       const StructSizeMap &) {
+std::pair<size_t, size_t> FloatT::calculateSizeAndAlign(FloatT type,
+                                                        const StructSizeMap &) {
   auto size = (type.getBitWidth() + BITS_OF_BYTE - 1) / BITS_OF_BYTE;
   auto align = size;
   return {size, align};
@@ -121,8 +122,8 @@ void NameStruct::printer(NameStruct type, llvm::raw_ostream &os) {
 llvm::StringRef NameStruct::getName() const { return getImpl()->getName(); }
 
 std::pair<size_t, size_t>
-NameStruct::calcuateSizeAndAlign(NameStruct type,
-                                 const StructSizeMap &sizeMap) {
+NameStruct::calculateSizeAndAlign(NameStruct type,
+                                  const StructSizeMap &sizeMap) {
   assert(sizeMap.contains(type.getName()) &&
          "NameStruct type must have a size defined in the size map");
   auto [size, align, _] = sizeMap.at(type.getName());
@@ -137,8 +138,8 @@ UnitT UnitT::get(IRContext *context) { return Base::get(context); }
 
 void UnitT::printer(UnitT type, llvm::raw_ostream &os) { os << "unit"; }
 
-std::pair<size_t, size_t> UnitT::calcuateSizeAndAlign(UnitT type,
-                                                      const StructSizeMap &) {
+std::pair<size_t, size_t> UnitT::calculateSizeAndAlign(UnitT type,
+                                                       const StructSizeMap &) {
   return {0, 1};
 }
 
@@ -207,7 +208,7 @@ llvm::ArrayRef<Type> FunctionT::getArgTypes() const {
   return getImpl()->getArgTypes();
 }
 std::pair<size_t, size_t>
-FunctionT::calcuateSizeAndAlign(FunctionT type, const StructSizeMap &) {
+FunctionT::calculateSizeAndAlign(FunctionT type, const StructSizeMap &) {
   return {0, 1};
 }
 
@@ -248,7 +249,7 @@ void PointerT::printer(PointerT type, llvm::raw_ostream &os) {
 }
 
 std::pair<size_t, size_t>
-PointerT::calcuateSizeAndAlign(PointerT type, const StructSizeMap &) {
+PointerT::calculateSizeAndAlign(PointerT type, const StructSizeMap &) {
   auto pointerSize = type.getContext()->getArchitectureBitSize() / BITS_OF_BYTE;
   return {pointerSize, pointerSize};
 }
@@ -290,7 +291,7 @@ void ArrayT::printer(ArrayT type, llvm::raw_ostream &os) {
 }
 
 std::pair<size_t, size_t>
-ArrayT::calcuateSizeAndAlign(ArrayT type, const StructSizeMap &sizeMap) {
+ArrayT::calculateSizeAndAlign(ArrayT type, const StructSizeMap &sizeMap) {
   auto elementType = type.getElementType();
   auto [innerSize, innerAlign] = elementType.getSizeAndAlign(sizeMap);
   auto totalSize = type.getSize() * std::max(innerSize, innerAlign);
@@ -323,8 +324,8 @@ void ConstQualifier::printer(ConstQualifier type, llvm::raw_ostream &os) {
 
 Type ConstQualifier::getType() const { return getImpl()->getType(); }
 std::pair<size_t, size_t>
-ConstQualifier::calcuateSizeAndAlign(ConstQualifier type,
-                                     const StructSizeMap &sizeMap) {
+ConstQualifier::calculateSizeAndAlign(ConstQualifier type,
+                                      const StructSizeMap &sizeMap) {
   return type.getType().getSizeAndAlign(sizeMap);
 }
 
@@ -395,6 +396,14 @@ bool isCastableTo(Type from, Type to) {
   return false;
 }
 
+std::pair<size_t, size_t>
+TupleT::calculateSizeAndAlign(TupleT type, const StructSizeMap &sizeMap) {
+  auto [totalSize, maxAlign, offsets] =
+      getTypeSizeAlignOffsets(type.getElementTypes(), sizeMap);
+
+  return {totalSize, maxAlign};
+}
+
 std::tuple<size_t, size_t, llvm::SmallVector<size_t>>
 getTypeSizeAlignOffsets(llvm::ArrayRef<Type> fields,
                         const StructSizeMap &sizeMap) {
@@ -425,6 +434,18 @@ getTypeSizeAlignOffsets(llvm::ArrayRef<Type> fields,
   auto totalSize = ((currentOffset - 1) / maxAlign + 1) * maxAlign;
 
   return {totalSize, maxAlign, offsets};
+}
+
+void registerBuiltinTypes(IRContext *context) {
+  context->registerType<IntT>();
+  context->registerType<FloatT>();
+  context->registerType<NameStruct>();
+  context->registerType<UnitT>();
+  context->registerType<FunctionT>();
+  context->registerType<PointerT>();
+  context->registerType<ConstQualifier>();
+  context->registerType<TupleT>();
+  context->registerType<ArrayT>();
 }
 
 } // namespace kecc::ir

@@ -1,6 +1,8 @@
 #include "kecc/ir/Type.h"
 #include "kecc/ir/Context.h"
 #include "kecc/ir/IRTypes.h"
+#include "kecc/ir/TypeWalk.h"
+#include "mlir/Support/LLVM.h"
 
 namespace kecc::ir {
 
@@ -12,6 +14,10 @@ std::string Type::toString() const {
 }
 
 void Type::print(llvm::raw_ostream &os) const {
+  if (!*this) {
+    os << "<Null>";
+    return;
+  }
   getImpl()->getPrintFn()(*this, os);
 }
 
@@ -27,5 +33,22 @@ Type Type::constCanonicalize() const {
 }
 
 IRContext *Type::getContext() const { return getImpl()->getContext(); }
+
+void Type::walkSubElements(
+    const llvm::function_ref<void(Type)> typeWalkFn,
+    const llvm::function_ref<void(Attribute)> attrWalkFn) const {
+  getImpl()->getWalkSubElementsFn()(*this, typeWalkFn, attrWalkFn);
+}
+
+Type Type::replaceSubElements(llvm::ArrayRef<Type> typeReplaced,
+                              llvm::ArrayRef<Attribute> attrReplaced) const {
+  return getImpl()->getReplaceSubElementsFn()(*this, typeReplaced,
+                                              attrReplaced);
+}
+
+std::pair<size_t, size_t>
+Type::getSizeAndAlign(const StructSizeMap &sizeMap) const {
+  return getImpl()->getSizeAndAlignFn()(*this, sizeMap);
+}
 
 } // namespace kecc::ir
