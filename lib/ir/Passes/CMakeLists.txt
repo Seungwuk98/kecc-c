@@ -10,6 +10,7 @@ add_library(KeccIRPasses
   OutlineConstant.cpp
   InstructionFold.cpp
   OutlineMultipleResults.cpp
+  InlineCall.cpp
 )
 
 target_link_libraries(KeccIRPasses

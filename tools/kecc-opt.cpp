@@ -176,6 +176,7 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::OutlineConstant>();
   kecc::ir::registerPass<kecc::ir::InstructionFold>();
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
+  kecc::ir::registerPass<kecc::ir::InlineCallPass>();
   kecc::ir::registerSimplifyCFGPass();
   kecc::ir::registerCanonicalizeStructPasses();
   kecc::cl::registerPMOption();

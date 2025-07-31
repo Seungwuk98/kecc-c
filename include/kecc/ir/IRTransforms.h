@@ -113,6 +113,13 @@ private:
 
 void registerCanonicalizeStructPasses();
 
+class InlineCallPass : public Pass {
+public:
+  PassResult run(Module *module) override;
+
+  llvm::StringRef getPassName() const override { return "inline-call"; }
+};
+
 } // namespace kecc::ir
 
 #endif // KECC_IR_TRANSFORMATIONS_H

@@ -778,7 +778,7 @@ void InlineCall::printer(InlineCall op, IRPrintContext &context) {
     value.printAsOperand(context, true);
   }
 
-  context.getOS() << " = inline call " << op.getName() << ":"
+  context.getOS() << " = inline call @" << op.getName() << ":"
                   << op.getFunctionType() << "(";
 
   for (auto I = op.getArguments().begin(), E = op.getArguments().end(); I != E;
