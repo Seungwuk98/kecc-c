@@ -77,10 +77,12 @@ private:
 
 class Block : public utils::ListObject<Block, Instruction *> {
 public:
+  Block(llvm::StringRef label) : label(label) {}
+  ~Block();
   using Node = utils::ListObject<Block, Instruction *>::Node;
 
   llvm::StringRef getLabel() const { return label; }
-  void print(llvm::raw_ostream &os, size_t indent) const;
+  void print(llvm::raw_ostream &os, size_t indent = 0) const;
 
   class InsertionPoint {
   public:
@@ -269,9 +271,8 @@ private:
 };
 
 template <typename Declaration> Section<Declaration>::~Section() {
-  for (auto directive : directives) {
+  for (auto directive : directives)
     delete directive;
-  }
   delete declaration;
 }
 

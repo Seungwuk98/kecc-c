@@ -61,6 +61,12 @@ DEFINE_KECC_TYPE_ID(kecc::as::pseudo::Call)
 
 namespace kecc::as {
 
+std::string Immediate::toString() const {
+  std::string result;
+  llvm::raw_string_ostream os(result);
+  print(os);
+  return result;
+}
 void ValueImmediate::print(llvm::raw_ostream &os) const { os << getValue(); }
 void RelocationImmediate::print(llvm::raw_ostream &os) const {
   std::string func;
@@ -74,6 +80,8 @@ void RelocationImmediate::print(llvm::raw_ostream &os) const {
   }
   os << std::format("{}({})", func, label);
 }
+
+void Instruction::remove() { getNode()->remove(); }
 
 bool RType::classof(const Instruction *inst) {
   return llvm::isa<rtype::Add, rtype::Sub, rtype::Sll, rtype::Srl, rtype::Sra,
@@ -331,7 +339,13 @@ Addi::Addi(Register rd, Register rs1, Immediate *imm, DataSize dataSize)
 std::string Addi::toString() const {
   return std::format("addi{}", dataSize.isWord() ? "w" : "");
 }
+
+Xori::Xori(Register rd, Register rs1, Immediate *imm)
+    : Base(TypeID::get<Xori>(), rd, rs1, imm) {}
 std::string Xori::toString() const { return "xori"; }
+
+Ori::Ori(Register rd, Register rs1, Immediate *imm)
+    : Base(TypeID::get<Ori>(), rd, rs1, imm) {}
 std::string Ori::toString() const { return "ori"; }
 
 Slli::Slli(Register rd, Register rs1, Immediate *imm, DataSize dataSize)
@@ -395,19 +409,22 @@ void BType::print(llvm::raw_ostream &os) const {
 
 namespace btype {
 
+Beq::Beq(Register rs1, Register rs2, llvm::StringRef imm)
+    : Base(TypeID::get<Beq>(), rs1, rs2, imm) {}
 std::string Beq::toString() const { return "beq"; }
+
+Bne::Bne(Register rs1, Register rs2, llvm::StringRef imm)
+    : Base(TypeID::get<Bne>(), rs1, rs2, imm) {}
 std::string Bne::toString() const { return "bne"; }
 
 Blt::Blt(Register rs1, Register rs2, llvm::StringRef imm, bool isSigned)
     : Base(TypeID::get<Blt>(), rs1, rs2, imm), isSignedV(isSigned) {}
-
 std::string Blt::toString() const {
   return std::format("blt{}", isSigned() ? "" : "u");
 }
 
 Bge::Bge(Register rs1, Register rs2, llvm::StringRef imm, bool isSigned)
     : Base(TypeID::get<Beq>(), rs1, rs2, imm), isSignedV(isSigned) {}
-
 std::string Bge::toString() const {
   return std::format("bge{}", isSigned() ? "" : "u");
 }
@@ -423,6 +440,7 @@ void UType::print(llvm::raw_ostream &os) const {
 }
 
 namespace utype {
+Lui::Lui(Register rd, Immediate *imm) : Base(TypeID::get<Lui>(), rd, imm) {}
 std::string Lui::toString() const { return "lui"; }
 } // namespace utype
 
@@ -515,6 +533,8 @@ Jalr::Jalr(Register rs) : Base(TypeID::get<Jalr>()), rs(rs) {}
 std::string Jalr::toString() const {
   return std::format("jalr\t{}", rs.toString());
 }
+
+Ret::Ret() : Base(TypeID::get<Ret>()) {}
 
 std::string Ret::toString() const { return "ret"; }
 

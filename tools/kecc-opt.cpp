@@ -22,6 +22,7 @@ enum Action {
 
 enum AnalysisKind {
   Dominance,
+  LiveRange,
 };
 
 static llvm::cl::opt<string> input(llvm::cl::Positional, llvm::cl::init("-"),
@@ -41,7 +42,9 @@ static llvm::cl::opt<Action>
 static llvm::cl::opt<AnalysisKind> dumpAnalysisKind(
     "dump-analysis",
     llvm::cl::values(clEnumValN(Dominance, "dominance",
-                                "Dump dominance analysis results")),
+                                "Dump dominance analysis results"),
+                     clEnumValN(LiveRange, "live-range",
+                                "Dump live range analysis results")),
     llvm::cl::desc("Dump analysis results to the specified file"));
 
 static llvm::cl::opt<bool> debugInfo(
@@ -99,6 +102,11 @@ int dumpAnalysis(ir::Module *module) {
     auto domAnalysis = ir::DominanceAnalysis::create(module);
     assert(domAnalysis && "Failed to create dominance analysis");
     dump([&](llvm::raw_ostream &os) { domAnalysis->dump(os); });
+  }
+  case cl::LiveRange: {
+    auto liveRangeAnalysis = ir::LiveRangeAnalysis::create(module);
+    assert(liveRangeAnalysis && "Failed to create live range analysis");
+    dump([&](llvm::raw_ostream &os) { liveRangeAnalysis->dump(os); });
   }
   }
   return 0;
@@ -173,7 +181,7 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::Mem2Reg>();
   kecc::ir::registerPass<kecc::ir::GVN>();
   kecc::ir::registerPass<kecc::ir::DeadCode>();
-  kecc::ir::registerPass<kecc::ir::OutlineConstant>();
+  kecc::ir::registerPass<kecc::ir::OutlineConstantPass>();
   kecc::ir::registerPass<kecc::ir::InstructionFold>();
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
   kecc::ir::registerPass<kecc::ir::InlineCallPass>();

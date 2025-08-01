@@ -70,7 +70,7 @@ public:
   }
 };
 
-class OutlineConstant : public Pass {
+class OutlineConstantPass : public Pass {
 public:
   void init(Module *module) override;
   PassResult run(Module *module) override;

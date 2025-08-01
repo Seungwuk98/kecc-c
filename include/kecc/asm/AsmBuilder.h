@@ -13,12 +13,28 @@ public:
   void setInsertionPoint(Block::InsertionPoint point) {
     insertionPoint = point;
   }
+
+  void setInsertionPointLast(Block *block) {
+    assert(block && "Cannot set insertion point to a null block");
+    auto endNode = block->getTail();
+    auto lastNode = endNode->prev;
+    auto insertionPoint = Block::InsertionPoint(block, lastNode);
+    setInsertionPoint(insertionPoint);
+  }
+
+  void setInsertionPointStart(Block *block) {
+    assert(block && "Cannot set insertion point to a null block");
+    auto startNode = block->getHead();
+    auto insertionPoint = Block::InsertionPoint(block, startNode);
+    setInsertionPoint(insertionPoint);
+  }
+
   Block::InsertionPoint getInsertionPoint() const { return insertionPoint; }
 
   void setInsertionPointAfterInst(Instruction *inst) {
     auto node = inst->getNode();
     auto insertionPoint = Block::InsertionPoint(inst->getParentBlock(), node);
-    this->insertionPoint = insertionPoint;
+    setInsertionPoint(insertionPoint);
   }
 
   void setInsertionPointBeforeInst(Instruction *inst) {
@@ -26,7 +42,7 @@ public:
     insertionPoint--;
   }
 
-  template <typename Inst, typename... Args> Inst *createInst(Args &&...args) {
+  template <typename Inst, typename... Args> Inst *create(Args &&...args) {
     assert(insertionPoint.isValid() &&
            "Insertion point is not valid, cannot insert instruction");
     auto *inst = new Inst(std::forward<Args>(args)...);
@@ -34,6 +50,7 @@ public:
     inst->setParent(insertionPoint.getBlock());
     inst->setNode(newPoint.getIterator().getNode());
     setInsertionPoint(newPoint);
+    return inst;
   }
 
 private:

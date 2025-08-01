@@ -122,6 +122,25 @@ private:
       preOrderMap;
 };
 
+class LiveRangeAnalysisImpl;
+class LiveRangeAnalysis : public Analysis {
+public:
+  ~LiveRangeAnalysis();
+
+  static std::unique_ptr<LiveRangeAnalysis> create(Module *module);
+
+  size_t getLiveRange(Function *func, Value value) const;
+  Type getLiveRangeType(Function *func, size_t liveRange) const;
+
+  void dump(llvm::raw_ostream &os) const;
+
+private:
+  LiveRangeAnalysis(Module *module,
+                    std::unique_ptr<LiveRangeAnalysisImpl> impl);
+
+  std::unique_ptr<LiveRangeAnalysisImpl> impl;
+};
+
 } // namespace kecc::ir
 
 DECLARE_KECC_TYPE_ID(kecc::ir::DominanceAnalysis)

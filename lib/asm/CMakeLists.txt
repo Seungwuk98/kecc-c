@@ -8,6 +8,5 @@ add_library(KeccASM
 target_link_libraries(KeccASM
   PRIVATE
   ${llvm_libs}
-  KeccIR
   MLIRSupport
 )

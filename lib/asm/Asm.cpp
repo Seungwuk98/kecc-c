@@ -31,6 +31,8 @@ void Variable::print(llvm::raw_ostream &os, size_t indent) const {
   }
 }
 
+Block::~Block() {}
+
 void Block::print(llvm::raw_ostream &os, size_t indent) const {
   if (!label.empty())
     os << label << ":\n";

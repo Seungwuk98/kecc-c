@@ -200,13 +200,13 @@ public:
 
 } // namespace
 
-void OutlineConstant::init(Module *module) {
+void OutlineConstantPass::init(Module *module) {
   if (!module->getContext()->isRegisteredInst<inst::OutlineConstant>()) {
     module->getContext()->registerInst<inst::OutlineConstant>();
   }
 }
 
-PassResult OutlineConstant::run(Module *module) {
+PassResult OutlineConstantPass::run(Module *module) {
   PatternSet patterns;
   patterns.addPatterns<ConvertBinary, ConvertInstructions>();
 
