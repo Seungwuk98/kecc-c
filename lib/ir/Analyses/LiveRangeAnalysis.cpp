@@ -132,6 +132,7 @@ void LiveRangeAnalysisBuilder::build() {
            phiBegin != phiEnd; ++phiBegin, ++succPhiIdx) {
         auto phi = (*phiBegin)->getDefiningInst<Phi>();
         assert(phi && "Expected Phi instruction in successor block");
+        Value arg = jumpArg->getArgs()[succPhiIdx];
         union_(phi, jumpArg->getArgs()[succPhiIdx]);
       }
       assert(jumpArg->getArgs().size() == succPhiIdx &&
@@ -304,13 +305,14 @@ PRINT_FUNC(Branch) {
 PRINT_FUNC(Switch) {
   os << "switch ";
   printValue(inst.getValue());
-  os << " default b" << inst.getDefaultCase()->getBlock()->getId() << "["
-     << '\n';
+  os << " default b" << inst.getDefaultCase()->getBlock()->getId() << " [";
   for (auto idx = 0u; idx < inst.getCaseSize(); ++idx) {
+    os << '\n';
     printIndent(indent + 2);
     printValue(inst.getCaseValue(idx));
     os << " b" << inst.getCaseJumpArg(idx)->getBlock()->getId();
   }
+  os << '\n';
   printIndent(indent);
   os << "]";
 }
@@ -343,7 +345,7 @@ PRINT_FUNC(InlineCall) {
 } // namespace print
 
 void LiveRangeAnalysis::dump(llvm::raw_ostream &os) const {
-  os << "Live Range Analysis dump\n";
+  os << "Live Range Analysis dump:\n";
 
   auto printIndent = [&os](size_t indent) {
     for (size_t i = 0; i < indent; ++i)

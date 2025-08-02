@@ -4,6 +4,7 @@ add_library(KeccIRAnalyses
   DominanceAnalysis.cpp
   VisitOrderAnalysis.cpp
   LiveRangeAnalysis.cpp
+  LivenessAnalysis.cpp
 )
 
 target_link_libraries(KeccIRAnalyses

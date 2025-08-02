@@ -74,3 +74,5 @@ block b4:
   ret %b3:p0:i32
   // CHECK-NEXT: ret [[LR_1]]
 }
+
+

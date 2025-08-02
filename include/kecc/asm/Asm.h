@@ -77,7 +77,7 @@ private:
 
 class Block : public utils::ListObject<Block, Instruction *> {
 public:
-  Block(llvm::StringRef label) : label(label) {}
+  Block(llvm::StringRef label);
   ~Block();
   using Node = utils::ListObject<Block, Instruction *>::Node;
 

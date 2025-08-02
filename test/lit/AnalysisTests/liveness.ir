@@ -1,0 +1,234 @@
+// RUN: kecc-opt %s --dump-analysis=live-range | FileCheck %s --check-prefix=LR
+// RUN: kecc-opt %s --dump-analysis=liveness | FileCheck %s --check-prefix=LN
+
+// A example case of text book "Engineering A Compiler(Keith D.Cooper) 3rd Edition" p.458
+// entry: b0
+// 
+// b0: 
+//   i <- ...
+//   j b1
+// 
+// b1:
+//   a <- ...
+//   c <- ...
+//   j b2, b5
+// 
+// b2:
+//   b <- ...
+//   c <- ...
+//   d <- ...
+//   j b3
+// 
+// b3:
+//   y <- a + b 
+//   z <- c + d
+//   i <- i + 1
+//   j (i <= 100 ? b1 : b4)
+// 
+// b4:
+//   ret
+// 
+// b5:
+//   a <- ...
+//   d <- ...
+//   j b6, b8
+// 
+// b6:
+//   d <- ...
+//   j b7
+// 
+// b7:
+//   b <- ...
+//   j b3
+// 
+// b8:
+//   c <- ...
+//   j b7
+// 
+// 
+// [LiveOut]
+// B0 : {i}
+// B1 : {a, c, i}
+// B2 : {a, b, c, d, i}
+// B3 : {i}
+// B4 : <empty>
+// B5 : {a, c, d, i}
+// B6 : {a, c, d, i}
+// B7 : {a, b, c, d, i}
+// B8 : {a, c, d, i}
+ 
+
+fun i32 @test_func() {
+init:
+  bid: b1001
+  allocations:
+
+block b1001:
+  %b1001:p0:i32:a
+  %b1001:p1:i32:b
+  %b1001:p2:i32:c
+  %b1001:p3:i32:d
+  %b1001:p4:i32:y
+  %b1001:p5:i32:z
+  %b1001:p6:i32:i
+  br 0:i1, b0(), b1000(%b1001:p0:i32, %b1001:p1:i32, %b1001:p2:i32, %b1001:p3:i32, %b1001:p4:i32, %b1001:p5:i32, %b1001:p6:i32)
+
+block b0:
+  %b0:i0:i32:i = add 0:i32 1:i32
+  br 0:i1, b1(), b1000(0:i32, 0:i32, 0:i32, 0:i32, 0:i32, 0:i32, %b0:i0:i32)
+
+block b1:
+  %b1:i0:i32:a = add 0:i32 1:i32
+  %b1:i1:i32:c = add 0:i32 1:i32
+  switch 0:i1 default b1000(%b1:i0:i32, 0:i32, %b1:i1:i32, 0:i32, 0:i32, 0:i32, 0:i32) [
+    0:i1 b2() 
+    1:i1 b5()
+  ]
+
+block b2:
+  %b2:i0:i32:b = add 0:i32 1:i32
+  %b2:i1:i32:c = add 0:i32 1:i32
+  %b2:i2:i32:d = add 0:i32 1:i32
+  br 0:i1, b3(%b2:i0:i32, 0:i32), b1000(0:i32, %b2:i0:i32, %b2:i1:i32, %b2:i2:i32, 0:i32, 0:i32, 0:i32)
+
+block b3:
+  %b3:p0:i32:b
+  %b3:p1:i32:d
+
+  %b3:i0:i32:y = add %b1:i0:i32 %b3:p0:i32 
+  %b3:i1:i32:z = add %b1:i1:i32 %b3:p1:i32 
+  %b3:i2:i32:i = add %b0:i0:i32 1:i32
+
+  switch 0:i1 default b1000(0:i32, %b3:p0:i32, 0:i32, %b3:p1:i32, %b3:i0:i32, %b3:i1:i32, %b3:i2:i32) [
+    0:i1 b1() 
+    1:i1 b4()
+  ]
+
+block b4:
+  ret 0:i32
+
+block b5:
+  %b5:i0:i32:a = add 0:i32 1:i32
+  %b5:i1:i32:d = add 0:i32 1:i32
+  switch 0:i1 default b1000(%b5:i0:i32, 0:i32, 0:i32, %b5:i1:i32, 0:i32, 0:i32, 0:i32) [
+    0:i1 b6()
+    1:i1 b8()
+  ]
+
+block b6:
+  %b6:i0:i32:d = add 0:i32 1:i32
+  br 0:i1, b7(), b1000(0:i32, 0:i32, 0:i32, %b6:i0:i32, 0:i32, 0:i32, 0:i32)
+
+block b7:
+  %b7:i0:i32:b = add 0:i32 1:i32
+  br 0:i1, b3(%b7:i0:i32, 0:i32), b1000(0:i32, %b7:i0:i32, 0:i32, 0:i32, 0:i32, 0:i32, 0:i32)
+
+block b8:
+  %b8:i0:i32:c = add 0:i32 1:i32
+  br 0:i1, b7(), b1000(0:i32, 0:i32, %b8:i0:i32, 0:i32, 0:i32, 0:i32, 0:i32)
+  
+block b1000:
+  %b1000:p0:i32:a
+  %b1000:p1:i32:b
+  %b1000:p2:i32:c
+  %b1000:p3:i32:d
+  %b1000:p4:i32:y
+  %b1000:p5:i32:z
+  %b1000:p6:i32:i
+  ret 0:i32
+}
+
+// LR: Live Range Analysis dump:
+// LR-NEXT: fun i32 @test_func () {
+// LR-NEXT: init:
+// LR-NEXT:   bid: b1001
+// LR-NEXT:   allocations:
+
+// LR-LABEL: block b1001:
+  // LR-NEXT: L0:i32:a
+  // LR-NEXT: L1:i32:b
+  // LR-NEXT: L2:i32:c
+  // LR-NEXT: L3:i32:d
+  // LR-NEXT: L4:i32:y
+  // LR-NEXT: L5:i32:z
+  // LR-NEXT: L6:i32:i
+  // LR-NEXT: br 0:i1, b0, b1000
+
+// LR-LABEL: block b0:
+  // LR-NEXT: L6:i32:i = add 0:i32 1:i32
+  // LR-NEXT: br 0:i1, b1, b1000
+
+// LR-LABEL: block b1:
+  // LR-NEXT: L0:i32:a = add 0:i32 1:i32
+  // LR-NEXT: L2:i32:c = add 0:i32 1:i32
+  // LR-NEXT: switch 0:i1 default b1000 [
+  // LR-NEXT:   0:i1 b2
+  // LR-NEXT:   1:i1 b5
+  // LR-NEXT: ]
+
+// LR-LABEL: block b2:
+  // LR-NEXT: L1:i32:b = add 0:i32 1:i32
+  // LR-NEXT: L2:i32:c = add 0:i32 1:i32
+  // LR-NEXT: L3:i32:d = add 0:i32 1:i32
+  // LR-NEXT: br 0:i1, b3, b1000
+
+// LR-LABEL: block b3:
+  // LR-NEXT: L1:i32:b
+  // LR-NEXT: L3:i32:d
+  // LR-NEXT: L4:i32:y = add L0:i32:a L1:i32:b
+  // LR-NEXT: L5:i32:z = add L2:i32:c L3:i32:d
+  // LR-NEXT: L6:i32:i = add L6:i32:i 1:i32
+  // LR-NEXT: switch 0:i1 default b1000 [
+  // LR-NEXT:   0:i1 b1
+  // LR-NEXT:   1:i1 b4
+  // LR-NEXT: ]
+
+// LR-LABEL: block b4:
+  // LR-NEXT: ret 0:i32
+
+// LR-LABEL: block b5:
+  // LR-NEXT: L0:i32:a = add 0:i32 1:i32
+  // LR-NEXT: L3:i32:d = add 0:i32 1:i32
+  // LR-NEXT: switch 0:i1 default b1000 [
+  // LR-NEXT:   0:i1 b6
+  // LR-NEXT:   1:i1 b8
+  // LR-NEXT: ]
+
+// LR-LABEL: block b6:
+  // LR-NEXT: L3:i32:d = add 0:i32 1:i32
+  // LR-NEXT: br 0:i1, b7, b1000
+
+// LR-LABEL: block b7:
+  // LR-NEXT: L1:i32:b = add 0:i32 1:i32
+  // LR-NEXT: br 0:i1, b3, b1000
+
+// LR-LABEL: block b8:
+  // LR-NEXT: L2:i32:c = add 0:i32 1:i32
+  // LR-NEXT: br 0:i1, b7, b1000
+
+// LR-LABEL: block b1000:
+  // LR-NEXT: L0:i32:a
+  // LR-NEXT: L1:i32:b
+  // LR-NEXT: L2:i32:c
+  // LR-NEXT: L3:i32:d
+  // LR-NEXT: L4:i32:y
+  // LR-NEXT: L5:i32:z
+  // LR-NEXT: L6:i32:i
+  // LR-NEXT: ret 0:i32
+// LR-NEXT: }
+
+
+// LN: Liveness Analysis dump 
+// LN-NEXT: Function: @test_func
+// LN-NEXT:   block b1001: <empty>
+// LN-NEXT:   block b0: L6
+// LN-NEXT:   block b1: L0, L2, L6
+// LN-NEXT:   block b2: L0, L1, L2, L3, L6
+// LN-NEXT:   block b3: L6
+// LN-NEXT:   block b4: <empty>
+// LN-NEXT:   block b5: L0, L2, L3, L6
+// LN-NEXT:   block b6: L0, L2, L3, L6
+// LN-NEXT:   block b7: L0, L1, L2, L3, L6
+// LN-NEXT:   block b8: L0, L2, L3, L6
+// LN-NEXT:   block b1000: <empty>
+

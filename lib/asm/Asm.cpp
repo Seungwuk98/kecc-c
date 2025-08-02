@@ -31,6 +31,7 @@ void Variable::print(llvm::raw_ostream &os, size_t indent) const {
   }
 }
 
+Block::Block(llvm::StringRef label) : label(label) {}
 Block::~Block() {}
 
 void Block::print(llvm::raw_ostream &os, size_t indent) const {

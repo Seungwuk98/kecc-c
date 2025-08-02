@@ -6,6 +6,7 @@
 #include "kecc/ir/Type.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
+#include <set>
 
 namespace kecc::ir {
 
@@ -139,6 +140,22 @@ private:
                     std::unique_ptr<LiveRangeAnalysisImpl> impl);
 
   std::unique_ptr<LiveRangeAnalysisImpl> impl;
+};
+
+class LivenessAnalysis : public Analysis {
+public:
+  static std::unique_ptr<LivenessAnalysis> create(Module *module);
+
+  void dump(llvm::raw_ostream &os) const;
+
+  const std::set<size_t> &getLiveVars(Block *block) const;
+
+private:
+  LivenessAnalysis(Module *module,
+                   llvm::DenseMap<Block *, std::set<size_t>> liveOut)
+      : Analysis(module), liveOut(std::move(liveOut)) {}
+
+  const llvm::DenseMap<Block *, std::set<size_t>> liveOut;
 };
 
 } // namespace kecc::ir

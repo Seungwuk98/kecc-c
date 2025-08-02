@@ -23,6 +23,7 @@ enum Action {
 enum AnalysisKind {
   Dominance,
   LiveRange,
+  Liveness,
 };
 
 static llvm::cl::opt<string> input(llvm::cl::Positional, llvm::cl::init("-"),
@@ -41,10 +42,10 @@ static llvm::cl::opt<Action>
 
 static llvm::cl::opt<AnalysisKind> dumpAnalysisKind(
     "dump-analysis",
-    llvm::cl::values(clEnumValN(Dominance, "dominance",
-                                "Dump dominance analysis results"),
-                     clEnumValN(LiveRange, "live-range",
-                                "Dump live range analysis results")),
+    llvm::cl::values(
+        clEnumValN(Dominance, "dominance", "Dump dominance analysis results"),
+        clEnumValN(LiveRange, "live-range", "Dump live range analysis results"),
+        clEnumValN(Liveness, "liveness", "Dump liveness analysis results")),
     llvm::cl::desc("Dump analysis results to the specified file"));
 
 static llvm::cl::opt<bool> debugInfo(
@@ -102,11 +103,19 @@ int dumpAnalysis(ir::Module *module) {
     auto domAnalysis = ir::DominanceAnalysis::create(module);
     assert(domAnalysis && "Failed to create dominance analysis");
     dump([&](llvm::raw_ostream &os) { domAnalysis->dump(os); });
+    break;
   }
   case cl::LiveRange: {
     auto liveRangeAnalysis = ir::LiveRangeAnalysis::create(module);
     assert(liveRangeAnalysis && "Failed to create live range analysis");
     dump([&](llvm::raw_ostream &os) { liveRangeAnalysis->dump(os); });
+    break;
+  }
+  case cl::Liveness: {
+    auto livenessAnalysis = ir::LivenessAnalysis::create(module);
+    assert(livenessAnalysis && "Failed to create liveness analysis");
+    dump([&](llvm::raw_ostream &os) { livenessAnalysis->dump(os); });
+    break;
   }
   }
   return 0;

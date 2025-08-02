@@ -38,6 +38,8 @@ void Operand::drop() {
   impl = nullptr;
 }
 
+bool Value::isConstant() const { return getDefiningInst<inst::Constant>(); }
+
 InstructionStorage *Value::getInstruction() const {
   std::uint8_t valueNumber = impl->getValueNumber();
   return reinterpret_cast<InstructionStorage *>(getImpl() + (++valueNumber));

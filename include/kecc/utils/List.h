@@ -88,7 +88,46 @@ protected:
   private:
     Node *curr;
   };
-  using ReverseIterator = std::reverse_iterator<Iterator>;
+
+  class RevIterator {
+  public:
+    RevIterator(Node *node) : iterator(node) {}
+
+    RevIterator &operator++() {
+      iterator--;
+      return *this;
+    }
+    RevIterator operator++(int) {
+      RevIterator temp = *this;
+      ++(*this);
+      return temp;
+    }
+    RevIterator &operator--() {
+      iterator++;
+      return *this;
+    }
+    RevIterator operator--(int) {
+      RevIterator temp = *this;
+      --(*this);
+      return temp;
+    }
+
+    T &operator*() const {
+      assert(iterator.getNode() && "Dereferencing null iterator");
+      return *iterator;
+    }
+    bool operator!=(const RevIterator &other) const {
+      return iterator != other.iterator;
+    }
+    bool operator==(const RevIterator &other) const {
+      return iterator == other.iterator;
+    }
+    explicit operator bool() const { return iterator; }
+    Node *getNode() const { return iterator.getNode(); }
+
+  private:
+    Iterator iterator;
+  };
 
 public:
   ListObject() {
@@ -110,8 +149,8 @@ public:
 
   Iterator begin() const { return Iterator(getHead()->next); }
   Iterator end() const { return Iterator(getTail()); }
-  ReverseIterator rbegin() const { return Iterator(getTail()->prev); }
-  ReverseIterator rend() const { return Iterator(getHead()); }
+  RevIterator rbegin() const { return RevIterator(getTail()->prev); }
+  RevIterator rend() const { return RevIterator(getHead()); }
 
   Node *push(T data) { return tail->prev->insertNext(data); }
 
