@@ -1,6 +1,8 @@
 #include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/Instruction.h"
 
+DEFINE_KECC_TYPE_ID(kecc::ir::LivenessAnalysis)
+
 namespace kecc::ir {
 
 struct LivenessAnalysisBuilder {

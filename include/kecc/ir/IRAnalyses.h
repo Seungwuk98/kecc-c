@@ -4,6 +4,7 @@
 #include "kecc/ir/Analysis.h"
 #include "kecc/ir/Module.h"
 #include "kecc/ir/Type.h"
+#include "kecc/parser/Lexer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <set>
@@ -38,6 +39,8 @@ public:
   const llvm::DenseSet<Block *> &getDF(Block *block) const;
 
   const llvm::DenseSet<Block *> &getDFRev(Block *block) const;
+
+  bool isDominator(Block *dom, Block *block);
 
 private:
   llvm::DenseMap<Block *, llvm::DenseSet<Block *>> domTree;
@@ -158,9 +161,44 @@ private:
   const llvm::DenseMap<Block *, std::set<size_t>> liveOut;
 };
 
+class LoopAnalysisImpl;
+class LoopAnalysis : public Analysis {
+public:
+  ~LoopAnalysis();
+
+  enum LoopType {
+    NonHeader,
+    Reducible,
+    Irreducible,
+    SelfLoop,
+  };
+
+  static std::unique_ptr<LoopAnalysis> create(Module *module);
+
+  const llvm::DenseSet<LoopType> &getLoopTypes(Block *header) const;
+  LoopType getLoopType(Block *header) const;
+  const llvm::DenseSet<Block *> &getLoopChildren(Block *block) const;
+  Block *getLoopHeader(Block *block) const;
+
+private:
+  LoopAnalysis(Module *module, std::unique_ptr<LoopAnalysisImpl> impl);
+  std::unique_ptr<LoopAnalysisImpl> impl;
+};
+
 } // namespace kecc::ir
+
+namespace llvm {
+
+template <>
+struct DenseMapInfo<kecc::ir::LoopAnalysis::LoopType>
+    : public llvm::DenseMapInfo<unsigned> {};
+
+} // namespace llvm
 
 DECLARE_KECC_TYPE_ID(kecc::ir::DominanceAnalysis)
 DECLARE_KECC_TYPE_ID(kecc::ir::VisitOrderAnalysis)
+DECLARE_KECC_TYPE_ID(kecc::ir::LiveRangeAnalysis)
+DECLARE_KECC_TYPE_ID(kecc::ir::LivenessAnalysis)
+DECLARE_KECC_TYPE_ID(kecc::ir::LoopAnalysis)
 
 #endif // KECC_IR_ANALYSES_H

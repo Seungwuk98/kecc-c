@@ -5,6 +5,8 @@
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
+DEFINE_KECC_TYPE_ID(kecc::ir::LiveRangeAnalysis)
+
 namespace kecc::ir {
 
 class LiveRangeAnalysisImpl {
@@ -41,6 +43,12 @@ struct LiveRangeAnalysisBuilder {
     return par = find(par);
   }
 
+  size_t getRank(Value v) {
+    if (auto it = rank.find(v); it != rank.end())
+      return it->second;
+    return rank[v] = 0;
+  }
+
   void union_(Value a, Value b) {
     a = find(a);
     b = find(b);
@@ -48,9 +56,12 @@ struct LiveRangeAnalysisBuilder {
     if (a == b)
       return;
 
-    if (rank[a] < rank[b])
+    auto rankA = getRank(a);
+    auto rankB = getRank(b);
+
+    if (rankA < rankB)
       parent[a] = b;
-    else if (rank[a] > rank[b])
+    else if (rankA > rankB)
       parent[b] = a;
     else {
       parent[b] = a;
