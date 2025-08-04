@@ -14,23 +14,27 @@ namespace kecc::ir {
 class DominatorTree {
 public:
   DominatorTree() = default;
-  DominatorTree(DominatorTree &&other)
-      : domTree(std::move(other.domTree)), idomMap(std::move(other.idomMap)),
-        dfAdj(std::move(other.dfAdj)), dfAdjRev(std::move(other.dfAdjRev)) {};
+  DominatorTree(DominatorTree &&other) { *this = std::move(other); };
   DominatorTree &operator=(DominatorTree &&other) {
     domTree = std::move(other.domTree);
     idomMap = std::move(other.idomMap);
     dfAdj = std::move(other.dfAdj);
     dfAdjRev = std::move(other.dfAdjRev);
+    dfsOrderMap = std::move(other.dfsOrderMap);
+    dfsLastSubTreeMap = std::move(other.dfsLastSubTreeMap);
     return *this;
   };
 
   DominatorTree(llvm::DenseMap<Block *, llvm::DenseSet<Block *>> domTree,
                 llvm::DenseMap<Block *, Block *> idomMap,
                 llvm::DenseMap<Block *, llvm::DenseSet<Block *>> dfAdj,
-                llvm::DenseMap<Block *, llvm::DenseSet<Block *>> dfAdjRev)
+                llvm::DenseMap<Block *, llvm::DenseSet<Block *>> dfAdjRev,
+                llvm::DenseMap<Block *, size_t> dfsOrderMap,
+                llvm::DenseMap<Block *, size_t> dfsLastSubTreeMap)
       : domTree(std::move(domTree)), idomMap(std::move(idomMap)),
-        dfAdj(std::move(dfAdj)), dfAdjRev(std::move(dfAdjRev)) {}
+        dfAdj(std::move(dfAdj)), dfAdjRev(std::move(dfAdjRev)),
+        dfsOrderMap(std::move(dfsOrderMap)),
+        dfsLastSubTreeMap(std::move(dfsLastSubTreeMap)) {}
 
   Block *getIdom(Block *block) const;
 
@@ -40,13 +44,16 @@ public:
 
   const llvm::DenseSet<Block *> &getDFRev(Block *block) const;
 
-  bool isDominator(Block *dom, Block *block);
+  bool isDominator(Block *dom, Block *block) const;
 
 private:
   llvm::DenseMap<Block *, llvm::DenseSet<Block *>> domTree;
   llvm::DenseMap<Block *, Block *> idomMap;
   llvm::DenseMap<Block *, llvm::DenseSet<Block *>> dfAdj;
   llvm::DenseMap<Block *, llvm::DenseSet<Block *>> dfAdjRev;
+
+  llvm::DenseMap<Block *, size_t> dfsOrderMap;
+  llvm::DenseMap<Block *, size_t> dfsLastSubTreeMap;
 };
 
 class DominanceAnalysis : public Analysis {
@@ -175,10 +182,13 @@ public:
 
   static std::unique_ptr<LoopAnalysis> create(Module *module);
 
-  const llvm::DenseSet<LoopType> &getLoopTypes(Block *header) const;
   LoopType getLoopType(Block *header) const;
   const llvm::DenseSet<Block *> &getLoopChildren(Block *block) const;
   Block *getLoopHeader(Block *block) const;
+
+  bool hasIrreducibleLoops() const;
+
+  void dump(llvm::raw_ostream &os) const;
 
 private:
   LoopAnalysis(Module *module, std::unique_ptr<LoopAnalysisImpl> impl);

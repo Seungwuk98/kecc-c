@@ -24,6 +24,13 @@ const llvm::DenseSet<Block *> &DominatorTree::getDFRev(Block *block) const {
   return dfAdjRev.at(block);
 }
 
+bool DominatorTree::isDominator(Block *dom, Block *block) const {
+  auto domOrder = dfsOrderMap.at(dom);
+  auto blockOrder = dfsOrderMap.at(block);
+
+  return domOrder <= blockOrder && blockOrder <= dfsLastSubTreeMap.at(dom);
+}
+
 struct DominaceAnalysisBuilder {
   Module *module;
   Function *function;
@@ -43,6 +50,9 @@ struct DominaceAnalysisBuilder {
   llvm::DenseMap<Block *, int64_t> newIdx;
   llvm::DenseMap<int64_t, Block *> idxToBlock;
 
+  llvm::DenseMap<Block *, size_t> domTreeOrder;
+  llvm::DenseMap<Block *, size_t> domTreeLastSubTree;
+
   int64_t order = 0;
 
   DominaceAnalysisBuilder(Module *module, Function *function)
@@ -55,6 +65,8 @@ struct DominaceAnalysisBuilder {
   void constructSdom();
   void constructIdom();
   void buildDF();
+
+  void dfsDomTree(Block *block);
 
   DominatorTree build();
 };
@@ -149,7 +161,7 @@ void DominaceAnalysisBuilder::buildDF() {
     for (Block *pred : module->getPredecessors(curr)) {
       Block *runner = pred;
 
-      while (runner != idomBlockMap[curr]) {
+      while (runner && runner != idomBlockMap[curr]) {
         dfAdj[runner].insert(curr);
         runner = idomBlockMap[runner];
       }
@@ -163,14 +175,27 @@ void DominaceAnalysisBuilder::buildDF() {
   }
 }
 
+void DominaceAnalysisBuilder::dfsDomTree(Block *block) {
+  domTreeOrder[block] = order++;
+  for (Block *child : tree[block]) {
+    if (!domTreeOrder.contains(child))
+      dfsDomTree(child);
+  }
+  domTreeLastSubTree[block] = order - 1;
+}
+
 DominatorTree DominaceAnalysisBuilder::build() {
   init();
   constructSdom();
   constructIdom();
   buildDF();
 
+  order = 0;
+  dfsDomTree(function->getEntryBlock());
+
   return DominatorTree(std::move(tree), std::move(idomBlockMap),
-                       std::move(dfAdj), std::move(dfAdjRev));
+                       std::move(dfAdj), std::move(dfAdjRev),
+                       std::move(domTreeOrder), std::move(domTreeLastSubTree));
 }
 
 std::unique_ptr<DominanceAnalysis> DominanceAnalysis::create(Module *module) {

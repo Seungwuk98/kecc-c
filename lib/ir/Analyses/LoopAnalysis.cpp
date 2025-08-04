@@ -1,6 +1,8 @@
 #include "kecc/ir/Analysis.h"
 #include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/Type.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/raw_ostream.h"
 
 DEFINE_KECC_TYPE_ID(kecc::ir::LoopAnalysis)
 
@@ -9,18 +11,26 @@ namespace kecc::ir {
 class LoopTree {
 public:
   using LoopType = LoopAnalysis::LoopType;
-  LoopTree(llvm::DenseMap<Block *, llvm::DenseSet<Block *>> loopTree,
+  LoopTree(Block *entry,
+           llvm::DenseMap<Block *, llvm::DenseSet<Block *>> loopTree,
            llvm::DenseMap<Block *, Block *> loopHeader,
-           llvm::DenseMap<Block *, llvm::DenseSet<LoopType>> loopType)
+           llvm::DenseMap<Block *, LoopType> loopType,
+           llvm::SmallVector<std::unique_ptr<Block>> dummyBlocks,
+           llvm::DenseMap<Block *, Block *> dummyToOriginal,
+           llvm::DenseMap<Block *, Block *> originalToDummy)
       : loopTree(std::move(loopTree)), loopHeader(std::move(loopHeader)),
-        loopType(std::move(loopType)) {}
+        loopType(std::move(loopType)), dummyBlocks(std::move(dummyBlocks)),
+        dummyToOriginal(std::move(dummyToOriginal)),
+        originalToDummy(std::move(originalToDummy)) {
+    loopDepth[entry] = 0;
+    calcLoopDepth(entry);
+  }
 
+  LoopTree() = default;
   LoopTree(const LoopTree &other) = default;
   LoopTree &operator=(const LoopTree &other) = default;
   LoopTree(LoopTree &&other) = default;
   LoopTree &operator=(LoopTree &&other) = default;
-
-  const llvm::DenseSet<LoopType> &getLoopTypes(Block *block) const;
 
   // Returns the loop type of the block.
   // Usually the program is reducible, so it returns NonHeader, Reducible, or
@@ -32,24 +42,27 @@ public:
 
   void dump(llvm::raw_ostream &os) const;
 
+  Block *getDummyBlock(Block *original) const;
+  Block *getOriginalBlock(Block *dummy) const;
+
+  size_t getLoopDepth(Block *block) const { return loopDepth.at(block); }
+
 private:
+  void calcLoopDepth(Block *block);
+
   llvm::DenseMap<Block *, llvm::DenseSet<Block *>> loopTree;
   llvm::DenseMap<Block *, Block *> loopHeader;
-  llvm::DenseMap<Block *, llvm::DenseSet<LoopType>> loopType;
+  llvm::DenseMap<Block *, LoopType> loopType;
+
+  llvm::DenseMap<Block *, size_t> loopDepth;
+
+  llvm::SmallVector<std::unique_ptr<Block>> dummyBlocks;
+  llvm::DenseMap<Block *, Block *> dummyToOriginal;
+  llvm::DenseMap<Block *, Block *> originalToDummy;
 };
 
-const llvm::DenseSet<LoopTree::LoopType> &
-LoopTree::getLoopTypes(Block *block) const {
-  return loopType.at(block);
-}
-
 LoopTree::LoopType LoopTree::getLoopType(Block *block) const {
-  auto loopTypes = getLoopTypes(block);
-  assert(llvm::all_equal(loopTypes) &&
-         "Loop types for a block should be the same for all dummies");
-  assert(*loopTypes.begin() != LoopType::Irreducible &&
-         "Loop type should not be Irreducible for a block");
-  return *loopTypes.begin();
+  return loopType.at(block);
 }
 
 const llvm::DenseSet<Block *> &LoopTree::getLoopChildren(Block *block) const {
@@ -64,6 +77,116 @@ Block *LoopTree::getLoopHeader(Block *block) const {
   if (auto it = loopHeader.find(block); it != loopHeader.end())
     return it->second;
   return nullptr; // entry point of the function
+}
+
+Block *LoopTree::getDummyBlock(Block *original) const {
+  if (auto it = originalToDummy.find(original); it != originalToDummy.end())
+    return it->second;
+  return nullptr; // no dummy block for the original block
+}
+
+Block *LoopTree::getOriginalBlock(Block *dummy) const {
+  if (auto it = dummyToOriginal.find(dummy); it != dummyToOriginal.end())
+    return it->second;
+  return nullptr; // no original block for the dummy block
+}
+
+void LoopTree::dump(llvm::raw_ostream &os) const {
+  os << "Loop Tree Dump:\n";
+
+  llvm::SmallVector<Block *> blocks;
+  blocks.reserve(loopType.size());
+  for (const auto &[block, _] : loopType)
+    blocks.emplace_back(block);
+
+  auto blockComparator = [&](Block *lhs, Block *rhs) {
+    auto lhsId = dummyToOriginal.contains(lhs)
+                     ? dummyToOriginal.at(lhs)->getId()
+                     : lhs->getId();
+    auto rhsId = dummyToOriginal.contains(rhs)
+                     ? dummyToOriginal.at(rhs)->getId()
+                     : rhs->getId();
+    if (lhsId == rhsId) {
+      return !dummyToOriginal.contains(lhs);
+    }
+    return lhsId < rhsId;
+  };
+
+  auto blockPrinter = [&](Block *block) -> llvm::raw_ostream & {
+    if (auto it = dummyToOriginal.find(block); it != dummyToOriginal.end())
+      os << "dummy of block b" << it->second->getId();
+    else
+      os << "block b" << block->getId();
+
+    return os;
+  };
+
+  llvm::sort(blocks, blockComparator);
+
+  bool first = true;
+  for (Block *block : blocks) {
+    if (first)
+      first = false;
+    else
+      os << "\n";
+
+    blockPrinter(block) << ":\n";
+    os << "  type: ";
+    switch (loopType.at(block)) {
+    case LoopType::NonHeader:
+      os << "NonHeader\n";
+      break;
+    case LoopType::Reducible:
+      os << "Reducible\n";
+      break;
+    case LoopType::Irreducible:
+      os << "Irreducible\n";
+      break;
+    case LoopType::SelfLoop:
+      os << "SelfLoop\n";
+      break;
+    }
+
+    os << "  depth: " << getLoopDepth(block) << '\n';
+
+    if (auto it = loopHeader.find(block); it != loopHeader.end()) {
+      os << "  header: ";
+      blockPrinter(it->second) << '\n';
+    }
+
+    if (auto it = loopTree.find(block); it != loopTree.end()) {
+      os << "  children: ";
+      const auto &children = it->second;
+      llvm::SmallVector<Block *> sortedChildren(children.begin(),
+                                                children.end());
+      llvm::sort(sortedChildren, blockComparator);
+
+      for (auto I = sortedChildren.begin(), E = sortedChildren.end(); I != E;
+           ++I) {
+        if (I != sortedChildren.begin())
+          os << ", ";
+        blockPrinter(*I);
+      }
+      os << '\n';
+    }
+  }
+}
+
+void LoopTree::calcLoopDepth(Block *block) {
+  auto currLoopType = loopType.at(block);
+  bool isLoop = (currLoopType == LoopType::Reducible ||
+                 currLoopType == LoopType::Irreducible ||
+                 currLoopType == LoopType::SelfLoop);
+  auto currDepth = loopDepth.at(block);
+  if (auto it = loopTree.find(block); it != loopTree.end()) {
+    for (Block *child : it->second) {
+      auto nextDepth = currDepth + isLoop;
+      auto [_, inserted] = loopDepth.try_emplace(child, nextDepth);
+      assert(inserted &&
+             "Loop depth for child block should not be already set");
+      calcLoopDepth(child);
+    }
+  }
 }
 
 struct LoopTreeBuilder {
@@ -93,28 +216,11 @@ struct LoopTreeBuilder {
     return parent[node] = node;
   }
 
+  // merge a's set into b's set
   void union_(size_t a, size_t b) {
     a = find(a);
     b = find(b);
-    if (a == b)
-      return;
-
-    auto rankA = getRank(a);
-    auto rankB = getRank(b);
-
-    if (rankA < rankB)
-      parent[a] = b;
-    else {
-      parent[b] = a;
-      if (rankA == rankB)
-        rank[a]++;
-    }
-  }
-
-  size_t getRank(size_t v) {
-    if (auto it = rank.find(v); it != rank.end())
-      return it->second;
-    return rank[v] = 0;
+    parent[a] = b;
   }
 
   Module *module;
@@ -133,11 +239,12 @@ struct LoopTreeBuilder {
   llvm::DenseMap<size_t, LoopType> loopTypeMap;
 
   llvm::DenseMap<size_t, size_t> parent;
-  llvm::DenseMap<size_t, size_t> rank;
+  llvm::DenseMap<size_t, size_t> loopDepth;
 
   llvm::SmallVector<std::unique_ptr<Block>> dummyBlocks;
   llvm::DenseMap<Block *, Block *> dummyToOriginal;
   llvm::DenseMap<Block *, Block *> originalToDummy;
+
   size_t order = 0;
 };
 
@@ -146,7 +253,21 @@ void LoopTreeBuilder::dfsImpl(Block *block) {
   blockOrderRev[order] = block;
   order++;
 
-  auto succs = module->getSuccessors(block);
+  // This sorting is not strictly necessary, but it helps to determine the shape
+  // of DFS spanning tree.
+  // And it is helpful for debugging and analyze loop tree structure.
+  llvm::SmallVector<Block *> succs(successors[block].begin(),
+                                   successors[block].end());
+  llvm::stable_sort(succs, [&](Block *lhs, Block *rhs) {
+    auto lhsId = dummyToOriginal.contains(lhs)
+                     ? dummyToOriginal.at(lhs)->getId()
+                     : lhs->getId();
+    auto rhsId = dummyToOriginal.contains(rhs)
+                     ? dummyToOriginal.at(rhs)->getId()
+                     : rhs->getId();
+    return lhsId < rhsId;
+  });
+
   for (Block *succ : succs) {
     if (!blockOrderMap.contains(succ))
       dfsImpl(succ);
@@ -184,27 +305,25 @@ LoopTree LoopTreeBuilder::build() {
   // build impl from the results
   llvm::DenseMap<Block *, llvm::DenseSet<Block *>> loopTree;
   llvm::DenseMap<Block *, Block *> loopHeader;
-  llvm::DenseMap<Block *, llvm::DenseSet<LoopType>> loopType;
+  llvm::DenseMap<Block *, LoopType> loopType;
 
   for (auto [block, order] : blockOrderMap) {
-    if (auto it = dummyToOriginal.find(block); it != dummyToOriginal.end())
-      block = it->second;
-
     auto type = loopTypeMap[order];
     auto header = headerMap[order];
-    auto headerBlock = blockOrderRev[header];
 
-    if (auto it = dummyToOriginal.find(headerBlock);
-        it != dummyToOriginal.end())
-      headerBlock = it->second;
+    if (header != std::numeric_limits<size_t>::max()) {
+      auto headerBlock = blockOrderRev[header];
+      loopTree[headerBlock].insert(block);
+      loopHeader[block] = headerBlock;
+    }
 
-    loopTree[headerBlock].insert(block);
-    loopHeader[block] = headerBlock;
-    loopType[block].insert(type);
+    loopType[block] = type;
   }
 
-  return LoopTree(std::move(loopTree), std::move(loopHeader),
-                  std::move(loopType));
+  return LoopTree(function->getEntryBlock(), std::move(loopTree),
+                  std::move(loopHeader), std::move(loopType),
+                  std::move(dummyBlocks), std::move(dummyToOriginal),
+                  std::move(originalToDummy));
 }
 
 Block *LoopTreeBuilder::createDummyBlock(Block *original) {
@@ -223,7 +342,7 @@ void LoopTreeBuilder::fixLoops() {
     llvm::DenseSet<size_t> redBackIn;
     llvm::DenseSet<size_t> otherIn;
 
-    auto preds = module->getPredecessors(blockOrderRev[curr]);
+    auto preds = predecessors[blockOrderRev[curr]];
     for (auto predBlock : preds) {
       auto pred = blockOrderMap[predBlock];
       (dominatorTree->isDominator(blockOrderRev[curr], predBlock) ? redBackIn
@@ -233,19 +352,22 @@ void LoopTreeBuilder::fixLoops() {
     if (!redBackIn.empty() && otherIn.size() > 1) {
       // create dummy block
       auto *dummy = createDummyBlock(blockOrderRev[curr]);
+      auto *currBlock = blockOrderRev[curr];
+
       // create edge (dummy, curr)
+      successors[dummy].insert(currBlock);
+      predecessors[currBlock].insert(dummy);
 
-      successors[dummy].insert(blockOrderRev[curr]);
-      predecessors[blockOrderRev[curr]].insert(dummy);
-
-      for (auto newPred : otherIn) {
+      for (auto pred : otherIn) {
+        Block *predBlock = blockOrderRev[pred];
         // create edge (newPred, dummy)
-        successors[blockOrderRev[newPred]].insert(dummy);
-        predecessors[dummy].insert(blockOrderRev[newPred]);
+        Block *newPredBlock = blockOrderRev[pred];
+        successors[predBlock].insert(dummy);
+        predecessors[dummy].insert(predBlock);
 
         // remove edge (newPred, curr)
-        successors[blockOrderRev[newPred]].erase(blockOrderRev[curr]);
-        predecessors[blockOrderRev[curr]].erase(blockOrderRev[newPred]);
+        successors[predBlock].erase(currBlock);
+        predecessors[currBlock].erase(predBlock);
       }
     }
   }
@@ -268,7 +390,7 @@ void LoopTreeBuilder::analyzeLoops() {
   }
   headerMap[0] = std::numeric_limits<size_t>::max();
 
-  for (auto curr = order - 1; curr >= 0; --curr) {
+  for (int curr = order - 1; curr >= 0; --curr) {
     llvm::DenseSet<size_t> workList;
     for (auto backPred : backPreds[curr]) {
       if (backPred != curr)
@@ -290,7 +412,8 @@ void LoopTreeBuilder::analyzeLoops() {
         if (!isAncestor(curr, nonBackPred)) {
           loopTypeMap[curr] = LoopType::Irreducible;
           nonBackPreds[curr].insert(nonBackPred);
-        } else if (!workList.contains(nonBackPred) && curr != nonBackPred) {
+        } else if (!savedWorkList.contains(nonBackPred) &&
+                   curr != nonBackPred) {
           workList.insert(nonBackPred);
           savedWorkList.insert(nonBackPred);
         }
@@ -332,9 +455,10 @@ std::unique_ptr<LoopAnalysisImpl> LoopAnalysisImpl::create(Module *module) {
   }
 
   for (Function *function : *module->getIR()) {
+    if (!function->hasDefinition())
+      continue;
 
     const DominatorTree *domTree = domAnalysis->getDominatorTree(function);
-
     LoopTreeBuilder builder(module, function, domTree);
     LoopTree loopTree = builder.build();
 
@@ -356,12 +480,6 @@ std::unique_ptr<LoopAnalysis> LoopAnalysis::create(Module *module) {
       new LoopAnalysis(module, std::move(impl)));
 }
 
-const llvm::DenseSet<LoopAnalysis::LoopType> &
-LoopAnalysis::getLoopTypes(Block *block) const {
-  auto *loopTree = impl->getLoopTree(block->getParentFunction());
-  return loopTree->getLoopTypes(block);
-}
-
 LoopAnalysis::LoopType LoopAnalysis::getLoopType(Block *block) const {
   auto *loopTree = impl->getLoopTree(block->getParentFunction());
   return loopTree->getLoopType(block);
@@ -376,6 +494,21 @@ LoopAnalysis::getLoopChildren(Block *block) const {
 Block *LoopAnalysis::getLoopHeader(Block *block) const {
   auto *loopTree = impl->getLoopTree(block->getParentFunction());
   return loopTree->getLoopHeader(block);
+}
+
+void LoopAnalysis::dump(llvm::raw_ostream &os) const {
+  os << "Loop Analysis Dump:\n";
+
+  for (Function *function : *getModule()->getIR()) {
+    if (!function->hasDefinition())
+      continue;
+
+    auto *loopTree = impl->getLoopTree(function);
+    os << "function @" << function->getName() << ":\n";
+    loopTree->dump(os);
+
+    os << '\n';
+  }
 }
 
 } // namespace kecc::ir

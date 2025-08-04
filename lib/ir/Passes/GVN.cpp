@@ -301,10 +301,6 @@ PassResult GVNImpl::run() {
   table.insertBlockTable(function->getEntryBlock(),
                          function->getAllocationBlock());
 
-  for (Block *block : rpo)
-    llvm::errs() << block->getId() << ' ';
-  llvm::errs() << '\n';
-
   for (Block *block : rpo) {
     // Initialize the block's expression set with its immediate dominator's set
     Block *idom = domTree->getIdom(block);

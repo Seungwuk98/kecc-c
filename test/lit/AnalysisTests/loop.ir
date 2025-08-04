@@ -1,0 +1,117 @@
+// RUN: kecc-opt %s --dump-analysis=loop | FileCheck %s
+
+// The test case is introduced in "Nesting of Reducible and Irreducible Loops(Paul Havlak, 1997)"
+// 
+// 
+//         −−−−−−−−−−− start
+//        |              ↓ 
+//        |    −−−−−−−−→ α −−−−−−−−
+//        |   |          ↓         |
+//        |   |   −−−−−→ β         |
+//        |   |  |       ↓         ↓
+//        |   |  |       γ ←−−−−−→ δ ←−
+//        |   |  |       ↓         ↓   |
+//        |   |   −−−−−− κ↺        θ −−
+//        |   |          ↓
+//        |    −−−−−−−−− λ
+//        |              ↓
+//         −−−−−−−−−−−→ end 
+
+
+
+fun unit @test_case () {
+init:
+  bid: b0
+  allocations:
+
+block b0: // start
+  br 0:i1, b1(), b8() // α, end  
+
+block b1: // α 
+  br 0:i1, b2(), b4() // β, δ 
+
+block b2: // β
+  j b3() // γ 
+  
+block b3: // γ 
+  br 0:i1, b4(), b6() // δ, κ   
+
+block b4: // δ
+  br 0:i1, b3(), b5() // γ, θ 
+
+block b5: // θ 
+  j b4() // δ
+
+block b6: // κ 
+  switch 0:i1 default b7() [ // λ
+    0:i1 b6() // κ
+    1:i1 b2() // β
+  ]
+
+block b7: // λ
+  br 0:i1, b8(), b1() // end, α
+
+block b8: // end
+  ret
+}
+
+
+// CHECK: Loop Analysis Dump:
+// CHECK-NEXT: function @test_case:
+// CHECK-NEXT: Loop Tree Dump:
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   type: NonHeader
+// CHECK-NEXT:   depth: 0
+// CHECK-NEXT:   children: block b1, block b8
+
+// CHECK-LABEL: block b1:
+// CHECK-NEXT:   type: Reducible
+// CHECK-NEXT:   depth: 0
+// CHECK-NEXT:   header: block b0
+// CHECK-NEXT:   children: block b2, block b7
+
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   type: Irreducible
+// CHECK-NEXT:   depth: 1
+// CHECK-NEXT:   header: block b1
+// CHECK-NEXT:   children: block b3, block b6
+
+// CHECK-LABEL: block b3:
+// CHECK-NEXT:   type: Irreducible
+// CHECK-NEXT:   depth: 2
+// CHECK-NEXT:   header: block b2
+// CHECK-NEXT:   children: block b4, dummy of block b4
+
+// CHECK-LABEL: block b4:
+// CHECK-NEXT:   type: Reducible
+// CHECK-NEXT:   depth: 3
+// CHECK-NEXT:   header: block b3
+// CHECK-NEXT:   children: block b5
+
+// CHECK-LABEL: dummy of block b4:
+// CHECK-NEXT:   type: NonHeader
+// CHECK-NEXT:   depth: 3
+// CHECK-NEXT:   header: block b3
+
+// CHECK-LABEL: block b5:
+// CHECK-NEXT:   type: NonHeader
+// CHECK-NEXT:   depth: 4
+// CHECK-NEXT:   header: block b4
+
+// CHECK-LABEL: block b6:
+// CHECK-NEXT:   type: SelfLoop
+// CHECK-NEXT:   depth: 2
+// CHECK-NEXT:   header: block b2
+
+// CHECK-LABEL: block b7:
+// CHECK-NEXT:   type: NonHeader
+// CHECK-NEXT:   depth: 1
+// CHECK-NEXT:   header: block b1
+
+// CHECK-LABEL: block b8:
+// CHECK-NEXT:   type: NonHeader
+// CHECK-NEXT:   depth: 0
+// CHECK-NEXT:   header: block b0
+
+
