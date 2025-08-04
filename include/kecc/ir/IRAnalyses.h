@@ -186,6 +186,8 @@ public:
   const llvm::DenseSet<Block *> &getLoopChildren(Block *block) const;
   Block *getLoopHeader(Block *block) const;
 
+  size_t getLoopDepth(Block *block) const;
+
   bool hasIrreducibleLoops() const;
 
   void dump(llvm::raw_ostream &os) const;

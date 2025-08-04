@@ -3,6 +3,7 @@ add_library(
   STATIC 
   IRTranslater.cpp
   InterferenceGraph.cpp
+  SpillCost.cpp
 )
 
 target_link_libraries(KeccTranslate

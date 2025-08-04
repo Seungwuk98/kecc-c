@@ -13,6 +13,8 @@ public:
   static std::unique_ptr<InterferenceGraph>
   create(ir::Module *module, ir::Function *func, bool isFloat);
 
+  size_t getDegree(size_t liveRange) const;
+
 private:
   InterferenceGraph(std::map<size_t, std::set<size_t>> graph)
       : graph(std::move(graph)) {}

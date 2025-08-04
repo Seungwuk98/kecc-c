@@ -496,6 +496,11 @@ Block *LoopAnalysis::getLoopHeader(Block *block) const {
   return loopTree->getLoopHeader(block);
 }
 
+size_t LoopAnalysis::getLoopDepth(Block *block) const {
+  auto *loopTree = impl->getLoopTree(block->getParentFunction());
+  return loopTree->getLoopDepth(block);
+}
+
 void LoopAnalysis::dump(llvm::raw_ostream &os) const {
   os << "Loop Analysis Dump:\n";
 

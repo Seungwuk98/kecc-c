@@ -4,6 +4,14 @@
 
 namespace kecc {
 
+size_t InterferenceGraph::getDegree(size_t liveRange) const {
+  auto it = graph.find(liveRange);
+  if (it != graph.end()) {
+    return it->second.size();
+  }
+  return 0;
+}
+
 struct InterferenceGraphBuilder {
   InterferenceGraphBuilder(ir::Module *module, ir::Function *func,
                            ir::LiveRangeAnalysis *liveRangeAnalysis,
