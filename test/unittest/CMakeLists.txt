@@ -2,7 +2,7 @@
 # get .cpp files in ir directory
 
 file(GLOB_RECURSE IR_UNIT_TESTS ${CMAKE_CURRENT_SOURCE_DIR}/ir "*.cpp")
-file(GLOB_RECURSE ASM_UNIT_TESTS ${CMAKE_CURRENT_SOURCE_DIR}/ir "*.cpp")
+file(GLOB_RECURSE ASM_UNIT_TESTS ${CMAKE_CURRENT_SOURCE_DIR}/asm "*.cpp")
 
 add_executable(
   UnitTest

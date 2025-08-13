@@ -40,7 +40,9 @@ class CFGConstantPropagation : public FuncPass {
 public:
   PassResult run(Module *module, Function *fun) override;
 
-  llvm::StringRef getPassName() const override { return "cfg-constant-prop"; }
+  llvm::StringRef getPassArgument() const override {
+    return "cfg-constant-prop";
+  }
 
 private:
 };
@@ -49,7 +51,7 @@ class CFGEmpty : public FuncPass {
 public:
   PassResult run(Module *module, Function *fun) override;
 
-  llvm::StringRef getPassName() const override { return "cfg-empty"; }
+  llvm::StringRef getPassArgument() const override { return "cfg-empty"; }
 
   bool candidateCondition(Module *module, Block *block) const;
 
@@ -93,7 +95,7 @@ public:
   void init(Module *, Function *) override { parent.clear(); }
   PassResult run(Module *module, Function *fun) override;
 
-  llvm::StringRef getPassName() const override { return "cfg-merge"; }
+  llvm::StringRef getPassArgument() const override { return "cfg-merge"; }
 
 private:
   Block *find(Block *block);
@@ -110,7 +112,7 @@ public:
   void init(Module *, Function *) override { visited.clear(); }
   PassResult run(Module *module, Function *fun) override;
 
-  llvm::StringRef getPassName() const override { return "cfg-reach"; }
+  llvm::StringRef getPassArgument() const override { return "cfg-reach"; }
 
 private:
   void dfs(Module *module, Block *block);

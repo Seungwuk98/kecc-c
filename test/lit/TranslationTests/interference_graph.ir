@@ -1,0 +1,117 @@
+// RUN: kecc-opt %s --outline-constant --inline-call --canonicalize-struct --outline-multiple-results --canonicalize-constant | FileCheck %s --check-prefix=OPT
+
+// RUN: kecc-translate %s --action=dump-graph | FileCheck %s --check-prefix=GRAPH
+
+fun i32 @test_func () {
+init:
+  bid: b0
+  allocations:
+    %l0:i32
+    %l1:i32
+    %l2:i32
+
+block b0:
+  %b0:p0:i32 // union %b3:i1
+  %b0:p1:i32 // union %b3:i2
+  %b0:p2:i32 // union %b3:i3
+ 
+  %b0:i0:unit = store %b0:p0:i32 %l0:i32*
+  %b0:i1:unit = store %b0:p1:i32 %l1:i32*
+  %b0:i2:unit = store %b0:p2:i32 %l2:i32*
+  br 0:i1, b1(), b2()
+
+block b1:
+  j b3(%b0:p1:i32)
+  
+block b2:
+  %b2:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+  j b3(%b2:i0:i32)
+
+
+block b3:
+  %b3:p0:i32 // union %b0:p1, %b2:i0
+  %b3:i0:i1 = typecast %b3:p0:i32 to i1
+  %b3:i1:i32 = add %b0:p1:i32 %b0:p2:i32
+  %b3:i2:i32 = add %b0:p0:i32 %b0:p2:i32
+  %b3:i3:i32 = add %b0:p0:i32 %b0:p1:i32
+  br %b3:i0:i1, b0(%b3:i1:i32, %b3:i2:i32, %b3:i3:i32), b4()
+
+block b4:
+  ret %b3:p0:i32
+}
+
+
+/// Default passes for translate ir
+/// `OutlineConstant`
+/// `InlineCall`
+/// `CanonicalizeStruct`
+/// `OutlineMultipleResults`
+/// `CanonicalizeConstant`
+// OPT: fun i32 @test_func () {
+// OPT-NEXT: init:
+// OPT-NEXT:   bid: b0
+// OPT-NEXT:   allocations:
+// OPT-NEXT:     %l0:i32
+// OPT-NEXT:     %l1:i32
+// OPT-NEXT:     %l2:i32
+
+// OPT-LABEL: block b0:
+// OPT-NEXT:   %b0:p0:i32
+// OPT-NEXT:   %b0:p1:i32
+// OPT-NEXT:   %b0:p2:i32
+// OPT-NEXT:   %b0:i0:unit = store %b0:p0:i32 %l0:i32*
+// OPT-NEXT:   %b0:i1:unit = store %b0:p1:i32 %l1:i32*
+// OPT-NEXT:   %b0:i2:unit = store %b0:p2:i32 %l2:i32*
+// OPT-NEXT:   %b0:i3:i1 = outline 0:i1
+// OPT-NEXT:   br %b0:i3:i1, b1(), b2()
+
+// OPT-LABEL: block b1:
+// OPT-NEXT:   j b3(%b0:p1:i32)
+
+// OPT-LABEL: block b2:
+// OPT-NEXT:   %b2:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+// OPT-NEXT:   j b3(%b2:i0:i32)
+
+// OPT-LABEL: block b3:
+// OPT-NEXT:   %b3:p0:i32
+// OPT-NEXT:   %b3:i0:i1 = typecast %b3:p0:i32 to i1
+// OPT-NEXT:   %b3:i1:i32 = add %b0:p1:i32 %b0:p2:i32
+// OPT-NEXT:   %b3:i2:i32 = add %b0:p0:i32 %b0:p2:i32
+// OPT-NEXT:   %b3:i3:i32 = add %b0:p0:i32 %b0:p1:i32
+// OPT-NEXT:   br %b3:i0:i1, b0(%b3:i1:i32, %b3:i2:i32, %b3:i3:i32), b4()
+
+// OPT-LABEL: block b4:
+// OPT-NEXT:   ret %b3:p0:i32
+// OPT-NEXT: }
+
+// GRAPH: Liveness Analysis dump:
+// GRAPH-NEXT: Function: @test_func
+// GRAPH-NEXT:   block b0: L0, L1, L2, L3, L4, L5
+// GRAPH-NEXT:   block b1: L0, L1, L2, L3, L4, L5, L11
+// GRAPH-NEXT:   block b2: L0, L1, L2, L3, L4, L5, L11
+// GRAPH-NEXT:   block b3: L0, L1, L2, L3, L4, L5, L11
+// GRAPH-NEXT:   block b4: <empty>
+
+// GRAPH: Interference graph for function: @test_func
+// GRAPH-NEXT: For integer live ranges:
+// GRAPH-NEXT: L0: L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
+// GRAPH-NEXT: L1: L0, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
+// GRAPH-NEXT: L2: L0, L1, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
+// GRAPH-NEXT: L3: L0, L1, L2, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
+// GRAPH-NEXT: L4: L0, L1, L2, L3, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
+// GRAPH-NEXT: L5: L0, L1, L2, L3, L4, L6, L7, L8, L9, L10, L11, L12, L13
+// GRAPH-NEXT: L6: L0, L1, L2, L3, L4, L5
+// GRAPH-NEXT: L7: L0, L1, L2, L3, L4, L5
+// GRAPH-NEXT: L8: L0, L1, L2, L3, L4, L5
+// GRAPH-NEXT: L9: L0, L1, L2, L3, L4, L5
+// GRAPH-NEXT: L10: L0, L1, L2, L3, L4, L5
+// GRAPH-NEXT: L11: L0, L1, L2, L3, L4, L5, L12, L13, L14, L15
+// GRAPH-NEXT: L12: L0, L1, L2, L3, L4, L5, L11, L13, L14, L15
+// GRAPH-NEXT: L13: L0, L1, L2, L3, L4, L5, L11, L12, L14, L15
+// GRAPH-NEXT: L14: L0, L1, L2, L3, L4, L11, L12, L13, L15
+// GRAPH-NEXT: L15: L0, L1, L2, L3, L4, L11, L12, L13, L14
+// GRAPH-NEXT: For floating-point live ranges:
+
+
+// RUN: kecc-translate %s --action=dump-graph --spill-iterations=1 --reg-for-alloc="temp={t0,t1},int={a0,a1,a2,a3},float={fa0,fa1,fa2,fa3}" | FileCheck %s
+

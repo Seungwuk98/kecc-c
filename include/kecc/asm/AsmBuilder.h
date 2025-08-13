@@ -10,6 +10,22 @@ class AsmBuilder {
 public:
   AsmBuilder() {}
 
+  struct InsertionGuard {
+    InsertionGuard(AsmBuilder &builder, Block::InsertionPoint point)
+        : builder(builder), previousPoint(builder.insertionPoint) {
+      builder.setInsertionPoint(point);
+    }
+
+    InsertionGuard(AsmBuilder &builder)
+        : builder(builder), previousPoint(builder.insertionPoint) {}
+
+    ~InsertionGuard() { builder.setInsertionPoint(previousPoint); }
+
+  private:
+    AsmBuilder &builder;
+    Block::InsertionPoint previousPoint;
+  };
+
   void setInsertionPoint(Block::InsertionPoint point) {
     insertionPoint = point;
   }

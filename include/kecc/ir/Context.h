@@ -278,6 +278,11 @@ public:
 
   static RegisterId unresolved(llvm::SMRange range, std::size_t regId);
 
+  bool operator<(const RegisterId &other) const {
+    return std::tie(blockId, kind, regId) <
+           std::tie(other.blockId, other.kind, other.regId);
+  }
+
 private:
   friend llvm::DenseMapInfo<RegisterId>;
 

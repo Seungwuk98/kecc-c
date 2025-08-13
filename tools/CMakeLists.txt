@@ -7,6 +7,7 @@ target_link_libraries(
   KeccParser
   KeccIRAnalyses
   KeccIRPasses
+  KeccTranslate
 )
 
 add_executable(kecc-translate kecc-translate.cpp)
@@ -16,7 +17,9 @@ target_link_libraries(
   PRIVATE
   ${llvm_libs}
   KeccIR
+  KeccParser
   KeccIRAnalyses
   KeccIRPasses
   KeccASM
+  KeccTranslate
 )

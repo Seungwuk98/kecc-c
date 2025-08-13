@@ -44,7 +44,10 @@ void Load::printer(Load op, IRPrintContext &context) {
   op.getPointer().printAsOperand(context);
 }
 
-Value Load::getPointer() const { return this->getStorage()->getOperand(0); }
+Value Load::getPointer() const { return getPointerAsOperand(); }
+const Operand &Load::getPointerAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
 Value Load::Adaptor::getPointer() const { return operands[0]; }
 
 //============================================================================//
@@ -67,8 +70,14 @@ void Store::printer(Store op, IRPrintContext &context) {
   op.getPointer().printAsOperand(context);
 }
 
-Value Store::getValue() const { return this->getStorage()->getOperand(0); }
-Value Store::getPointer() const { return this->getStorage()->getOperand(1); }
+Value Store::getValue() const { return getValueAsOperand(); }
+const Operand &Store::getValueAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
+Value Store::getPointer() const { return getPointerAsOperand(); }
+const Operand &Store::getPointerAsOperand() const {
+  return this->getStorage()->getOperand(1);
+}
 
 Value Store::Adaptor::getValue() const { return operands[0]; }
 Value Store::Adaptor::getPointer() const { return operands[1]; }
@@ -122,7 +131,10 @@ void Call::printer(Call op, IRPrintContext &context) {
   context.getOS() << ')';
 }
 
-Value Call::getFunction() const { return this->getStorage()->getOperand(0); }
+const Operand &Call::getFunctionAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
+Value Call::getFunction() const { return getFunctionAsOperand(); }
 llvm::ArrayRef<Operand> Call::getArguments() const {
   return this->getStorage()->getOperands().slice(1);
 }
@@ -150,7 +162,10 @@ void TypeCast::printer(TypeCast op, IRPrintContext &context) {
   context.getOS() << " to " << op.getTargetType().toString();
 }
 
-Value TypeCast::getValue() const { return this->getStorage()->getOperand(0); }
+Value TypeCast::getValue() const { return getValueAsOperand(); }
+const Operand &TypeCast::getValueAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
 Type TypeCast::getTargetType() const {
   return this->getStorage()->getResult(0).getType();
 }
@@ -176,9 +191,15 @@ void Gep::printer(Gep op, IRPrintContext &context) {
   op.getOffset().printAsOperand(context);
 }
 
-Value Gep::getBasePointer() const { return this->getStorage()->getOperand(0); }
+Value Gep::getBasePointer() const { return getBasePointerAsOperand(); }
+const Operand &Gep::getBasePointerAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
 
-Value Gep::getOffset() const { return this->getStorage()->getOperand(1); }
+Value Gep::getOffset() const { return getOffsetAsOperand(); }
+const Operand &Gep::getOffsetAsOperand() const {
+  return this->getStorage()->getOperand(1);
+}
 
 Value Gep::Adaptor::getBasePointer() const { return operands[0]; }
 Value Gep::Adaptor::getOffset() const { return operands[1]; }
@@ -263,8 +284,14 @@ void Binary::printer(Binary op, IRPrintContext &context) {
   op.getRhs().printAsOperand(context);
 }
 
+const Operand &Binary::getLhsAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
 Value Binary::getLhs() const { return this->getStorage()->getOperand(0); }
-Value Binary::getRhs() const { return this->getStorage()->getOperand(1); }
+const Operand &Binary::getRhsAsOperand() const {
+  return this->getStorage()->getOperand(1);
+}
+Value Binary::getRhs() const { return getRhsAsOperand(); }
 Binary::OpKind Binary::getOpKind() const {
   return this->getStorage()
       ->getAttribute(0)
@@ -306,7 +333,10 @@ void Unary::printer(Unary op, IRPrintContext &context) {
   op.getValue().printAsOperand(context);
 }
 
-Value Unary::getValue() const { return this->getStorage()->getOperand(0); }
+Value Unary::getValue() const { return getValueAsOperand(); }
+const Operand &Unary::getValueAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
 Unary::OpKind Unary::getOpKind() const {
   return this->getStorage()
       ->getAttribute(0)
@@ -355,7 +385,11 @@ void Branch::printer(Branch op, IRPrintContext &context) {
   op.getElseArg()->printJumpArg(context);
 }
 
-Value Branch::getCondition() const { return this->getStorage()->getOperand(0); }
+const Operand &Branch::getConditionAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
+Value Branch::getCondition() const { return getConditionAsOperand(); }
+
 JumpArg *Branch::getIfArg() const { return this->getStorage()->getJumpArg(0); }
 JumpArg *Branch::getElseArg() const {
   return this->getStorage()->getJumpArg(1);
@@ -407,9 +441,16 @@ void Switch::printer(Switch op, IRPrintContext &context) {
   context.getOS() << ']';
 }
 
-Value Switch::getValue() const { return this->getStorage()->getOperand(0); }
-Value Switch::getCaseValue(std::size_t idx) const {
+const Operand &Switch::getValueAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
+Value Switch::getValue() const { return getValueAsOperand(); }
+
+const Operand &Switch::getCaseValueAsOperand(std::size_t idx) const {
   return this->getStorage()->getOperands().slice(1)[idx];
+}
+Value Switch::getCaseValue(std::size_t idx) const {
+  return getCaseValueAsOperand(idx);
 }
 JumpArg *Switch::getCaseJumpArg(std::size_t idx) const {
   return this->getStorage()->getJumpArgs().slice(1)[idx];
@@ -461,11 +502,11 @@ void Return::printer(Return op, IRPrintContext &context) {
   }
 }
 
-Value Return::getValue(std::size_t idx) const {
+const Operand &Return::getValueAsOperand(std::size_t idx) const {
   assert(idx < getValueSize() && "Index out of bounds for return value");
   return getValues()[idx];
 }
-
+Value Return::getValue(std::size_t idx) const { return getValueAsOperand(idx); }
 llvm::ArrayRef<Operand> Return::getValues() const {
   return this->getStorage()->getOperands();
 }
@@ -727,9 +768,10 @@ void OutlineConstant::build(IRBuilder &builder, InstructionState &state,
   state.pushOperand(value);
 }
 
-Value OutlineConstant::getConstant() const {
+const Operand &OutlineConstant::getConstantAsOperand() const {
   return getStorage()->getOperand(0);
 }
+Value OutlineConstant::getConstant() const { return getConstantAsOperand(); }
 
 void OutlineConstant::printer(OutlineConstant op, IRPrintContext &context) {
   op.printAsOperand(context, true);

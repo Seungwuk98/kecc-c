@@ -135,7 +135,7 @@ public:
 
   PassResult run(Module *module) override;
 
-  llvm::StringRef getPassName() const override { return "fold-type-cast"; }
+  llvm::StringRef getPassArgument() const override { return "fold-type-cast"; }
 
   void setOption(llvm::StringRef option) override {
     if (option == "func-ptr-only")

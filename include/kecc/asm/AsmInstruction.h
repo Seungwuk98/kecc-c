@@ -40,6 +40,8 @@ public:
 
   virtual void print(llvm::raw_ostream &os) const = 0;
   std::string toString() const;
+  virtual bool isZero() const = 0;
+  virtual void applyMinus() = 0;
 
 protected:
   Immediate(Kind kind) : kind(kind) {}
@@ -59,6 +61,12 @@ public:
   }
 
   void print(llvm::raw_ostream &os) const override;
+
+  bool isZero() const override { return value == 0; }
+  void applyMinus() override {
+    // Negate the value.
+    value = -value;
+  }
 
 private:
   std::int64_t value;
@@ -82,6 +90,16 @@ public:
   }
 
   void print(llvm::raw_ostream &os) const override;
+
+  bool isZero() const override {
+    // Relocation immediates are not considered zero.
+    return false;
+  }
+  void applyMinus() override {
+    // Relocation immediates do not support negation.
+    // This is a no-op.
+    llvm_unreachable("RelocationImmediate does not support applyMinus");
+  }
 
 private:
   RelocationFunction relocation;

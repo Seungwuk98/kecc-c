@@ -133,41 +133,6 @@ private:
       preOrderMap;
 };
 
-class LiveRangeAnalysisImpl;
-class LiveRangeAnalysis : public Analysis {
-public:
-  ~LiveRangeAnalysis();
-
-  static std::unique_ptr<LiveRangeAnalysis> create(Module *module);
-
-  size_t getLiveRange(Function *func, Value value) const;
-  Type getLiveRangeType(Function *func, size_t liveRange) const;
-
-  void dump(llvm::raw_ostream &os) const;
-
-private:
-  LiveRangeAnalysis(Module *module,
-                    std::unique_ptr<LiveRangeAnalysisImpl> impl);
-
-  std::unique_ptr<LiveRangeAnalysisImpl> impl;
-};
-
-class LivenessAnalysis : public Analysis {
-public:
-  static std::unique_ptr<LivenessAnalysis> create(Module *module);
-
-  void dump(llvm::raw_ostream &os) const;
-
-  const std::set<size_t> &getLiveVars(Block *block) const;
-
-private:
-  LivenessAnalysis(Module *module,
-                   llvm::DenseMap<Block *, std::set<size_t>> liveOut)
-      : Analysis(module), liveOut(std::move(liveOut)) {}
-
-  const llvm::DenseMap<Block *, std::set<size_t>> liveOut;
-};
-
 class LoopAnalysisImpl;
 class LoopAnalysis : public Analysis {
 public:
@@ -209,8 +174,6 @@ struct DenseMapInfo<kecc::ir::LoopAnalysis::LoopType>
 
 DECLARE_KECC_TYPE_ID(kecc::ir::DominanceAnalysis)
 DECLARE_KECC_TYPE_ID(kecc::ir::VisitOrderAnalysis)
-DECLARE_KECC_TYPE_ID(kecc::ir::LiveRangeAnalysis)
-DECLARE_KECC_TYPE_ID(kecc::ir::LivenessAnalysis)
 DECLARE_KECC_TYPE_ID(kecc::ir::LoopAnalysis)
 
 #endif // KECC_IR_ANALYSES_H

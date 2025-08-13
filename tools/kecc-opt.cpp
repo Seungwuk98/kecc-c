@@ -4,6 +4,7 @@
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/Pass.h"
 #include "kecc/parser/Parser.h"
+#include "kecc/translate/LiveRangeAnalyses.h"
 #include "kecc/utils/Diag.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -108,13 +109,13 @@ int dumpAnalysis(ir::Module *module) {
     break;
   }
   case cl::LiveRange: {
-    auto liveRangeAnalysis = ir::LiveRangeAnalysis::create(module);
+    auto liveRangeAnalysis = LiveRangeAnalysis::create(module);
     assert(liveRangeAnalysis && "Failed to create live range analysis");
     dump([&](llvm::raw_ostream &os) { liveRangeAnalysis->dump(os); });
     break;
   }
   case cl::Liveness: {
-    auto livenessAnalysis = ir::LivenessAnalysis::create(module);
+    auto livenessAnalysis = LivenessAnalysis::create(module);
     assert(livenessAnalysis && "Failed to create liveness analysis");
     dump([&](llvm::raw_ostream &os) { livenessAnalysis->dump(os); });
     break;
@@ -129,7 +130,7 @@ int dumpAnalysis(ir::Module *module) {
   return 0;
 }
 
-int keccMain() {
+int keccOptMain() {
   ir::IRContext context;
 
   if (cl::action == cl::Opt && cl::action.getNumOccurrences() == 0 &&
@@ -171,17 +172,18 @@ int keccMain() {
     return 0;
   }
 
+  ir::PassManager pm;
+
+  cl::pmOption->passCallback(pm);
+  auto result = pm.run(module.get());
+  if (result.isFailure())
+    return 1;
+
   if (cl::action == cl::DumpAnalysis) {
     return dumpAnalysis(module.get());
   }
 
   if (cl::action == cl::Opt) {
-    ir::PassManager pm;
-
-    cl::pmOption->passCallback(pm);
-    auto result = pm.run(module.get());
-    if (result.isFailure())
-      return 1;
     dumpModule(module.get());
     return 0;
   }
@@ -207,5 +209,5 @@ int main(int argc, const char **argv) {
   kecc::cl::registerPMOption();
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "Kecc IR Optimization Compiler\n");
-  return kecc::keccMain();
+  return kecc::keccOptMain();
 }

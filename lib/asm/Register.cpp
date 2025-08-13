@@ -29,8 +29,8 @@ private:
   ABIKind kind;
   CallingConvension callingConvention;
 
-  llvm::StringRef description;
-  llvm::StringRef printName;
+  std::string description;
+  std::string printName;
 };
 
 namespace detail {
@@ -303,6 +303,18 @@ Register Register::fa7() { return &detail::f17; }
 
 namespace detail {
 
+llvm::ArrayRef<RegisterImpl *> xRegisters = {
+    &x0,  &x1,  &x2,  &x3,  &x4,  &x5,  &x6,  &x7,  &x8,  &x9,  &x10,
+    &x11, &x12, &x13, &x14, &x15, &x16, &x17, &x18, &x19, &x20, &x21,
+    &x22, &x23, &x24, &x25, &x26, &x27, &x28, &x29, &x30, &x31,
+};
+
+llvm::ArrayRef<RegisterImpl *> fRegisters = {
+    &f0,  &f1,  &f2,  &f3,  &f4,  &f5,  &f6,  &f7,  &f8,  &f9,  &f10,
+    &f11, &f12, &f13, &f14, &f15, &f16, &f17, &f18, &f19, &f20, &f21,
+    &f22, &f23, &f24, &f25, &f26, &f27, &f28, &f29, &f30, &f31,
+};
+
 llvm::ArrayRef<Register> integerTempRegisters = {
     Register::t0(), Register::t1(), Register::t2(), Register::t3(),
     Register::t4(), Register::t5(), Register::t6(),
@@ -442,43 +454,52 @@ llvm::ArrayRef<Register> getFpSavedRegisters() {
   return detail::floatSavedRegisters;
 }
 
-namespace {
-llvm::ManagedStatic<llvm::StringMap<std::unique_ptr<RegisterImpl>>> tempStorage;
-static RegisterImpl *
-createAnonymousRegister(RegisterType type, CallingConvension callingConvention,
-                        llvm::StringRef printName) {
+bool Register::definedAnonymousRegister(AnonymousRegisterStorage *storage,
+                                        llvm::StringRef name) {
+  return storage->contains(name);
+}
+
+Register Register::createAnonymousRegister(AnonymousRegisterStorage *storage,
+                                           RegisterType type,
+                                           CallingConvension callingConvention,
+                                           llvm::StringRef name) {
+  assert(!name.empty() > 0 && "Anonymous register must have a non-empty name");
+  assert(!storage->contains(name) &&
+         "Register with this name already exists in the storage");
+
   RegisterImpl *impl = new RegisterImpl(static_cast<Mnemonic>(-1), -1, type,
                                         static_cast<ABIKind>(-1),
-                                        callingConvention, -1, "", printName);
+                                        callingConvention, -1, "", name);
 
-  auto [it, inserted] =
-      tempStorage->insert({printName, std::unique_ptr<RegisterImpl>(impl)});
-  assert(inserted && "Register with this name already exists");
-
-  return it->second.get();
+  auto reg = storage->insert(std::unique_ptr<RegisterImpl>(impl));
+  return reg;
 }
-} // namespace
 
-Register Register::getAnonymousRegister(RegisterType type,
-                                        CallingConvension callingConvention,
+Register Register::getAnonymousRegister(AnonymousRegisterStorage *storage,
                                         llvm::StringRef name) {
   assert(!name.empty() > 0 && "Anonymous register must have a non-empty name");
-
-  auto it = tempStorage->find(name);
-  if (it != tempStorage->end())
-    return Register(it->second.get());
-
-  RegisterImpl *impl = createAnonymousRegister(type, callingConvention, name);
-  return Register(impl);
+  return storage->get(name);
 }
 
-Register Register::getAnonymousRegister(llvm::StringRef name) {
-  assert(!name.empty() > 0 && "Anonymous register must have a non-empty name");
+Register Register::getX(size_t index) { return detail::xRegisters[index]; }
+Register Register::getF(size_t index) { return detail::fRegisters[index]; }
 
-  auto it = tempStorage->find(name);
-  assert(it != tempStorage->end() &&
-         "Register with this name does not exist in the temporary storage");
-  return Register(it->second.get());
+AnonymousRegisterStorage::AnonymousRegisterStorage() {}
+AnonymousRegisterStorage::~AnonymousRegisterStorage() = default;
+
+bool AnonymousRegisterStorage::contains(llvm::StringRef name) {
+  return impls.contains(name);
+}
+
+Register AnonymousRegisterStorage::insert(std::unique_ptr<RegisterImpl> impl) {
+  llvm::StringRef printName = impl->getPrintName();
+  auto [it, inserted] = impls.try_emplace(printName, std::move(impl));
+  assert(inserted);
+  return it->second.get();
+}
+
+Register AnonymousRegisterStorage::get(llvm::StringRef name) {
+  return impls.at(name).get();
 }
 
 } // namespace kecc::as

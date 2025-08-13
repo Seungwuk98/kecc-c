@@ -1,9 +1,14 @@
+add_subdirectory(TranslationRules)
+
 add_library(
   KeccTranslate
   STATIC 
   IRTranslater.cpp
   InterferenceGraph.cpp
-  SpillCost.cpp
+  SpillAnalysis.cpp
+  TranslateContext.cpp
+  LiveRangeAnalysis.cpp
+  LivenessAnalysis.cpp
 )
 
 target_link_libraries(KeccTranslate
@@ -12,4 +17,5 @@ target_link_libraries(KeccTranslate
   MLIRSupport
   KeccIR
   KeccASM
+  KeccTranslationRules
 )

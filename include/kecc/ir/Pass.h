@@ -42,7 +42,7 @@ public:
   virtual PassResult run(Module *module) = 0;
   virtual void init(Module *module) {}
   virtual void exit(Module *module) {}
-  virtual llvm::StringRef getPassName() const { return "ananymous_pass"; }
+  virtual llvm::StringRef getPassArgument() const { return "ananymous_pass"; }
   virtual llvm::StringRef getDescription() const { return ""; }
   virtual void setOption(llvm::StringRef) {}
 };
@@ -107,6 +107,8 @@ public:
     passes.emplace_back(pass, options);
   }
 
+  template <typename PassType> void addPass(llvm::StringRef options = "");
+
   PassResult run(Module *module);
 
 private:
@@ -134,6 +136,14 @@ template <typename Pass, typename... Args> void registerPass(Args &&...args) {
 }
 
 Pass *getPassByName(llvm::StringRef name);
+
+template <typename PassType>
+void PassManager::addPass(llvm::StringRef options) {
+  auto passName = PassType::getPassName();
+  Pass *pass = getPassByName(passName);
+  assert(pass && "Pass is not registered");
+  addPass(pass, options);
+}
 
 } // namespace kecc::ir
 

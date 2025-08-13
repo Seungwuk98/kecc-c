@@ -2,6 +2,7 @@ add_library(KeccASM
   STATIC 
   AsmInstruction.cpp
   Register.cpp
+  RegisterParser.cpp
   Asm.cpp
 )
 
@@ -10,3 +11,4 @@ target_link_libraries(KeccASM
   ${llvm_libs}
   MLIRSupport
 )
+

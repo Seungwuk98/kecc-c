@@ -21,58 +21,57 @@ block b0:
   %b0:p0:i32 // union %b3:i1
   %b0:p1:i32 // union %b3:i2
   %b0:p2:i32 // union %b3:i3
-  // CHECK-NEXT: [[LR_0:L[0-9]+]]:i32
-  // CHECK-NEXT: [[LR_1:L[0-9]+]]:i32
-  // CHECK-NEXT: [[LR_2:L[0-9]+]]:i32
-  
+
   %b0:i0:unit = store %b0:p0:i32 %l0:i32*
-  // CHECK-NEXT: [[LR_3:L[0-9]+]]:unit = store [[LR_0]]:i32 [[LR_L0]]:i32*
+  // CHECK-NEXT: [[LR_3:L[0-9]+]]:unit = store [[LR_0:L[0-9]+]]:i32 [[LR_L0]]:i32*
   %b0:i1:unit = store %b0:p1:i32 %l1:i32*
-  // CHECK-NEXT: [[LR_4:L[0-9]+]]:unit = store [[LR_1]]:i32 [[LR_L1]]:i32*
+  // CHECK-NEXT: [[LR_4:L[0-9]+]]:unit = store [[LR_1:L[0-9]+]]:i32 [[LR_L1]]:i32*
   %b0:i2:unit = store %b0:p2:i32 %l2:i32*
-  // CHECK-NEXT: [[LR_5:L[0-9]+]]:unit = store [[LR_2]]:i32 [[LR_L2]]:i32*
+  // CHECK-NEXT: [[LR_5:L[0-9]+]]:unit = store [[LR_2:L[0-9]+]]:i32 [[LR_L2]]:i32*
   br 0:i1, b1(), b2()
   // CHECK-NEXT: br 0:i1, b1, b2
 
 block b1:
 // CHECK-LABEL: block b1:
   j b3(%b0:p1:i32)
+  // CHECK-NEXT: [[LR_7:L[0-9]+]] = [[LR_1]]
   // CHECK-NEXT: j b3
   
 block b2:
 // CHECK-LABEL: block b2:
 
   %b2:i0:i32 = add %b0:p0:i32 %b0:p1:i32
-  // CHECK-NEXT: [[LR_1]]:i32 = add [[LR_0]]:i32 [[LR_1]]:i32
+  // CHECK-NEXT: [[LR_6:L[0-9]+]]:i32 = add [[LR_0]]:i32 [[LR_1]]:i32
 
   j b3(%b2:i0:i32)
+  // CHECK-NEXT: [[LR_7]] = [[LR_6]]
   // CHECK-NEXT j b3
 
 
 block b3:
 // CHECK-LABEL: block b3:
   %b3:p0:i32 // union %b0:p1, %b2:i0
-  // CHECK-NEXT: [[LR_1]]:i32
 
   %b3:i0:i1 = typecast %b3:p0:i32 to i1
-  // CHECK-NEXT: [[LR_6:L[0-9]+]]:i1 = typecast [[LR_1]]:i32 to i1
-
+  // CHECK-NEXT: [[LR_8:L[0-9]+]]:i1 = typecast [[LR_7]]:i32 to i1
   %b3:i1:i32 = add %b0:p1:i32 %b0:p2:i32
-  // CHECK-NEXT: [[LR_0]]:i32 = add [[LR_1]]:i32 [[LR_2]]:i32
-
+  // CHECK-NEXT: [[LR_9:L[0-9]+]]:i32 = add [[LR_1]]:i32 [[LR_2]]:i32
   %b3:i2:i32 = add %b0:p0:i32 %b0:p2:i32
-  // CHECK-NEXT: [[LR_1]]:i32 = add [[LR_0]]:i32 [[LR_2]]:i32
-
+  // CHECK-NEXT: [[LR_10:L[0-9]+]]:i32 = add [[LR_0]]:i32 [[LR_2]]:i32
   %b3:i3:i32 = add %b0:p0:i32 %b0:p1:i32
-  // CHECK-NEXT: [[LR_2]]:i32 = add [[LR_0]]:i32 [[LR_1]]:i32
+  // CHECK-NEXT: [[LR_11:L[0-9]+]]:i32 = add [[LR_0]]:i32 [[LR_1]]:i32
+
 
   br %b3:i0:i1, b0(%b3:i1:i32, %b3:i2:i32, %b3:i3:i32), b4()
-  // CHECK-NEXT: br [[LR_6]]:i1, b0, b4
+  // CHECK-NEXT: [[LR_0]] = [[LR_9]]
+  // CHECK-NEXT: [[LR_1]] = [[LR_10]]
+  // CHECK-NEXT: [[LR_2]] = [[LR_11]]
+  // CHECK-NEXT: br [[LR_8]]:i1, b0, b4
 
 block b4:
 // CHECK-LABEL: block b4:
   ret %b3:p0:i32
-  // CHECK-NEXT: ret [[LR_1]]
+  // CHECK-NEXT: ret [[LR_7]]
 }
 
 

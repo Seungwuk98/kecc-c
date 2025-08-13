@@ -2,11 +2,16 @@
 #define KECC_ASM_REGISTER_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/raw_ostream.h"
+#include <ostream>
 #include <string>
 
 namespace kecc::as {
+
+class AnonymousRegisterStorage;
 
 enum class ABIKind {
   Zero,
@@ -110,6 +115,8 @@ public:
   static Register fa6();
   static Register fa7();
 
+  static Register getX(size_t index);
+  static Register getF(size_t index);
   static Register temp(RegisterType type, size_t index);
   static Register arg(RegisterType type, size_t index);
   static Register saved(RegisterType type, size_t index);
@@ -134,17 +141,36 @@ public:
     return llvm::DenseMapInfo<RegisterImpl *>::getHashValue(reg.impl);
   }
 
-  static Register getAnonymousRegister(RegisterType type,
-                                       CallingConvension callingConvention,
+  static bool definedAnonymousRegister(AnonymousRegisterStorage *storage,
                                        llvm::StringRef name);
 
-  static Register getAnonymousRegister(llvm::StringRef name);
+  static Register createAnonymousRegister(AnonymousRegisterStorage *storage,
+                                          RegisterType type,
+                                          CallingConvension callingConvention,
+                                          llvm::StringRef name);
+
+  static Register getAnonymousRegister(AnonymousRegisterStorage *storage,
+                                       llvm::StringRef name);
 
 private:
   friend class llvm::DenseMapInfo<Register>;
+  friend class AnonymousRegisterStorage;
   Register(RegisterImpl *impl) : impl(impl) {}
 
   RegisterImpl *impl;
+};
+
+class AnonymousRegisterStorage {
+public:
+  AnonymousRegisterStorage();
+  ~AnonymousRegisterStorage();
+
+  bool contains(llvm::StringRef name);
+  Register insert(std::unique_ptr<RegisterImpl> impl);
+  Register get(llvm::StringRef name);
+
+private:
+  llvm::DenseMap<llvm::StringRef, std::unique_ptr<RegisterImpl>> impls;
 };
 
 llvm::ArrayRef<Register> getIntTempRegisters();
@@ -153,6 +179,15 @@ llvm::ArrayRef<Register> getIntSavedRegisters();
 llvm::ArrayRef<Register> getFpTempRegisters();
 llvm::ArrayRef<Register> getFpArgRegisters();
 llvm::ArrayRef<Register> getFpSavedRegisters();
+
+inline std::ostream &operator<<(std::ostream &os, const Register &reg) {
+  return os << reg.toString();
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
+                                     const Register &reg) {
+  return os << reg.toString();
+}
 
 } // namespace kecc::as
 

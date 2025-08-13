@@ -62,14 +62,15 @@ static InlineConstantState getInlineConstantState(Value value) {
   return InlineConstantState::nonConstant();
 }
 
-static void createOutline(IRRewriter &rewriter, InstructionStorage *inst,
-                          Value constant,
-                          llvm::function_ref<void(Value)> operandSetter) {
+static Value createOutline(IRRewriter &rewriter, InstructionStorage *inst,
+                           Value constant,
+                           llvm::function_ref<void(Value)> operandSetter) {
   IRBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPointBeforeInst(inst);
   auto outlineConstant =
       rewriter.create<inst::OutlineConstant>(inst->getRange(), constant);
   operandSetter(outlineConstant);
+  return outlineConstant;
 }
 
 class ConvertBinary : public InstPattern<inst::Binary> {
@@ -121,6 +122,7 @@ public:
         if (!rhsCS.isNonConstant())
           createOutlineAndMatch(rhs, lhsSetter);
       }
+      break;
     case inst::Binary::Shl:
     case inst::Binary::Shr:
       if (rhsCS.isOutline()) {
@@ -135,10 +137,11 @@ public:
     case inst::Binary::Le:
     case inst::Binary::Gt:
     case inst::Binary::Ge:
-      if (lhsCS.isOutline())
+      if (!lhsCS.isNonConstant())
         createOutlineAndMatch(lhs, lhsSetter);
-      else if (rhsCS.isOutline())
+      else if (!rhsCS.isNonConstant())
         createOutlineAndMatch(rhs, rhsSetter);
+      break;
     }
 
     return matched ? utils::LogicalResult::success()
@@ -158,6 +161,8 @@ public:
 
     bool matched = false;
     bool notified = false;
+
+    llvm::DenseMap<ConstantAttr, Value> constantCache;
     for (auto [idx, value] : llvm::enumerate(inst->getOperands())) {
       auto inlineState = getInlineConstantState(value);
       if (!inlineState.isNonConstant()) {
@@ -165,8 +170,18 @@ public:
           rewriter.notifyStartUpdate(inst);
           notified = true;
         }
-        createOutline(rewriter, inst, value,
-                      [&](Value newValue) { inst->setOperand(idx, newValue); });
+        auto constantAttr = value.getDefiningInst<inst::Constant>().getValue();
+        if (auto it = constantCache.find(constantAttr);
+            it != constantCache.end()) {
+          inst->setOperand(idx, it->second);
+        } else {
+          auto outlineConstant =
+              createOutline(rewriter, inst, value, [&](Value newValue) {
+                inst->setOperand(idx, newValue);
+              });
+          constantCache[constantAttr] = outlineConstant;
+        }
+
         matched = true;
       }
     }
@@ -177,9 +192,22 @@ public:
       for (auto [argIdx, arg] : llvm::enumerate(jumpArgState.getArgs())) {
         auto inlineState = getInlineConstantState(arg);
         if (!inlineState.isNonConstant()) {
-          createOutline(rewriter, inst, arg, [&](Value newValue) {
-            jumpArgState.setArg(argIdx, newValue);
-          });
+          if (!notified) {
+            rewriter.notifyStartUpdate(inst);
+            notified = true;
+          }
+          auto constantAttr = arg.getDefiningInst<inst::Constant>().getValue();
+          if (auto it = constantCache.find(constantAttr);
+              it != constantCache.end()) {
+            jumpArgState.setArg(argIdx, it->second);
+          } else {
+            auto outlineConstant =
+                createOutline(rewriter, inst, arg, [&](Value newValue) {
+                  jumpArgState.setArg(argIdx, newValue);
+                });
+            constantCache[constantAttr] = outlineConstant;
+          }
+
           argMatched = true;
         }
       }

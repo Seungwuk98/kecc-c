@@ -10,7 +10,7 @@ static llvm::ManagedStatic<llvm::StringMap<std::unique_ptr<Pass>>> passRegistry;
 Pass *registerPass(const std::function<std::unique_ptr<Pass>()> &passFn) {
   auto pass = passFn();
   assert(pass && "Pass factory function must return a valid Pass instance");
-  auto name = pass->getPassName();
+  auto name = pass->getPassArgument();
   auto [it, inserted] = passRegistry->try_emplace(name, std::move(pass));
   assert(inserted && "Pass with the same name already registered");
   (void)inserted; // Suppress unused variable warning
@@ -115,11 +115,11 @@ void PassNameParser::printOptionInfo(const llvm::cl::Option &o,
   for (const auto &entry : *passRegistry)
     entries.push_back(entry.second.get());
   llvm::sort(entries, [](const Pass *a, const Pass *b) {
-    return a->getPassName() < b->getPassName();
+    return a->getPassArgument() < b->getPassArgument();
   });
   llvm::outs().indent(4) << "Passes:\n";
   for (const auto *pass : entries) {
-    llvm::outs().indent(8) << pass->getPassName() << ": "
+    llvm::outs().indent(8) << pass->getPassArgument() << ": "
                            << pass->getDescription() << "\n";
   }
 }

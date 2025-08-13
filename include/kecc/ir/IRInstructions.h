@@ -29,6 +29,7 @@ public:
   static void build(IRBuilder &builder, InstructionState &state, Value ptr);
 
   Value getPointer() const;
+  const Operand &getPointerAsOperand() const;
 
   static void printer(Load op, IRPrintContext &context);
 
@@ -48,7 +49,9 @@ public:
                     Value ptr);
 
   Value getValue() const;
+  const Operand &getValueAsOperand() const;
   Value getPointer() const;
+  const Operand &getPointerAsOperand() const;
 
   static void printer(Store op, IRPrintContext &context);
   struct Adaptor {
@@ -72,6 +75,7 @@ public:
                     llvm::ArrayRef<Value> args, llvm::ArrayRef<Type> types);
 
   Value getFunction() const;
+  const Operand &getFunctionAsOperand() const;
   llvm::ArrayRef<Operand> getArguments() const;
 
   static void printer(Call op, IRPrintContext &context);
@@ -94,6 +98,7 @@ public:
                     Type targetType);
 
   Value getValue() const;
+  const Operand &getValueAsOperand() const;
   Type getTargetType() const;
 
   static void printer(TypeCast op, IRPrintContext &context);
@@ -116,7 +121,9 @@ public:
                     Value offset, Type type);
 
   Value getBasePointer() const;
+  const Operand &getBasePointerAsOperand() const;
   Value getOffset() const;
+  const Operand &getOffsetAsOperand() const;
 
   static void printer(Gep op, IRPrintContext &context);
 
@@ -160,7 +167,9 @@ public:
                     Value rhs, OpKind op, Type result);
 
   Value getLhs() const;
+  const Operand &getLhsAsOperand() const;
   Value getRhs() const;
+  const Operand &getRhsAsOperand() const;
   OpKind getOpKind() const;
 
   static void printer(Binary op, IRPrintContext &context);
@@ -189,6 +198,7 @@ public:
                     OpKind op);
 
   Value getValue() const;
+  const Operand &getValueAsOperand() const;
   OpKind getOpKind() const;
 
   static void printer(Unary op, IRPrintContext &context);
@@ -228,6 +238,7 @@ public:
                     JumpArgState ifArg, JumpArgState elseArg);
 
   Value getCondition() const;
+  const Operand &getConditionAsOperand() const;
   JumpArg *getIfArg() const;
   JumpArg *getElseArg() const;
 
@@ -256,7 +267,9 @@ public:
                     JumpArgState defaultCase);
 
   Value getValue() const;
+  const Operand &getValueAsOperand() const;
   Value getCaseValue(size_t idx) const;
+  const Operand &getCaseValueAsOperand(size_t idx) const;
   JumpArg *getCaseJumpArg(size_t idx) const;
   std::size_t getCaseSize() const;
   JumpArg *getDefaultCase() const;
@@ -289,6 +302,7 @@ public:
                     llvm::ArrayRef<Value> value);
 
   Value getValue(std::size_t idx) const;
+  const Operand &getValueAsOperand(std::size_t idx) const;
   llvm::ArrayRef<Operand> getValues() const;
   std::size_t getValueSize() const { return getValues().size(); }
 
@@ -411,6 +425,7 @@ public:
   static void build(IRBuilder &builder, InstructionState &state, Value value);
 
   Value getConstant() const;
+  const Operand &getConstantAsOperand() const;
 
   static void printer(OutlineConstant op, IRPrintContext &context);
 
