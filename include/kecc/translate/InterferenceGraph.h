@@ -12,6 +12,8 @@ class MaximumCardinalitySearch;
 
 class InterferenceGraph {
 public:
+  ~InterferenceGraph();
+
   static std::unique_ptr<InterferenceGraph>
   create(ir::Module *module, ir::Function *func, bool isFloat);
 
@@ -25,18 +27,19 @@ public:
 
   void dump(llvm::raw_ostream &os) const;
 
+  MaximumCardinalitySearch *getMCS() const { return mcs.get(); }
+
 private:
   friend class MaximumCardinalitySearch;
 
   InterferenceGraph(ir::Module *module, ir::Function *function, bool isFloat,
-                    llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph)
-      : module(module), function(function), isFloat(isFloat),
-        graph(std::move(graph)) {}
+                    llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph);
 
   ir::Module *module;
   ir::Function *function;
   bool isFloat;
   llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph;
+  std::unique_ptr<MaximumCardinalitySearch> mcs;
 };
 
 void spill(ir::Module *module, InterferenceGraph *graph);
@@ -57,6 +60,8 @@ public:
   const llvm::SetVector<LiveRange> &getSimplicialElimOrder() const {
     return simplicialElimOrder;
   }
+
+  void dump(llvm::raw_ostream &os) const;
 
 private:
   void init();

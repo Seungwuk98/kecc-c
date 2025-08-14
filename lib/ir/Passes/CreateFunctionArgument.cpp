@@ -88,6 +88,7 @@ PassResult CreateFunctionArgument::run(Module *module, Function *func) {
     builder.create<inst::Jump>({}, jumpArg);
 
     func->setEntryBlock(newBlock->getId());
+    module->addBlockRelation(newBlock, entryBlock);
   }
 
   return PassResult::success();

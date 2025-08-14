@@ -1,6 +1,4 @@
-// RUN: kecc-opt %s --outline-constant --inline-call --canonicalize-struct --outline-multiple-results --canonicalize-constant | FileCheck %s --check-prefix=OPT
 
-// RUN: kecc-translate %s --action=dump-graph | FileCheck %s --check-prefix=GRAPH
 
 fun i32 @test_func () {
 init:
@@ -40,6 +38,7 @@ block b4:
   ret %b3:p0:i32
 }
 
+// RUN: kecc-opt %s --outline-constant --inline-call --canonicalize-struct --outline-multiple-results --create-function-argument --canonicalize-constant | FileCheck %s --check-prefix=OPT
 
 /// Default passes for translate ir
 /// `OutlineConstant`
@@ -84,6 +83,48 @@ block b4:
 // OPT-NEXT:   ret %b3:p0:i32
 // OPT-NEXT: }
 
+
+// RUN: kecc-translate %s --action=dump-graph | FileCheck %s --check-prefix=GRAPH
+
+// GRAPH: Live Range Analysis dump:
+// GRAPH-NEXT: fun i32 @test_func () {
+// GRAPH-NEXT: init:
+// GRAPH-NEXT:   bid: b0
+// GRAPH-NEXT:   allocations:
+// GRAPH-NEXT:     L0:i32
+// GRAPH-NEXT:     L1:i32
+// GRAPH-NEXT:     L2:i32
+
+// GRAPH-LABEL: block b0:
+// GRAPH-NEXT:   L6:unit = store L3:i32 L0:i32*
+// GRAPH-NEXT:   L7:unit = store L4:i32 L1:i32*
+// GRAPH-NEXT:   L8:unit = store L5:i32 L2:i32*
+// GRAPH-NEXT:   L9:i1 = outline constant 0:i1
+// GRAPH-NEXT:   br L9:i1, b1, b2
+
+// GRAPH-LABEL: block b1:
+// GRAPH-NEXT:   L11 = L4
+// GRAPH-NEXT:   j b3
+
+// GRAPH-LABEL: block b2:
+// GRAPH-NEXT:   L10:i32 = add L3:i32 L4:i32
+// GRAPH-NEXT:   L11 = L10
+// GRAPH-NEXT:   j b3
+
+// GRAPH-LABEL: block b3:
+// GRAPH-NEXT:   L12:i1 = typecast L11:i32 to i1
+// GRAPH-NEXT:   L13:i32 = add L4:i32 L5:i32
+// GRAPH-NEXT:   L14:i32 = add L3:i32 L5:i32
+// GRAPH-NEXT:   L15:i32 = add L3:i32 L4:i32
+// GRAPH-NEXT:   L3 = L13
+// GRAPH-NEXT:   L4 = L14
+// GRAPH-NEXT:   L5 = L15
+// GRAPH-NEXT:   br L12:i1, b0, b4
+
+// GRAPH-LABEL: block b4:
+// GRAPH-NEXT:   ret L11:i32
+// GRAPH-NEXT: }
+
 // GRAPH: Liveness Analysis dump:
 // GRAPH-NEXT: Function: @test_func
 // GRAPH-NEXT:   block b0: L0, L1, L2, L3, L4, L5
@@ -93,7 +134,7 @@ block b4:
 // GRAPH-NEXT:   block b4: <empty>
 
 // GRAPH: Interference graph for function: @test_func
-// GRAPH-NEXT: For integer live ranges:
+// GRAPH: For integer live ranges:
 // GRAPH-NEXT: L0: L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
 // GRAPH-NEXT: L1: L0, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
 // GRAPH-NEXT: L2: L0, L1, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
@@ -110,8 +151,225 @@ block b4:
 // GRAPH-NEXT: L13: L0, L1, L2, L3, L4, L5, L11, L12, L14, L15
 // GRAPH-NEXT: L14: L0, L1, L2, L3, L4, L11, L12, L13, L15
 // GRAPH-NEXT: L15: L0, L1, L2, L3, L4, L11, L12, L13, L14
-// GRAPH-NEXT: For floating-point live ranges:
+
+// GRAPH: Maximum Cardinality Search dump:
+// GRAPH-NEXT: SEO: L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15
+// GRAPH-NEXT: Max Clique: L0, L1, L2, L3, L4, L11, L12, L13, L14, L15
+
+// GRAPH: For floating-point live ranges:
+// GRAPH: Maximum Cardinality Search dump:
+// GRAPH-NEXT: SEO:
+// GRAPH-NEXT: Max Clique:
 
 
-// RUN: kecc-translate %s --action=dump-graph --spill-iterations=1 --reg-for-alloc="temp={t0,t1},int={a0,a1,a2,a3},float={fa0,fa1,fa2,fa3}" | FileCheck %s
+// RUN: kecc-translate %s --action=dump-graph --reg-for-alloc="temp={t0,t1},int={a0,a1,a2,a3},float={fa0,fa1,fa2,fa3}" --spill-iterations=1 | FileCheck %s --check-prefix=SPILL1
+
+
+// SPILL1: Live Range Analysis dump:
+// SPILL1-NEXT: fun i32 @test_func () {
+// SPILL1-NEXT: init:
+// SPILL1-NEXT:   bid: b0
+// SPILL1-NEXT:   allocations:
+// SPILL1-NEXT:     L0:i32
+// SPILL1-NEXT:     spill L0
+// SPILL1-NEXT:     L1:i32
+// SPILL1-NEXT:     spill L1
+// SPILL1-NEXT:     L2:i32
+// SPILL1-NEXT:     spill L2
+
+// SPILL1-LABEL: block b0:
+// SPILL1-NEXT:   restore L6 from spill memory of L3
+// SPILL1-NEXT:   restore L7 from spill memory of L0
+// SPILL1-NEXT:   L8:unit = store L6:i32 L7:i32*
+// SPILL1-NEXT:   restore L9 from spill memory of L1
+// SPILL1-NEXT:   L10:unit = store L4:i32 L9:i32*
+// SPILL1-NEXT:   restore L11 from spill memory of L2
+// SPILL1-NEXT:   L12:unit = store L5:i32 L11:i32*
+// SPILL1-NEXT:   L13:i1 = outline constant 0:i1
+// SPILL1-NEXT:   br L13:i1, b1, b2
+
+// SPILL1-LABEL: block b1:
+// SPILL1-NEXT:   L16 = L4
+// SPILL1-NEXT:   j b3
+
+// SPILL1-LABEL: block b2:
+// SPILL1-NEXT:   restore L14 from spill memory of L3
+// SPILL1-NEXT:   L15:i32 = add L14:i32 L4:i32
+// SPILL1-NEXT:   L16 = L15
+// SPILL1-NEXT:   j b3
+
+// SPILL1-LABEL: block b3:
+// SPILL1-NEXT:   L17:i1 = typecast L16:i32 to i1
+// SPILL1-NEXT:   spill L17
+// SPILL1-NEXT:   L18:i32 = add L4:i32 L5:i32
+// SPILL1-NEXT:   spill L18
+// SPILL1-NEXT:   restore L19 from spill memory of L3
+// SPILL1-NEXT:   L20:i32 = add L19:i32 L5:i32
+// SPILL1-NEXT:   restore L21 from spill memory of L3
+// SPILL1-NEXT:   L22:i32 = add L21:i32 L4:i32
+// SPILL1-NEXT:   restore L24 from spill memory of L17
+// SPILL1-NEXT:   memcpy to spill memory of L3 from spill memory of L18
+// SPILL1-NEXT:   L4 = L20
+// SPILL1-NEXT:   L5 = L22
+// SPILL1-NEXT:   br L24:i1, b0, b4
+
+// SPILL1-LABEL: block b4:
+// SPILL1-NEXT:   ret L16:i32
+// SPILL1-NEXT: }
+
+// SPILL1-LABEL: Liveness Analysis dump:
+// SPILL1-NEXT: Function: @test_func
+// SPILL1-NEXT:   block b0: L4, L5
+// SPILL1-NEXT:   block b1: L4, L5, L11
+// SPILL1-NEXT:   block b2: L4, L5, L11
+// SPILL1-NEXT:   block b3: L4, L5, L11
+// SPILL1-NEXT:   block b4: <empty>
+
+// SPILL1: Interference graph for function: @test_func
+
+// SPILL1: For integer live ranges:
+// SPILL1-NEXT: L0: L4, L5
+// SPILL1-NEXT: L1: L4, L5
+// SPILL1-NEXT: L2: L4, L5
+// SPILL1-NEXT: L4: L0, L1, L2, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L19, L20, L21, L22, L24
+// SPILL1-NEXT: L5: L0, L1, L2, L4, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L19, L24
+// SPILL1-NEXT: L6: L4, L5, L7
+// SPILL1-NEXT: L7: L4, L5, L6
+// SPILL1-NEXT: L8: L4, L5
+// SPILL1-NEXT: L9: L4, L5
+// SPILL1-NEXT: L10: L4, L5
+// SPILL1-NEXT: L11: L4, L5
+// SPILL1-NEXT: L12: L4, L5
+// SPILL1-NEXT: L13: L4, L5
+// SPILL1-NEXT: L14: L4, L5
+// SPILL1-NEXT: L15: L4, L5
+// SPILL1-NEXT: L16: L4, L5, L17, L18, L19, L20, L21, L22, L23, L24
+// SPILL1-NEXT: L17: L4, L5, L16, L23
+// SPILL1-NEXT: L18: L4, L5, L16, L23
+// SPILL1-NEXT: L19: L4, L5, L16, L23
+// SPILL1-NEXT: L20: L4, L16, L21, L22, L23, L24
+// SPILL1-NEXT: L21: L4, L16, L20, L23
+// SPILL1-NEXT: L22: L4, L16, L20, L23, L24
+// SPILL1-NEXT: L23: L16, L17, L18, L19, L20, L21, L22, L24
+// SPILL1-NEXT: L24: L4, L5, L16, L20, L22, L23
+
+// SPILL1: Maximum Cardinality Search dump:
+// SPILL1-NEXT: SEO: L0, L4, L5, L1, L2, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L19, L23, L24, L20, L22, L21
+// SPILL1-NEXT: Max Clique: L4, L16, L20, L22, L23, L24
+
+// SPILL1: For floating-point live ranges:
+// SPILL1: Maximum Cardinality Search dump:
+// SPILL1-NEXT: SEO: 
+// SPILL1-NEXT: Max Clique: 
+
+
+// RUN: kecc-translate %s --action=dump-graph --reg-for-alloc="temp={t0,t1},int={a0,a1,a2,a3},float={fa0,fa1,fa2,fa3}" --spill-iterations=2 | FileCheck %s --check-prefix=SPILL2
+
+// SPILL2: Live Range Analysis dump:
+// SPILL2-NEXT: fun i32 @test_func () {
+// SPILL2-NEXT: init:
+// SPILL2-NEXT:   bid: b0
+// SPILL2-NEXT:   allocations:
+// SPILL2-NEXT:     L0:i32
+// SPILL2-NEXT:     spill L0
+// SPILL2-NEXT:     L1:i32
+// SPILL2-NEXT:     spill L1
+// SPILL2-NEXT:     L2:i32
+// SPILL2-NEXT:     spill L2
+
+// SPILL2-LABEL: block b0:
+// SPILL2-NEXT:   restore L6 from spill memory of L3
+// SPILL2-NEXT:   restore L7 from spill memory of L0
+// SPILL2-NEXT:   L8:unit = store L6:i32 L7:i32*
+// SPILL2-NEXT:   restore L9 from spill memory of L4
+// SPILL2-NEXT:   restore L10 from spill memory of L1
+// SPILL2-NEXT:   L11:unit = store L9:i32 L10:i32*
+// SPILL2-NEXT:   restore L12 from spill memory of L2
+// SPILL2-NEXT:   L13:unit = store L5:i32 L12:i32*
+// SPILL2-NEXT:   L14:i1 = outline constant 0:i1
+// SPILL2-NEXT:   br L14:i1, b1, b2
+
+// SPILL2-LABEL: block b1:
+// SPILL2-NEXT:   memcpy to spill memory of L19 from spill memory of L4
+// SPILL2-NEXT:   j b3
+
+// SPILL2-LABEL: block b2:
+// SPILL2-NEXT:   restore L16 from spill memory of L3
+// SPILL2-NEXT:   restore L17 from spill memory of L4
+// SPILL2-NEXT:   L18:i32 = add L16:i32 L17:i32
+// SPILL2-NEXT:   store L18 into spill memory of L19
+// SPILL2-NEXT:   j b3
+
+// SPILL2-LABEL: block b3:
+// SPILL2-NEXT:   restore L20 from spill memory of L19
+// SPILL2-NEXT:   L21:i1 = typecast L20:i32 to i1
+// SPILL2-NEXT:   spill L21
+// SPILL2-NEXT:   restore L22 from spill memory of L4
+// SPILL2-NEXT:   L23:i32 = add L22:i32 L5:i32
+// SPILL2-NEXT:   spill L23
+// SPILL2-NEXT:   restore L24 from spill memory of L3
+// SPILL2-NEXT:   L25:i32 = add L24:i32 L5:i32
+// SPILL2-NEXT:   restore L26 from spill memory of L3
+// SPILL2-NEXT:   restore L27 from spill memory of L4
+// SPILL2-NEXT:   L28:i32 = add L26:i32 L27:i32
+// SPILL2-NEXT:   restore L30 from spill memory of L21
+// SPILL2-NEXT:   memcpy to spill memory of L3 from spill memory of L23
+// SPILL2-NEXT:   store L25 into spill memory of L4
+// SPILL2-NEXT:   L5 = L28
+// SPILL2-NEXT:   br L30:i1, b0, b4
+
+// SPILL2-LABEL: block b4:
+// SPILL2-NEXT:   restore L31 from spill memory of L19
+// SPILL2-NEXT:   ret L31:i32
+// SPILL2-NEXT: }
+
+// SPILL2: Liveness Analysis dump:
+// SPILL2-NEXT: Function: @test_func
+// SPILL2-NEXT:   block b0: L5
+// SPILL2-NEXT:   block b1: L5
+// SPILL2-NEXT:   block b2: L5
+// SPILL2-NEXT:   block b3: L5
+// SPILL2-NEXT:   block b4: <empty>
+
+// SPILL2: Interference graph for function: @test_func
+// SPILL2: For integer live ranges:
+// SPILL2-NEXT: L0: L5
+// SPILL2-NEXT: L1: L5
+// SPILL2-NEXT: L2: L5
+// SPILL2-NEXT: L5: L0, L1, L2, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L20, L21, L22, L23, L24, L30
+// SPILL2-NEXT: L6: L5, L7
+// SPILL2-NEXT: L7: L5, L6
+// SPILL2-NEXT: L8: L5
+// SPILL2-NEXT: L9: L5, L10
+// SPILL2-NEXT: L10: L5, L9
+// SPILL2-NEXT: L11: L5
+// SPILL2-NEXT: L12: L5
+// SPILL2-NEXT: L13: L5
+// SPILL2-NEXT: L14: L5
+// SPILL2-NEXT: L15: L5
+// SPILL2-NEXT: L16: L5, L17
+// SPILL2-NEXT: L17: L5, L16
+// SPILL2-NEXT: L18: L5
+// SPILL2-NEXT: L20: L5, L29
+// SPILL2-NEXT: L21: L5, L29
+// SPILL2-NEXT: L22: L5, L29
+// SPILL2-NEXT: L23: L5, L29
+// SPILL2-NEXT: L24: L5, L29
+// SPILL2-NEXT: L25: L26, L27, L28, L29, L30
+// SPILL2-NEXT: L26: L25, L27, L29
+// SPILL2-NEXT: L27: L25, L26, L29
+// SPILL2-NEXT: L28: L25, L29, L30
+// SPILL2-NEXT: L29: L20, L21, L22, L23, L24, L25, L26, L27, L28, L30
+// SPILL2-NEXT: L30: L5, L25, L28, L29
+// SPILL2: Maximum Cardinality Search dump:
+// SPILL2-NEXT: SEO: L0, L5, L1, L2, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L20, L21, L29, L22, L23, L24, L30, L25, L28, L26, L27
+// SPILL2-NEXT: Max Clique: L25, L28, L29, L30
+
+// SPILL2: For floating-point live ranges:
+// SPILL2: Maximum Cardinality Search dump:
+// SPILL2-NEXT: SEO: 
+// SPILL2-NEXT: Max Clique: 
+
+
+
 

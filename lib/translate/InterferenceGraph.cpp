@@ -38,52 +38,6 @@ struct InterferenceGraphBuilder {
   llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph;
 };
 
-std::unique_ptr<InterferenceGraph> InterferenceGraph::create(ir::Module *module,
-                                                             ir::Function *func,
-                                                             bool isFloat) {
-  auto *liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  if (!liveRangeAnalysis) {
-    auto analysis = LiveRangeAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  }
-
-  auto *livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  if (!livenessAnalysis) {
-    auto analysis = LivenessAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  }
-
-  InterferenceGraphBuilder builder(module, func, liveRangeAnalysis,
-                                   livenessAnalysis, isFloat);
-  builder.build();
-
-  return std::unique_ptr<InterferenceGraph>(
-      new InterferenceGraph(module, func, isFloat, std::move(builder.graph)));
-}
-
-void InterferenceGraph::update() {
-  auto *liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  if (!liveRangeAnalysis) {
-    auto analysis = LiveRangeAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  }
-
-  auto *livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  if (!livenessAnalysis) {
-    auto analysis = LivenessAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  }
-
-  InterferenceGraphBuilder builder(module, function, liveRangeAnalysis,
-                                   livenessAnalysis, isFloat);
-  builder.build();
-  graph = std::move(builder.graph);
-}
-
 void InterferenceGraphBuilder::build() {
   SpillAnalysis *spillAnalysis = module->getAnalysis<SpillAnalysis>();
 
@@ -92,7 +46,7 @@ void InterferenceGraphBuilder::build() {
 
     for (auto I = block->rbegin(), E = block->rend(); I != E; ++I) {
       ir::InstructionStorage *inst = *I;
-      if (block != func->getEntryBlock() && inst->getDefiningInst<ir::Phi>())
+      if (inst->getDefiningInst<ir::Phi>())
         break;
 
       auto results = inst->getResults();
@@ -215,6 +169,61 @@ void InterferenceGraphBuilder::insert(LiveRange lr1, LiveRange lr2) {
   }
 }
 
+std::unique_ptr<InterferenceGraph> InterferenceGraph::create(ir::Module *module,
+                                                             ir::Function *func,
+                                                             bool isFloat) {
+  auto *liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
+  if (!liveRangeAnalysis) {
+    auto analysis = LiveRangeAnalysis::create(module);
+    module->insertAnalysis(std::move(analysis));
+    liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
+  }
+
+  auto *livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
+  if (!livenessAnalysis) {
+    auto analysis = LivenessAnalysis::create(module);
+    module->insertAnalysis(std::move(analysis));
+    livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
+  }
+
+  InterferenceGraphBuilder builder(module, func, liveRangeAnalysis,
+                                   livenessAnalysis, isFloat);
+  builder.build();
+
+  return std::unique_ptr<InterferenceGraph>(
+      new InterferenceGraph(module, func, isFloat, std::move(builder.graph)));
+}
+
+void InterferenceGraph::update() {
+  auto *liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
+  if (!liveRangeAnalysis) {
+    auto analysis = LiveRangeAnalysis::create(module);
+    module->insertAnalysis(std::move(analysis));
+    liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
+  }
+
+  auto *livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
+  if (!livenessAnalysis) {
+    auto analysis = LivenessAnalysis::create(module);
+    module->insertAnalysis(std::move(analysis));
+    livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
+  }
+
+  InterferenceGraphBuilder builder(module, function, liveRangeAnalysis,
+                                   livenessAnalysis, isFloat);
+  builder.build();
+  graph = std::move(builder.graph);
+}
+
+InterferenceGraph::InterferenceGraph(
+    ir::Module *module, ir::Function *function, bool isFloat,
+    llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph)
+    : module(module), function(function), isFloat(isFloat),
+      graph(std::move(graph)) {
+  mcs.reset(new MaximumCardinalitySearch(this));
+}
+InterferenceGraph::~InterferenceGraph() = default;
+
 void InterferenceGraph::dump(llvm::raw_ostream &os) const {
   LiveRangeAnalysis *liveRangeAnalysis =
       module->getAnalysis<LiveRangeAnalysis>();
@@ -254,6 +263,10 @@ void InterferenceGraph::dump(llvm::raw_ostream &os) const {
     }
     os << "\n";
   }
+
+  if (mcs) {
+    mcs->dump(os);
+  }
 }
 
 void MaximumCardinalitySearch::init() {
@@ -262,7 +275,10 @@ void MaximumCardinalitySearch::init() {
   assert(liveRangeAnalysis &&
          "LiveRangeAnalysis must be available before MaximumCardinalitySearch");
 
-  liveRangeIdMap = liveRangeAnalysis->getCurrLRIdMap();
+  auto *spillAnalysis = interferenceGraph->module->getAnalysis<SpillAnalysis>();
+
+  liveRangeIdMap = liveRangeAnalysis->getCurrLRIdMap(
+      spillAnalysis ? spillAnalysis->getSpillInfo() : SpillInfo());
 }
 
 void MaximumCardinalitySearch::search() {
@@ -271,8 +287,8 @@ void MaximumCardinalitySearch::search() {
   auto comparator = [&](const PQKey &a, const PQKey &b) {
     if (a.first != b.first)
       return a.first < b.first; // max heap
-    return liveRangeIdMap[a.second] <
-           liveRangeIdMap[b.second]; // tie-break by id
+    return liveRangeIdMap.at(a.second) >
+           liveRangeIdMap.at(b.second); // tie-break by id
   };
 
   std::priority_queue<PQKey, std::vector<PQKey>, decltype(comparator)> pq(
@@ -296,16 +312,41 @@ void MaximumCardinalitySearch::search() {
       if (simplicialElimOrder.contains(neighbor))
         continue;
 
-      clique[neighbor].insert(liveRange);
-      pq.push({clique[neighbor].size(),
-               neighbor}); // update degree in priority queue
+      auto &cliqueSet = clique[neighbor];
+      cliqueSet.insert(liveRange);
+      pq.push({cliqueSet.size(), neighbor}); // update degree in priority queue
 
-      if (clique[neighbor].size() + 1 > maxClique.size()) {
-        maxClique = clique[neighbor];
-        maxClique.insert(liveRange);
+      if (cliqueSet.size() + 1 > maxClique.size()) {
+        maxClique = cliqueSet;
+        maxClique.insert(neighbor);
       }
     }
   }
+}
+
+void MaximumCardinalitySearch::dump(llvm::raw_ostream &os) const {
+  os << "Maximum Cardinality Search dump:\n";
+
+  os << "SEO: ";
+  for (auto I = simplicialElimOrder.begin(), E = simplicialElimOrder.end();
+       I != E; ++I) {
+    if (I != simplicialElimOrder.begin())
+      os << ", ";
+    os << "L" << liveRangeIdMap.at(*I);
+  }
+  os << "\n";
+
+  os << "Max Clique: ";
+  llvm::SmallVector<LiveRange> sortedClique(maxClique.begin(), maxClique.end());
+  llvm::sort(sortedClique, [&](LiveRange a, LiveRange b) {
+    return liveRangeIdMap.at(a) < liveRangeIdMap.at(b);
+  });
+  for (auto I = sortedClique.begin(), E = sortedClique.end(); I != E; ++I) {
+    if (I != sortedClique.begin())
+      os << ", ";
+    os << "L" << liveRangeIdMap.at(*I);
+  }
+  os << "\n";
 }
 
 } // namespace kecc

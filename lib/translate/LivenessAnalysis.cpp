@@ -49,15 +49,6 @@ void LivenessAnalysisBuilder::build(ir::Module *module) {
   for (ir::Function *func : *module->getIR()) {
     auto order = visitOrderAnalysis->getReversePreOrder(func);
     for (ir::Block *block : order) {
-      if (block == func->getEntryBlock()) {
-        // entry phi instruction is a definition
-        for (auto I = block->phiBegin(), E = block->phiEnd(); I != E; ++I) {
-          ir::Phi phi = (*I)->getDefiningInst<ir::Phi>();
-          assert(phi && "Phi instruction expected");
-          LiveRange lr = liveRangeAnalysis->getLiveRange(func, phi);
-          varKill[block].insert(lr);
-        }
-      }
       for (auto I = block->tempBegin(), E = block->end(); I != E; ++I) {
         ir::InstructionStorage *inst = *I;
 

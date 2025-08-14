@@ -95,6 +95,7 @@ ir::PassResult runPasses(ir::Module *module) {
   pm.addPass<ir::InlineCallPass>();
   pm.addPass<ir::CanonicalizeStruct>();
   pm.addPass<ir::OutlineMultipleResults>();
+  pm.addPass<ir::CreateFunctionArgument>();
   pm.addPass<ir::CanonicalizeConstant>();
 
   return pm.run(module);
@@ -210,6 +211,7 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::InlineCallPass>();
   kecc::ir::registerPass<kecc::ir::CanonicalizeStruct>();
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
+  kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
 
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "Kecc IR Translation Compiler\n");

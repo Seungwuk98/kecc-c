@@ -3,6 +3,7 @@
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/WalkSupport.h"
+#include "kecc/translate/InterferenceGraph.h"
 #include "llvm/ADT/SmallVectorExtras.h"
 #include <cmath>
 
@@ -142,7 +143,7 @@ bool SpillAnalysis::trySpill(size_t iter) {
   for (ir::Function *func : *getModule()->getIR()) {
     auto count = 0;
     while (true) {
-      if (iter > 0 && count++ >= iter)
+      if (iter >= 0 && count++ >= iter)
         break;
 
       auto funcSpilled = trySpill(func);
@@ -163,8 +164,8 @@ bool SpillAnalysis::trySpill(ir::Function *func) {
 bool SpillAnalysis::trySpill(ir::Function *function, as::RegisterType regType) {
   auto interfGraph = getInterferenceGraph(function, regType);
   // find maximum clique using Maximum Cardinality Search
-  MaximumCardinalitySearch mcs(interfGraph);
-  const llvm::DenseSet<LiveRange> &maxClique = mcs.getMaxClique();
+  MaximumCardinalitySearch *mcs = interfGraph->getMCS();
+  const llvm::DenseSet<LiveRange> &maxClique = mcs->getMaxClique();
 
   LiveRangeAnalysis *liveRangeAnalysis =
       getModule()->getAnalysis<LiveRangeAnalysis>();

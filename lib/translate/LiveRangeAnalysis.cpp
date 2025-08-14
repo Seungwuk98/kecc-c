@@ -562,18 +562,6 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
     for (ir::Block *block : *func) {
       os << "\nblock b" << block->getId() << ":\n";
 
-      if (block == func->getEntryBlock()) {
-        for (auto I = block->phiBegin(), E = block->phiEnd(); I != E; ++I) {
-          auto phi = (*I)->getDefiningInst<ir::Phi>();
-          assert(phi && "Expected phi instruction");
-          auto phiLR = getLiveRange(func, phi);
-          if (spillInfo.spilled.contains(phiLR)) {
-            printIndent(indent + 2);
-            os << "spill L" << liveRangeToId.at(phiLR) << '\n';
-          }
-        }
-      }
-
       for (auto I = block->tempBegin(), E = block->tempEnd(); I != E; ++I) {
         auto inst = *I;
         printRestore(inst->getOperands(), indent + 2);

@@ -63,6 +63,11 @@ public:
 
   std::pair<StructSizeMap, StructFieldsMap> calcStructSizeMap() const;
 
+  void addBlockRelation(Block *pred, Block *succ) {
+    predecessors[succ].insert(pred);
+    successors[pred].insert(succ);
+  }
+
 private:
   Module(std::unique_ptr<IR> ir) : ir(std::move(ir)) {}
 
