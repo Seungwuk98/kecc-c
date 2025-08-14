@@ -11,6 +11,7 @@ add_library(KeccIRPasses
   InstructionFold.cpp
   OutlineMultipleResults.cpp
   InlineCall.cpp
+  CreateFunctionArgument.cpp
 )
 
 target_link_libraries(KeccIRPasses

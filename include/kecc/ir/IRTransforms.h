@@ -162,6 +162,18 @@ public:
   }
 };
 
+class CreateFunctionArgument : public FuncPass {
+public:
+  PassResult run(Module *module, Function *func) override;
+
+  static llvm::StringRef getPassName() { return "create-function-argument"; }
+  llvm::StringRef getPassArgument() const override { return getPassName(); }
+  llvm::StringRef getDescription() const override {
+    return "Create function argument instructions for all functions in the "
+           "module.";
+  }
+};
+
 } // namespace kecc::ir
 
 #endif // KECC_IR_TRANSFORMATIONS_H

@@ -108,21 +108,6 @@ void LivenessAnalysisBuilder::build(ir::Module *module) {
 
   LiveRangeAnalysis *liveRangeAnalysis =
       module->getAnalysis<LiveRangeAnalysis>();
-  auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap(spill);
-
-  for (ir::Function *func : *module->getIR()) {
-    for (ir::Block *block : *func) {
-      llvm::errs() << "block b" << block->getId() << ":\n";
-      const auto &uevarSet = uevar[block];
-      const auto &varKillSet = varKill[block];
-      for (LiveRange lr : uevarSet) {
-        llvm::errs() << "uevar: " << currLRIdMap.at(lr) << '\n';
-      }
-      for (LiveRange lr : varKillSet) {
-        llvm::errs() << "varKill: " << currLRIdMap.at(lr) << '\n';
-      }
-    }
-  }
 
   for (ir::Function *func : *module->getIR()) {
     auto order = visitOrderAnalysis->getReversePreOrder(func);

@@ -10,8 +10,8 @@
 
 namespace kecc::ir::inst {
 
-class Nop
-    : public InstructionTemplate<Nop, Instruction, ZeroResult, OneResult> {
+class Nop : public InstructionTemplate<Nop, Instruction, ZeroResult, OneResult,
+                                       Pure> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state);
@@ -91,7 +91,8 @@ public:
   };
 };
 
-class TypeCast : public InstructionTemplate<TypeCast, Instruction, OneResult> {
+class TypeCast
+    : public InstructionTemplate<TypeCast, Instruction, OneResult, Pure> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value value,
@@ -114,7 +115,7 @@ public:
 };
 
 class Gep : public InstructionTemplate<Gep, Instruction, NOperand<2>::Trait,
-                                       OneResult> {
+                                       OneResult, Pure> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value basePtr,
@@ -139,7 +140,7 @@ public:
 };
 
 class Binary : public InstructionTemplate<Binary, Instruction,
-                                          NOperand<2>::Trait, OneResult> {
+                                          NOperand<2>::Trait, OneResult, Pure> {
 public:
   using Base::Base;
   enum OpKind {
@@ -185,7 +186,7 @@ public:
   };
 };
 
-class Unary : public InstructionTemplate<Unary, Instruction, OneResult> {
+class Unary : public InstructionTemplate<Unary, Instruction, OneResult, Pure> {
 public:
   using Base::Base;
   enum OpKind {
@@ -460,6 +461,20 @@ public:
     llvm::ArrayRef<Value> getArguments() const;
 
     llvm::ArrayRef<Value> operands;
+  };
+};
+
+class FunctionArgument
+    : public InstructionTemplate<FunctionArgument, Instruction, OneResult> {
+public:
+  using Base::Base;
+
+  static void build(IRBuilder &builder, InstructionState &state, Type type);
+
+  static void printer(FunctionArgument op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
   };
 };
 

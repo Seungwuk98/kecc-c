@@ -453,6 +453,8 @@ struct VariadicResults : TraitBase<ConcreteType, VariadicResults> {
 template <typename ConcreteType>
 struct SideEffect : TraitBase<ConcreteType, SideEffect> {};
 
+template <typename ConcreteType> struct Pure : TraitBase<ConcreteType, Pure> {};
+
 class IRBuilder;
 
 class Phi : public InstructionTemplate<Phi, Instruction, OneResult, Arg> {

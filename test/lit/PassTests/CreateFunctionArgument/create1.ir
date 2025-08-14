@@ -1,0 +1,77 @@
+// RUN: kecc-opt %s --create-function-argument | FileCheck %s
+
+fun i32 @func1 (i32) {
+// CHECK: fun i32 @func1 (i32)
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:i32
+  // CHECK-NEXT: %b0:i0:i32 = function argument
+  ret %b0:p0:i32
+  // CHECK-NEXT: ret %b0:i0:i32
+}
+
+fun i32 @func2 (i32, i32) {
+// CHECK: fun i32 @func2 (i32, i32) {
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:p0:i32
+  // CHECK-NEXT: %b0:i0:i32 = function argument
+  %b0:p1:i32
+  // CHECK-NEXT: %b0:i1:i32 = function argument
+  %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+  // CHECK-NEXT: %b0:i2:i32 = add %b0:i0:i32 %b0:i1:i32
+  ret %b0:i0:i32
+  // CHECK-NEXT: ret %b0:i2:i32
+}
+
+fun i32 @func3 (i32, i32) {
+// CHECK: fun i32 @func3 (i32, i32) {
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b2
+// CHECK-NEXT:   allocations:
+
+// CHECK-LABEL: block b2:
+// CHECK-NEXT:   %b2:i0:i32 = function argument
+// CHECK-NEXT:   %b2:i1:i32 = function argument
+// CHECK-NEXT:   j b0(%b2:i0:i32, %b2:i1:i32, undef:i32)
+
+block b0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:p2:i32
+  %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+  %b0:i1:i32 = add %b0:i0:i32 %b0:p2:i32
+  %b0:i2:i1 = typecast %b0:i1:i32 to i1
+  br %b0:i2:i1, b0(%b0:i0:i32, %b0:i1:i32, %b0:p0:i32), b1() 
+
+// CHECK-LABEL: block b0:
+// CHECK-NEXT:   %b0:p0:i32
+// CHECK-NEXT:   %b0:p1:i32
+// CHECK-NEXT:   %b0:p2:i32
+// CHECK-NEXT:   %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+// CHECK-NEXT:   %b0:i1:i32 = add %b0:i0:i32 %b0:p2:i32
+// CHECK-NEXT:   %b0:i2:i1 = typecast %b0:i1:i32 to i1
+// CHECK-NEXT:   br %b0:i2:i1, b0(%b0:i0:i32, %b0:i1:i32, %b0:p0:i32), b1() 
+
+block b1:
+// CHECK-LABEL: block b1:
+  ret 1:i32
+  // CHECK-NEXT: ret 1:i32
+}

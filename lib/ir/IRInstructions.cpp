@@ -832,6 +832,20 @@ void InlineCall::printer(InlineCall op, IRPrintContext &context) {
   context.getOS() << ')';
 }
 
+//============================================================================//
+/// Function argument
+//============================================================================//
+
+void FunctionArgument::build(IRBuilder &builder, InstructionState &state,
+                             Type type) {
+  state.pushType(type);
+}
+
+void FunctionArgument::printer(FunctionArgument op, IRPrintContext &context) {
+  op.printAsOperand(context);
+  context.getOS() << " = function argument";
+}
+
 void registerBuiltinInstructions(IRContext *context) {
   context->registerInst<Phi>();
   context->registerInst<inst::Nop>();
@@ -853,6 +867,7 @@ void registerBuiltinInstructions(IRContext *context) {
   context->registerInst<inst::LocalVariable>();
   context->registerInst<inst::Unresolved>();
   context->registerInst<inst::InlineCall>();
+  context->registerInst<inst::FunctionArgument>();
 }
 
 } // namespace kecc::ir::inst
