@@ -9,6 +9,7 @@
 namespace kecc {
 
 class MaximumCardinalitySearch;
+class LiveRangeAnalysis;
 
 class InterferenceGraph {
 public:
@@ -31,6 +32,7 @@ public:
 
 private:
   friend class MaximumCardinalitySearch;
+  friend class GraphColoring;
 
   InterferenceGraph(ir::Module *module, ir::Function *function, bool isFloat,
                     llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph);
@@ -73,6 +75,34 @@ private:
   llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> clique;
 
   llvm::DenseMap<LiveRange, size_t> liveRangeIdMap;
+};
+
+class GraphColoring {
+public:
+  using Color = size_t;
+
+  GraphColoring(InterferenceGraph *interfGraph)
+      : interferenceGraph(interfGraph),
+        liveRangeAnalysis(
+            interfGraph->module->getAnalysis<LiveRangeAnalysis>()) {
+    assert(liveRangeAnalysis && "LiveRangeAnalysis must not be null");
+    coloring(interfGraph);
+  }
+
+  Color getColor(LiveRange liveRange) const;
+
+private:
+  void coloring(InterferenceGraph *interfGraph);
+
+  Color createNewColor();
+
+  Color findAvailableColor(LiveRange liveRange);
+
+  InterferenceGraph *interferenceGraph;
+  LiveRangeAnalysis *liveRangeAnalysis;
+  llvm::DenseMap<LiveRange, Color> colorMap;
+  llvm::DenseMap<LiveRange, llvm::DenseSet<Color>> neighborColors;
+  Color numColors = 0;
 };
 
 } // namespace kecc

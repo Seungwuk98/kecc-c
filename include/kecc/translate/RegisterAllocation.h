@@ -3,7 +3,11 @@
 
 #include "kecc/asm/Register.h"
 #include "kecc/ir/IRAnalyses.h"
+#include "kecc/ir/Module.h"
+#include "kecc/translate/InterferenceGraph.h"
 #include "kecc/translate/LiveRange.h"
+#include "kecc/translate/LiveRangeAnalyses.h"
+#include "kecc/translate/SpillAnalysis.h"
 
 namespace kecc {
 
@@ -13,6 +17,10 @@ public:
   as::Register getRegister(LiveRange liveRange) const;
 
 private:
+  ir::Module *module;
+  SpillAnalysis *spillAnalysis;
+  LiveRangeAnalysis *liveRangeAnalysis;
+  InterferenceGraph *interferenceGraph;
 };
 
 } // namespace kecc

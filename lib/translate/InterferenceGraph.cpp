@@ -349,4 +349,46 @@ void MaximumCardinalitySearch::dump(llvm::raw_ostream &os) const {
   os << "\n";
 }
 
+GraphColoring::Color GraphColoring::getColor(LiveRange liveRange) const {
+  return colorMap.at(liveRange);
+}
+
+void GraphColoring::coloring(InterferenceGraph *intefGraph) {
+  MaximumCardinalitySearch *mcs = intefGraph->getMCS();
+  const auto &seo = mcs->getSimplicialElimOrder();
+
+  for (LiveRange lr : seo) {
+    Color color = findAvailableColor(lr);
+    colorMap[lr] = color;
+    for (LiveRange neighbor : intefGraph->graph[lr]) {
+      neighborColors[neighbor].insert(color);
+    }
+  }
+
+  auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap();
+  for (const auto &[liveRange, _] : currLRIdMap) {
+    if (!colorMap.contains(liveRange))
+      colorMap[liveRange] = 0;
+  }
+}
+
+GraphColoring::Color GraphColoring::createNewColor() { return numColors++; }
+
+GraphColoring::Color GraphColoring::findAvailableColor(LiveRange liveRange) {
+  assert(colorMap.find(liveRange) == colorMap.end() &&
+         "Live range already colored");
+
+  auto &neighborColorSet = neighborColors[liveRange];
+  Color color = 0;
+  for (; neighborColorSet.contains(color); ++color)
+    ;
+
+  assert(color <= numColors &&
+         "Color exceeds the number of colors used so far");
+  if (color == numColors)
+    numColors++;
+
+  return color;
+}
+
 } // namespace kecc
