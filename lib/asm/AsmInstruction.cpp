@@ -274,7 +274,7 @@ std::string FcvtIntToFloat::toString() const {
   assert(floatDataSize.isFloat() && intDataSize.isInt() &&
          "FcvtFloatToInt should only be used with float and int data sizes");
   return std::format("fcvt.{}.{}{}", floatDataSize.toString(),
-                     isSigned() ? "" : "u", intDataSize.isWord() ? "w" : "l");
+                     intDataSize.isWord() ? "w" : "l", isSigned() ? "" : "u");
 }
 
 FcvtFloatToInt::FcvtFloatToInt(Register rd, Register rs1,
@@ -481,6 +481,12 @@ Fmv::Fmv(DataSize dataSize, Register rd, Register rs)
 std::string Fmv::toString() const {
   return std::format("fmv.{}\t{},{}", dataSize.toString(), rd.toString(),
                      rs.toString());
+}
+
+Not::Not(Register rd, Register rs) : Base(TypeID::get<Not>()), rd(rd), rs(rs) {}
+
+std::string Not::toString() const {
+  return std::format("not\t{},{}", rd.toString(), rs.toString());
 }
 
 Neg::Neg(DataSize dataSize, Register rd, Register rs)

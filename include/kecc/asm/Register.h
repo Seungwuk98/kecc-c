@@ -1,6 +1,7 @@
 #ifndef KECC_ASM_REGISTER_H
 #define KECC_ASM_REGISTER_H
 
+#include "kecc/utils/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseMapInfo.h"
@@ -43,6 +44,14 @@ enum class CallingConvension {
 class RegisterImpl;
 class Register {
 public:
+  Register &operator=(const Register &other) {
+    if (this != &other) {
+      impl = other.impl;
+    }
+    return *this;
+  }
+  Register(const Register &other) : impl(other.impl) {}
+
   std::string toString() const;
 
   static Register zero();
@@ -137,6 +146,12 @@ public:
   bool isInteger() const;
   bool isFloatingPoint() const;
 
+  bool isArg() const;
+  bool isTemp() const;
+  bool isSaved() const;
+
+  int getABIIndex() const;
+
   friend inline llvm::hash_code hash_value(const Register &reg) {
     return llvm::DenseMapInfo<RegisterImpl *>::getHashValue(reg.impl);
   }
@@ -211,6 +226,10 @@ template <> struct DenseMapInfo<kecc::as::Register> {
     return l == r;
   }
 };
+
+template <>
+struct DenseMapInfo<kecc::as::RegisterType>
+    : llvm::EnumDenseMapInfo<kecc::as::RegisterType> {};
 
 } // namespace llvm
 

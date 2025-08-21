@@ -6,10 +6,14 @@
 #include "kecc/asm/AsmInstruction.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/Module.h"
+#include "kecc/ir/Value.h"
+#include "kecc/translate/FunctionStack.h"
 #include "kecc/translate/InterferenceGraph.h"
+#include "kecc/translate/LiveRangeAnalyses.h"
 #include "kecc/translate/RegisterAllocation.h"
 #include "kecc/translate/TranslateContext.h"
 #include "kecc/utils/LogicalResult.h"
+#include <format>
 
 namespace kecc {
 
@@ -34,21 +38,90 @@ private:
 
 class FunctionTranslater {
 public:
-  FunctionTranslater(TranslateContext *context, ir::Module *module,
-                     ir::Function *function);
+  FunctionTranslater(IRTranslater *translater, TranslateContext *context,
+                     ir::Module *module, ir::Function *function);
 
+  static std::string getBlockName(ir::Block *block);
   as::Block *createBlock(ir::Block *block);
 
   as::Function *translate();
 
-  TranslateContext *getContext() const { return context; }
+  TranslateContext *getTranslateContext() const { return context; }
 
-  RegisterAllocation &regAlloc();
+  as::Register getRegister(ir::Value value);
+  as::Register getOperandRegister(const ir::Operand *operand);
+
+  std::pair<llvm::StringRef, as::DataSize>
+  getConstantLabel(ir::ConstantAttr constant);
+  std::pair<llvm::StringRef, as::DataSize> getConstantLabel(std::int64_t value);
+
+  ir::Module *getModule() const { return module; }
+
+  as::Register restoreOperand(as::AsmBuilder &builder,
+                              const ir::Operand *operand);
+
+  void writeFunctionEnd(as::AsmBuilder &builder);
+
+  void moveRegisters(as::AsmBuilder &builder, llvm::ArrayRef<as::Register> srcs,
+                     llvm::ArrayRef<as::Register> dsts);
+
+  // return anonymous registers which means stack points
+  llvm::SmallVector<as::Register> saveCallerSavedRegisters(
+      as::AsmBuilder &builder,
+      llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas);
+
+  void loadCallerSavedRegisters(
+      as::AsmBuilder &builder, llvm::ArrayRef<as::Register> stackpointers,
+      llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas);
+
+  LiveRangeAnalysis *getLiveRangeAnalysis() const { return liveRangeAnalysis; }
+  LivenessAnalysis *getLivenessAnalysis() const { return livenessAnalysis; }
+  SpillAnalysis *getSpillAnalysis() const { return spillAnalysis; }
+
+  std::optional<as::Register> getSpillMemory(ir::Value value) const {
+    auto liveRange = liveRangeAnalysis->getLiveRange(value);
+    auto it = spillMemories.find(liveRange);
+    if (it != spillMemories.end())
+      return it->second;
+    return std::nullopt;
+  }
+
+  std::string getAnonRegLabel() {
+    return std::format("{}_anon{}", function->getName().str(), anonRegIndex++);
+  }
+
+  llvm::ArrayRef<as::Register> getIntArgRegisters() const {
+    return intArgRegisters;
+  }
+  llvm::ArrayRef<as::Register> getFloatArgRegisters() const {
+    return floatArgRegisters;
+  }
+
+  FunctionStack *getStack() { return &stack; }
+
+  as::Register createAnonRegister(as::RegisterType regType,
+                                  const StackPoint &sp);
 
 private:
+  IRTranslater *irTranslater;
   TranslateContext *context;
   ir::Module *module;
   ir::Function *function;
+
+  LiveRangeAnalysis *liveRangeAnalysis;
+  LivenessAnalysis *livenessAnalysis;
+  SpillAnalysis *spillAnalysis;
+  RegisterAllocation regAlloc;
+  FunctionStack stack;
+
+  llvm::DenseMap<LiveRange, as::Register> spillMemories;
+  llvm::DenseMap<LiveRange, size_t> liveRangeToIndexMap;
+  llvm::DenseMap<as::Register, std::pair<StackPoint, as::DataSize>>
+      anonymousRegisterToSp;
+
+  llvm::SmallVector<as::Register, 8> intArgRegisters;
+  llvm::SmallVector<as::Register, 8> floatArgRegisters;
+  size_t anonRegIndex = 0;
 };
 
 class TranslateRuleSet {
@@ -68,6 +141,9 @@ public:
   virtual utils::LogicalResult translate(as::AsmBuilder &builder,
                                          FunctionTranslater &translater,
                                          ir::InstructionStorage *inst) = 0;
+
+  virtual bool restoreActively() const { return false; }
+  virtual bool callFunction() const { return false; }
 
   TypeID getId() const { return typeId; }
   int getBenefit() const { return benefit; }
@@ -96,8 +172,25 @@ public:
                                          ConcreteInst inst) = 0;
 };
 
+as::Immediate *getImmediate(int64_t value);
+as::Immediate *getImmediate(ir::ConstantAttr constAttr);
 as::Immediate *getImmediate(ir::inst::Constant constant);
 as::DataSize getDataSize(ir::Type type);
+
+as::Immediate *getImmOrLoad(as::AsmBuilder &builder, as::Register rd,
+                            std::int32_t value);
+void loadInt(as::AsmBuilder &builder, FunctionTranslater &translater,
+             as::Register rd, std::int64_t value, ir::IntT intT);
+
+void storeData(as::AsmBuilder &builder, FunctionTranslater &translater,
+               as::Register rd, as::Register rs, as::DataSize dataSize,
+               std::int64_t offset);
+
+void loadData(as::AsmBuilder &builder, FunctionTranslater &translater,
+              as::Register rd, as::Register rs, as::DataSize dataSize,
+              std::int64_t offset);
+
+#define KECC_UNREACHABLE_LABEL "kecc.unreachable"
 
 } // namespace kecc
 

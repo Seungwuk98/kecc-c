@@ -41,14 +41,79 @@ extern void translateInstruction(as::AsmBuilder &builder,
                                  FunctionTranslater &translater,
                                  ir::InstructionStorage *inst);
 
-FunctionTranslater::FunctionTranslater(TranslateContext *context,
+FunctionTranslater::FunctionTranslater(IRTranslater *translater,
+                                       TranslateContext *context,
                                        ir::Module *module,
                                        ir::Function *function)
-    : context(context), module(module), function(function) {}
+    : irTranslater(translater), context(context), module(module),
+      function(function), regAlloc(module, context) {
+  liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
+  livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
+  spillAnalysis = module->getAnalysis<SpillAnalysis>();
+
+  assert(liveRangeAnalysis && livenessAnalysis && spillAnalysis &&
+         "LiveRangeAnalysis, LivenessAnalysis, and SpillAnalysis must be "
+         "available");
+}
+
+llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
+    as::AsmBuilder &builder,
+    llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas) {
+  size_t totalSize = 0u;
+
+  llvm::SmallVector<StackPoint> stackPoint;
+  stackPoint.reserve(datas.size());
+  for (const auto &[reg, dataSize] : datas) {
+    stackPoint.emplace_back(stack.callerSavedRegister(totalSize));
+    totalSize += dataSize.getByteSize();
+  }
+
+  llvm::SmallVector<as::Register> anonRegs;
+  anonRegs.reserve(datas.size());
+  for (const auto &sp : stackPoint) {
+    auto anon = as::Register::createAnonymousRegister(
+        context->getAnonymousRegStorage(), as::RegisterType::Integer,
+        as::CallingConvension::None,
+        std::format("{}_call{}_{}", function->getName().str(),
+                    getCurrCallIndex(), getCurrCallRegIndex()));
+
+    incrementCallRegIndex();
+    anonymousRegisterToSp.try_emplace(anon, sp);
+    anonRegs.emplace_back(anon);
+  }
+
+  for (size_t i = 0; i < datas.size(); ++i) {
+    const auto &[reg, dataSize] = datas[i];
+    const auto &anonStackReg = anonRegs[i];
+
+    storeData(builder, *this, anonStackReg, reg, dataSize, 0);
+  }
+
+  return anonRegs;
+}
+
+void FunctionTranslater::loadCallerSavedRegisters(
+    as::AsmBuilder &builder, llvm::ArrayRef<as::Register> stackpointers,
+    llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas) {
+  assert(stackpointers.size() == datas.size() &&
+         "Stack pointers and data sizes must match in size");
+
+  for (size_t i = 0; i < stackpointers.size(); ++i) {
+    const auto &sp = stackpointers[i];
+    const auto &[reg, dataSize] = datas[i];
+
+    loadData(builder, *this, reg, sp, dataSize, 0);
+  }
+}
+
+std::string FunctionTranslater::getBlockName(ir::Block *block) {
+  // Generate a unique name for the block based on its function and ID
+  return std::format(".{}_L{}", block->getParentFunction()->getName().str(),
+                     block->getId());
+}
 
 as::Block *FunctionTranslater::createBlock(ir::Block *block) {
-  auto newName = std::format(
-      ".{}_L{}", block->getParentFunction()->getName().str(), block->getId());
+  auto newName = getBlockName(block);
   auto *newBlock = new as::Block(newName);
   return newBlock;
 }
@@ -57,7 +122,7 @@ std::unique_ptr<as::Asm> IRTranslater::translate() {
   llvm::SmallVector<as::Section<as::Function> *> functions;
 
   for (ir::Function *function : *module->getIR()) {
-    FunctionTranslater translater(context, module, function);
+    FunctionTranslater translater(this, context, module, function);
 
     auto *asFunction = translater.translate();
     assert(asFunction && "Function translation failed");

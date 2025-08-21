@@ -9,6 +9,8 @@ add_library(
   TranslateContext.cpp
   LiveRangeAnalysis.cpp
   LivenessAnalysis.cpp
+  RegisterAllocation.cpp
+  FunctionStack.cpp
 )
 
 target_link_libraries(KeccTranslate

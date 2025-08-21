@@ -159,6 +159,8 @@ public:
            kind == Kind::Double;
   }
 
+  size_t getByteSize() const;
+
 private:
   Kind kind;
 };
@@ -856,6 +858,20 @@ private:
   friend class ::kecc::as::AsmBuilder;
   Fmv(DataSize dataSize, Register rd, Register rs);
   DataSize dataSize;
+  Register rd;
+  Register rs;
+};
+
+class Not final : public InstructionTemplate<Not, Pseudo> {
+public:
+  Register getRd() const { return rd; }
+  Register getRs() const { return rs; }
+
+  std::string toString() const override;
+
+private:
+  friend class ::kecc::as::AsmBuilder;
+  Not(Register rd, Register rs);
   Register rd;
   Register rs;
 };

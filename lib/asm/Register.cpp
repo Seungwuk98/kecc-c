@@ -9,8 +9,8 @@ public:
   RegisterImpl(Mnemonic mnemonic, int index, RegisterType type, ABIKind kind,
                CallingConvension callingConvention, int abiIndex,
                llvm::StringRef description, llvm::StringRef printName)
-      : mnemonic(mnemonic), type(type), kind(kind),
-        callingConvention(callingConvention), index(index),
+      : mnemonic(mnemonic), index(index), type(type), kind(kind),
+        callingConvention(callingConvention), abiIndex(abiIndex),
         description(description), printName(printName) {}
 
   Mnemonic getMnemonic() const { return mnemonic; }
@@ -28,6 +28,7 @@ private:
   RegisterType type;
   ABIKind kind;
   CallingConvension callingConvention;
+  int abiIndex;
 
   std::string description;
   std::string printName;

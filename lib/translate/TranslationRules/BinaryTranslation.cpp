@@ -97,27 +97,25 @@ as::Instruction *createLogicalNot(as::AsmBuilder &builder, as::Register rd) {
 utils::LogicalResult translateIntAdd(as::AsmBuilder &builder,
                                      FunctionTranslater &translater,
                                      ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  assert(!lhs.isConstant() ||
-         !rhs.isConstant() &&
-             "Binary addition must have at least one non-constant operand. "
-             "It is guaranteed by `OutlineConstant` pass.");
+  assert((!lhs->isConstant() || !rhs->isConstant()) &&
+         "Binary addition must have at least one non-constant operand. "
+         "It is guaranteed by `OutlineConstant` pass.");
 
-  if (lhs.isConstant() | rhs.isConstant()) {
+  if (lhs->isConstant() | rhs->isConstant()) {
     // use itype
-    if (lhs.isConstant())
+    if (lhs->isConstant())
       std::swap(lhs, rhs);
 
-    auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+    auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
     assert(rhsImm && "Expected a constant immediate for rhs operand");
 
-    auto lhsReg = regAlloc.getRegister(lhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
     if (rhsImm->isZero()) {
       // mv dest, lhs
       builder.create<as::pseudo::Mv>(rd, lhsReg);
@@ -129,8 +127,8 @@ utils::LogicalResult translateIntAdd(as::AsmBuilder &builder,
   } else {
     // use rtype
 
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
 
     builder.create<as::rtype::Add>(rd, lhsReg, rhsReg, dataSize);
     return utils::LogicalResult::success();
@@ -140,19 +138,18 @@ utils::LogicalResult translateIntAdd(as::AsmBuilder &builder,
 utils::LogicalResult translateFloatAdd(as::AsmBuilder &builder,
                                        FunctionTranslater &translater,
                                        ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  assert(!lhs.isConstant() && !rhs.isConstant() &&
+  assert(!lhs->isConstant() && !rhs->isConstant() &&
          "Binary float addition operands must not be constant. "
          "It is guaranteed by `OutlineConstant` pass.");
 
-  auto lhsReg = regAlloc.getRegister(lhs);
-  auto rhsReg = regAlloc.getRegister(rhs);
+  auto lhsReg = translater.getOperandRegister(lhs);
+  auto rhsReg = translater.getOperandRegister(rhs);
   builder.create<as::rtype::Fadd>(rd, lhsReg, rhsReg, dataSize);
   return utils::LogicalResult::success();
 }
@@ -170,20 +167,19 @@ utils::LogicalResult translateAdd(as::AsmBuilder &builder,
 utils::LogicalResult translateIntSub(as::AsmBuilder &builder,
                                      FunctionTranslater &translater,
                                      ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  assert(!lhs.isConstant() && "Binary subtraction lhs must not be constant. "
-                              "It is guaranteed by `OutlineConstant` pass.");
-  auto lhsReg = regAlloc.getRegister(lhs);
+  assert(!lhs->isConstant() && "Binary subtraction lhs must not be constant. "
+                               "It is guaranteed by `OutlineConstant` pass.");
+  auto lhsReg = translater.getOperandRegister(lhs);
 
-  if (rhs.isConstant()) {
+  if (rhs->isConstant()) {
     // use itype
-    auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+    auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
     assert(rhsImm && "Expected a constant immediate.");
     if (rhsImm->isZero()) {
       // mv dest, lhs
@@ -195,7 +191,7 @@ utils::LogicalResult translateIntSub(as::AsmBuilder &builder,
     builder.create<as::itype::Addi>(rd, lhsReg, rhsImm, dataSize);
   } else {
     // use rtype
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
     builder.create<as::rtype::Sub>(rd, lhsReg, rhsReg, dataSize);
   }
 
@@ -205,17 +201,16 @@ utils::LogicalResult translateIntSub(as::AsmBuilder &builder,
 utils::LogicalResult translateFloatSub(as::AsmBuilder &builder,
                                        FunctionTranslater &translater,
                                        ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
-  assert(!lhs.isConstant() && !rhs.isConstant() &&
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
+  assert(!lhs->isConstant() && !rhs->isConstant() &&
          "Binary float subtraction operands must not be constant. "
          "It is guaranteed by `OutlineConstant` pass.");
-  auto lhsReg = regAlloc.getRegister(lhs);
-  auto rhsReg = regAlloc.getRegister(rhs);
+  auto lhsReg = translater.getOperandRegister(lhs);
+  auto rhsReg = translater.getOperandRegister(rhs);
   builder.create<as::rtype::Fsub>(rd, lhsReg, rhsReg, dataSize);
   return utils::LogicalResult::success();
 }
@@ -233,20 +228,19 @@ utils::LogicalResult translateSub(as::AsmBuilder &builder,
 utils::LogicalResult translateMul(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
-  assert(!lhs.isConstant() && !rhs.isConstant() &&
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
+  assert(!lhs->isConstant() && !rhs->isConstant() &&
          "Binary multiplication operands must not be constant. "
          "It is guaranteed by `OutlineConstant` pass.");
 
-  auto lhsReg = regAlloc.getRegister(lhs);
-  auto rhsReg = regAlloc.getRegister(rhs);
+  auto lhsReg = translater.getOperandRegister(lhs);
+  auto rhsReg = translater.getOperandRegister(rhs);
 
-  if (lhs.getType().isa<ir::FloatT>())
+  if (lhs->getType().isa<ir::FloatT>())
     builder.create<as::rtype::Fmul>(rd, lhsReg, rhsReg, dataSize);
   else
     builder.create<as::rtype::Mul>(rd, lhsReg, rhsReg, dataSize);
@@ -256,23 +250,22 @@ utils::LogicalResult translateMul(as::AsmBuilder &builder,
 utils::LogicalResult translateDiv(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
-  assert(!lhs.isConstant() && !rhs.isConstant() &&
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
+  assert(!lhs->isConstant() && !rhs->isConstant() &&
          "Binary division operands must not be constant. "
          "It is guaranteed by `OutlineConstant` pass.");
 
-  auto lhsReg = regAlloc.getRegister(lhs);
-  auto rhsReg = regAlloc.getRegister(rhs);
+  auto lhsReg = translater.getOperandRegister(lhs);
+  auto rhsReg = translater.getOperandRegister(rhs);
 
-  if (lhs.getType().isa<ir::FloatT>())
+  if (lhs->getType().isa<ir::FloatT>())
     builder.create<as::rtype::Fdiv>(rd, lhsReg, rhsReg, dataSize);
   else {
-    auto intT = rhs.getType().cast<ir::IntT>();
+    auto intT = rhs->getType().cast<ir::IntT>();
     builder.create<as::rtype::Div>(rd, lhsReg, rhsReg, dataSize,
                                    intT.isSigned());
   }
@@ -283,21 +276,20 @@ utils::LogicalResult translateDiv(as::AsmBuilder &builder,
 utils::LogicalResult translateMod(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
-  assert(!lhs.isConstant() && !rhs.isConstant() &&
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
+  assert(!lhs->isConstant() && !rhs->isConstant() &&
          "Binary modulo operands must not be constant. "
          "It is guaranteed by `OutlineConstant` pass.");
-  assert(!lhs.getType().isa<ir::FloatT>() &&
+  assert(!lhs->getType().isa<ir::FloatT>() &&
          "Binary modulo operands must not be float type. ");
-  auto lhsReg = regAlloc.getRegister(lhs);
-  auto rhsReg = regAlloc.getRegister(rhs);
+  auto lhsReg = translater.getOperandRegister(lhs);
+  auto rhsReg = translater.getOperandRegister(rhs);
 
-  auto intT = rhs.getType().cast<ir::IntT>();
+  auto intT = rhs->getType().cast<ir::IntT>();
 
   builder.create<as::rtype::Rem>(rd, lhsReg, rhsReg, dataSize, intT.isSigned());
   return utils::LogicalResult::success();
@@ -306,25 +298,24 @@ utils::LogicalResult translateMod(as::AsmBuilder &builder,
 utils::LogicalResult translateAnd(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
+  auto rd = translater.getRegister(dest);
 
-  assert(!lhs.isConstant() ||
-         !rhs.isConstant() &&
+  assert(!lhs->isConstant() ||
+         !rhs->isConstant() &&
              "Binary AND must have at least one non-constant operand. "
              "It is guaranteed by `OutlineConstant` pass.");
 
-  if (lhs.isConstant() | rhs.isConstant()) {
+  if (lhs->isConstant() | rhs->isConstant()) {
     // use itype
-    if (lhs.isConstant())
+    if (lhs->isConstant())
       std::swap(lhs, rhs);
 
-    auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+    auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
     assert(rhsImm && "Expected a constant immediate for rhs operand");
-    auto lhsReg = regAlloc.getRegister(lhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
     if (rhsImm->isZero()) {
       // mv dest, zero
       builder.create<as::pseudo::Mv>(rd, as::Register::zero());
@@ -335,8 +326,8 @@ utils::LogicalResult translateAnd(as::AsmBuilder &builder,
     return utils::LogicalResult::success();
   } else {
     // use rtype
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
 
     builder.create<as::rtype::And>(rd, lhsReg, rhsReg);
     return utils::LogicalResult::success();
@@ -346,24 +337,23 @@ utils::LogicalResult translateAnd(as::AsmBuilder &builder,
 utils::LogicalResult translateOr(as::AsmBuilder &builder,
                                  FunctionTranslater &translater,
                                  ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  assert(!lhs.isConstant() ||
-         !rhs.isConstant() &&
+  auto rd = translater.getRegister(dest);
+  assert(!lhs->isConstant() ||
+         !rhs->isConstant() &&
              "Binary OR must have at least one non-constant operand. "
              "It is guaranteed by `OutlineConstant` pass.");
 
-  if (lhs.isConstant() | rhs.isConstant()) {
-    if (lhs.isConstant())
+  if (lhs->isConstant() | rhs->isConstant()) {
+    if (lhs->isConstant())
       std::swap(lhs, rhs);
 
     // use itype
-    auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+    auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
     assert(rhsImm && "Expected a constant immediate for rhs operand");
-    auto lhsReg = regAlloc.getRegister(lhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
     if (rhsImm->isZero()) {
       // mv dest, lhs
       builder.create<as::pseudo::Mv>(rd, lhsReg);
@@ -374,8 +364,8 @@ utils::LogicalResult translateOr(as::AsmBuilder &builder,
     return utils::LogicalResult::success();
   } else {
     // use rtype
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
 
     builder.create<as::rtype::Or>(rd, lhsReg, rhsReg);
     return utils::LogicalResult::success();
@@ -385,24 +375,23 @@ utils::LogicalResult translateOr(as::AsmBuilder &builder,
 utils::LogicalResult translateXor(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  assert(!lhs.isConstant() ||
-         !rhs.isConstant() &&
+  auto rd = translater.getRegister(dest);
+  assert(!lhs->isConstant() ||
+         !rhs->isConstant() &&
              "Binary XOR must have at least one non-constant operand. "
              "It is guaranteed by `OutlineConstant` pass.");
 
-  if (lhs.isConstant() | rhs.isConstant()) {
+  if (lhs->isConstant() | rhs->isConstant()) {
     // use itype
-    if (lhs.isConstant())
+    if (lhs->isConstant())
       std::swap(lhs, rhs);
 
-    auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+    auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
     assert(rhsImm && "Expected a constant immediate for rhs operand");
-    auto lhsReg = regAlloc.getRegister(lhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
     if (rhsImm->isZero()) {
       // mv dest, lhs
       builder.create<as::pseudo::Mv>(rd, lhsReg);
@@ -412,8 +401,8 @@ utils::LogicalResult translateXor(as::AsmBuilder &builder,
     builder.create<as::itype::Xori>(rd, lhsReg, rhsImm);
   } else {
     // use rtype
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
 
     builder.create<as::rtype::Xor>(rd, lhsReg, rhsReg);
   }
@@ -424,20 +413,19 @@ utils::LogicalResult translateXor(as::AsmBuilder &builder,
 utils::LogicalResult translateShl(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  assert(!lhs.isConstant() && "Binary shift left lhs must not be constant. "
-                              "It is guaranteed by `OutlineConstant` pass.");
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  assert(!lhs->isConstant() && "Binary shift left lhs must not be constant. "
+                               "It is guaranteed by `OutlineConstant` pass.");
+  auto dataSize = getDataSize(lhs->getType());
 
-  if (rhs.isConstant()) {
+  if (rhs->isConstant()) {
     // use itype
-    auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+    auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
     assert(rhsImm && "Expected a constant immediate for rhs operand");
-    auto lhsReg = regAlloc.getRegister(lhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
     if (rhsImm->isZero()) {
       // mv dest, lhs
       builder.create<as::pseudo::Mv>(rd, lhsReg);
@@ -447,8 +435,8 @@ utils::LogicalResult translateShl(as::AsmBuilder &builder,
     builder.create<as::itype::Slli>(rd, lhsReg, rhsImm, dataSize);
   } else {
     // use rtype
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
 
     builder.create<as::rtype::Sll>(rd, lhsReg, rhsReg, dataSize);
   }
@@ -458,20 +446,19 @@ utils::LogicalResult translateShl(as::AsmBuilder &builder,
 utils::LogicalResult translateShr(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  assert(!lhs.isConstant() && "Binary shift right lhs must not be constant. "
-                              "It is guaranteed by `OutlineConstant` pass.");
+  auto rd = translater.getRegister(dest);
+  assert(!lhs->isConstant() && "Binary shift right lhs must not be constant. "
+                               "It is guaranteed by `OutlineConstant` pass.");
 
-  auto dataSize = getDataSize(lhs.getType());
-  if (rhs.isConstant()) {
+  auto dataSize = getDataSize(lhs->getType());
+  if (rhs->isConstant()) {
     // use itype
-    auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+    auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
     assert(rhsImm && "Expected a constant immediate for rhs operand");
-    auto lhsReg = regAlloc.getRegister(lhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
     if (rhsImm->isZero()) {
       // mv dest, lhs
       builder.create<as::pseudo::Mv>(rd, lhsReg);
@@ -481,8 +468,8 @@ utils::LogicalResult translateShr(as::AsmBuilder &builder,
     builder.create<as::itype::Srai>(rd, lhsReg, rhsImm, dataSize);
   } else {
     // use rtype
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
 
     builder.create<as::rtype::Sra>(rd, lhsReg, rhsReg, dataSize);
   }
@@ -493,43 +480,42 @@ utils::LogicalResult translateShr(as::AsmBuilder &builder,
 utils::LogicalResult translateEq(as::AsmBuilder &builder,
                                  FunctionTranslater &translater,
                                  ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  if (lhs.getType().isa<ir::FloatT>()) {
-    assert(!lhs.isConstant() && !rhs.isConstant() &&
+  if (lhs->getType().isa<ir::FloatT>()) {
+    assert(!lhs->isConstant() && !rhs->isConstant() &&
            "Binary float equality operands must not be constant. "
            "It is guaranteed by `OutlineConstant` pass.");
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
     builder.create<as::rtype::Feq>(rd, lhsReg, rhsReg, dataSize);
   } else {
-    assert(!lhs.isConstant() ||
-           !rhs.isConstant() &&
+    assert(!lhs->isConstant() ||
+           !rhs->isConstant() &&
                "Binary equality must have at least one non-constant operand. "
                "It is guaranteed by `OutlineConstant` pass.");
 
-    if (lhs.isConstant() | rhs.isConstant()) {
+    if (lhs->isConstant() | rhs->isConstant()) {
       // use seqz
-      if (lhs.isConstant())
+      if (lhs->isConstant())
         std::swap(lhs, rhs);
 
-      auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+      auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
       assert(rhsImm && rhsImm->isZero() &&
              "Expected a constant immediate 0 for rhs operand");
 
-      auto lhsReg = regAlloc.getRegister(lhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
       builder.create<as::pseudo::Seqz>(rd, lhsReg);
     } else {
       // use rtype
       // sub rd, lhs, rhs
       // seqz rd, rd
-      auto lhsReg = regAlloc.getRegister(lhs);
-      auto rhsReg = regAlloc.getRegister(rhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
+      auto rhsReg = translater.getOperandRegister(rhs);
 
       builder.create<as::rtype::Sub>(rd, lhsReg, rhsReg, dataSize);
       builder.create<as::pseudo::Seqz>(rd, rd);
@@ -543,9 +529,8 @@ utils::LogicalResult translateNeq(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
   translateEq(builder, translater, inst);
-  auto &regAlloc = translater.regAlloc();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
+  auto rd = translater.getRegister(dest);
   // xori rd, rd, 1
   createLogicalNot(builder, rd);
   return utils::LogicalResult::success();
@@ -554,38 +539,37 @@ utils::LogicalResult translateNeq(as::AsmBuilder &builder,
 utils::LogicalResult translateLt(as::AsmBuilder &builder,
                                  FunctionTranslater &translater,
                                  ir::inst::Binary inst) {
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  if (lhs.getType().isa<ir::FloatT>()) {
-    assert(!lhs.isConstant() && !rhs.isConstant() &&
+  if (lhs->getType().isa<ir::FloatT>()) {
+    assert(!lhs->isConstant() && !rhs->isConstant() &&
            "Binary float less than operands must not be constant. "
            "It is guaranteed by `OutlineConstant` pass.");
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
     builder.create<as::rtype::Flt>(rd, lhsReg, rhsReg, dataSize);
   } else {
-    assert(!lhs.isConstant() && "Binary less than lhs must not be constant. "
-                                "It is guaranteed by `OutlineConstant` pass.");
+    assert(!lhs->isConstant() && "Binary less than lhs must not be constant. "
+                                 "It is guaranteed by `OutlineConstant` pass.");
 
-    if (rhs.isConstant()) {
+    if (rhs->isConstant()) {
       // use itype
-      auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+      auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
       assert(rhsImm && "Expected a constant immediate for rhs operand");
-      auto lhsReg = regAlloc.getRegister(lhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
 
-      auto isSigned = rhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = rhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::itype::Slti>(rd, lhsReg, rhsImm, isSigned);
     } else {
       // use rtype
-      auto lhsReg = regAlloc.getRegister(lhs);
-      auto rhsReg = regAlloc.getRegister(rhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
+      auto rhsReg = translater.getOperandRegister(rhs);
 
-      auto isSigned = rhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = rhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::rtype::Slt>(rd, lhsReg, rhsReg, isSigned);
     }
   }
@@ -597,38 +581,37 @@ utils::LogicalResult translateLe(as::AsmBuilder &builder,
   // lt rd, rhs, lhs
   // xori rd, rd, 1
 
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  if (lhs.getType().isa<ir::FloatT>()) {
-    assert(!lhs.isConstant() && !rhs.isConstant() &&
+  if (lhs->getType().isa<ir::FloatT>()) {
+    assert(!lhs->isConstant() && !rhs->isConstant() &&
            "Binary float less than or equal operands must not be constant. "
            "It is guaranteed by `OutlineConstant` pass.");
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
     builder.create<as::rtype::Flt>(rd, rhsReg, lhsReg, dataSize);
   } else {
-    assert(!rhs.isConstant() &&
+    assert(!rhs->isConstant() &&
            "Binary less than or equal rhs must not be constant. ");
 
-    if (lhs.isConstant()) {
+    if (lhs->isConstant()) {
       // use itype
-      auto *lhsImm = getImmediate(lhs.getDefiningInst<ir::inst::Constant>());
+      auto *lhsImm = getImmediate(lhs->getDefiningInst<ir::inst::Constant>());
       assert(lhsImm && "Expected a constant immediate for lhs operand");
-      auto rhsReg = regAlloc.getRegister(rhs);
+      auto rhsReg = translater.getOperandRegister(rhs);
 
-      auto isSigned = lhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = lhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::itype::Slti>(rd, rhsReg, lhsImm, isSigned);
     } else {
       // use rtype
-      auto lhsReg = regAlloc.getRegister(lhs);
-      auto rhsReg = regAlloc.getRegister(rhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
+      auto rhsReg = translater.getOperandRegister(rhs);
 
-      auto isSigned = lhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = lhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::rtype::Slt>(rd, rhsReg, lhsReg, isSigned);
     }
   }
@@ -642,38 +625,37 @@ utils::LogicalResult translateGt(as::AsmBuilder &builder,
                                  ir::inst::Binary inst) {
   // lt rd, rhs, lhs
 
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  if (lhs.getType().isa<ir::FloatT>()) {
-    assert(!lhs.isConstant() && !rhs.isConstant() &&
+  if (lhs->getType().isa<ir::FloatT>()) {
+    assert(!lhs->isConstant() && !rhs->isConstant() &&
            "Binary float greater than operands must not be constant. "
            "It is guaranteed by `OutlineConstant` pass.");
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
     builder.create<as::rtype::Flt>(rd, rhsReg, lhsReg, dataSize);
   } else {
-    assert(!rhs.isConstant() &&
+    assert(!rhs->isConstant() &&
            "Binary greater than rhs must not be constant. ");
 
-    if (lhs.isConstant()) {
+    if (lhs->isConstant()) {
       // use itype
-      auto *lhsImm = getImmediate(lhs.getDefiningInst<ir::inst::Constant>());
+      auto *lhsImm = getImmediate(lhs->getDefiningInst<ir::inst::Constant>());
       assert(lhsImm && "Expected a constant immediate for lhs operand");
-      auto rhsReg = regAlloc.getRegister(rhs);
+      auto rhsReg = translater.getOperandRegister(rhs);
 
-      auto isSigned = lhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = lhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::itype::Slti>(rd, rhsReg, lhsImm, isSigned);
     } else {
       // use rtype
-      auto lhsReg = regAlloc.getRegister(lhs);
-      auto rhsReg = regAlloc.getRegister(rhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
+      auto rhsReg = translater.getOperandRegister(rhs);
 
-      auto isSigned = lhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = lhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::rtype::Slt>(rd, rhsReg, lhsReg, isSigned);
     }
   }
@@ -686,38 +668,37 @@ utils::LogicalResult translateGe(as::AsmBuilder &builder,
   // lt rd, lhs, rhs
   // xori rd, rd, 1
 
-  auto &regAlloc = translater.regAlloc();
-  auto lhs = inst.getLhs();
-  auto rhs = inst.getRhs();
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
-  auto rd = regAlloc.getRegister(dest);
-  auto dataSize = getDataSize(lhs.getType());
+  auto rd = translater.getRegister(dest);
+  auto dataSize = getDataSize(lhs->getType());
 
-  if (lhs.getType().isa<ir::FloatT>()) {
-    assert(!lhs.isConstant() && !rhs.isConstant() &&
+  if (lhs->getType().isa<ir::FloatT>()) {
+    assert(!lhs->isConstant() && !rhs->isConstant() &&
            "Binary float less than operands must not be constant. "
            "It is guaranteed by `OutlineConstant` pass.");
-    auto lhsReg = regAlloc.getRegister(lhs);
-    auto rhsReg = regAlloc.getRegister(rhs);
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
     builder.create<as::rtype::Flt>(rd, lhsReg, rhsReg, dataSize);
   } else {
-    assert(!lhs.isConstant() && "Binary less than lhs must not be constant. "
-                                "It is guaranteed by `OutlineConstant` pass.");
+    assert(!lhs->isConstant() && "Binary less than lhs must not be constant. "
+                                 "It is guaranteed by `OutlineConstant` pass.");
 
-    if (rhs.isConstant()) {
+    if (rhs->isConstant()) {
       // use itype
-      auto *rhsImm = getImmediate(rhs.getDefiningInst<ir::inst::Constant>());
+      auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
       assert(rhsImm && "Expected a constant immediate for rhs operand");
-      auto lhsReg = regAlloc.getRegister(lhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
 
-      auto isSigned = rhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = rhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::itype::Slti>(rd, lhsReg, rhsImm, isSigned);
     } else {
       // use rtype
-      auto lhsReg = regAlloc.getRegister(lhs);
-      auto rhsReg = regAlloc.getRegister(rhs);
+      auto lhsReg = translater.getOperandRegister(lhs);
+      auto rhsReg = translater.getOperandRegister(rhs);
 
-      auto isSigned = rhs.getType().cast<ir::IntT>().isSigned();
+      auto isSigned = rhs->getType().cast<ir::IntT>().isSigned();
       builder.create<as::rtype::Slt>(rd, lhsReg, rhsReg, isSigned);
     }
   }

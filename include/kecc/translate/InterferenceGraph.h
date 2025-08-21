@@ -10,6 +10,7 @@ namespace kecc {
 
 class MaximumCardinalitySearch;
 class LiveRangeAnalysis;
+class GraphColoring;
 
 class InterferenceGraph {
 public:
@@ -29,6 +30,9 @@ public:
   void dump(llvm::raw_ostream &os) const;
 
   MaximumCardinalitySearch *getMCS() const { return mcs.get(); }
+  GraphColoring *getGraphColoring() const { return graphColoring.get(); }
+
+  GraphColoring *coloring();
 
 private:
   friend class MaximumCardinalitySearch;
@@ -42,6 +46,7 @@ private:
   bool isFloat;
   llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph;
   std::unique_ptr<MaximumCardinalitySearch> mcs;
+  std::unique_ptr<GraphColoring> graphColoring;
 };
 
 void spill(ir::Module *module, InterferenceGraph *graph);
@@ -90,6 +95,8 @@ public:
   }
 
   Color getColor(LiveRange liveRange) const;
+
+  size_t getNumColors() const { return numColors; }
 
 private:
   void coloring(InterferenceGraph *interfGraph);
