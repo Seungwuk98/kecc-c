@@ -455,6 +455,9 @@ struct SideEffect : TraitBase<ConcreteType, SideEffect> {};
 
 template <typename ConcreteType> struct Pure : TraitBase<ConcreteType, Pure> {};
 
+template <typename ConcreteType>
+struct CallLike : TraitBase<ConcreteType, CallLike> {};
+
 class IRBuilder;
 
 class Phi : public InstructionTemplate<Phi, Instruction, OneResult, Arg> {

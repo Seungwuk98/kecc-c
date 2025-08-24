@@ -81,6 +81,13 @@ void LivenessAnalysisBuilder::build(ir::Module *module) {
             varKill[block].insert(liveRange);
           } else {
             liveRange = liveRangeAnalysis->getLiveRange(func, operand);
+            if (spill.spilled.contains(liveRange)) {
+              assert((inst->hasTrait<ir::CallLike>()) &&
+                     "This case is only "
+                     "possible for call-like "
+                     "instructions");
+              continue;
+            }
           }
 
           if (!varKill[block].contains(liveRange))

@@ -66,7 +66,7 @@ public:
 };
 
 class Call : public InstructionTemplate<Call, Instruction, VariadicResults,
-                                        SideEffect> {
+                                        SideEffect, CallLike> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value function,
@@ -440,8 +440,9 @@ public:
   };
 };
 
-class InlineCall : public InstructionTemplate<InlineCall, Instruction,
-                                              VariadicResults, SideEffect> {
+class InlineCall
+    : public InstructionTemplate<InlineCall, Instruction, VariadicResults,
+                                 SideEffect, CallLike> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state,

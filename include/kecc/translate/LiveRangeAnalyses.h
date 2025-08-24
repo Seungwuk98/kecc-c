@@ -1,7 +1,9 @@
 #ifndef KECC_TRANSLATE_LIVE_RANGE_ANALYSIS_H
 #define KECC_TRANSLATE_LIVE_RANGE_ANALYSIS_H
 
+#include "kecc/ir/Analysis.h"
 #include "kecc/ir/IR.h"
+#include "kecc/ir/Instruction.h"
 #include "kecc/ir/Value.h"
 #include "kecc/translate/LiveRange.h"
 #include "llvm/ADT/DenseMap.h"
@@ -92,6 +94,24 @@ private:
       : Analysis(module), liveOut(std::move(liveOut)) {}
 
   const llvm::DenseMap<ir::Block *, llvm::DenseSet<LiveRange>> liveOut;
+};
+
+class CallLivenessAnalysis : public ir::Analysis {
+public:
+  static std::unique_ptr<CallLivenessAnalysis> create(ir::Module *module);
+
+  void dump(llvm::raw_ostream &os) const;
+
+  const llvm::DenseSet<LiveRange> &
+  getLiveIn(ir::InstructionStorage *inst) const;
+
+private:
+  CallLivenessAnalysis(
+      ir::Module *module,
+      llvm::DenseMap<ir::InstructionStorage *, llvm::DenseSet<LiveRange>>
+          liveIn)
+      : Analysis(module), liveIn(std::move(liveIn)) {}
+  llvm::DenseMap<ir::InstructionStorage *, llvm::DenseSet<LiveRange>> liveIn;
 };
 
 } // namespace kecc

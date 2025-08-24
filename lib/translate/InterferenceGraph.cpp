@@ -41,6 +41,23 @@ struct InterferenceGraphBuilder {
 void InterferenceGraphBuilder::build() {
   SpillAnalysis *spillAnalysis = module->getAnalysis<SpillAnalysis>();
 
+  // special case for function argument
+  // All function arguments are interfering with each other
+
+  {
+    llvm::SmallVector<LiveRange> funcArgs;
+    for (ir::InstructionStorage *inst : *func->getEntryBlock()) {
+      auto funcArg = inst->getDefiningInst<ir::inst::FunctionArgument>();
+      if (!funcArg)
+        break;
+      auto liveRange = liveRangeAnalysis->getLiveRange(func, funcArg);
+      for (LiveRange otherLR : funcArgs) {
+        insert(liveRange, otherLR);
+      }
+      funcArgs.emplace_back(liveRange);
+    }
+  }
+
   for (ir::Block *block : *func) {
     llvm::DenseSet<LiveRange> liveNow = livenessAnalysis->getLiveVars(block);
 
@@ -90,6 +107,13 @@ void InterferenceGraphBuilder::build() {
           restored.emplace_back(liveRange);
         } else {
           liveRange = liveRangeAnalysis->getLiveRange(func, operand);
+          if (spillAnalysis &&
+              spillAnalysis->getSpillInfo().spilled.contains(liveRange)) {
+            assert(!inst->hasTrait<ir::CallLike>() &&
+                   "Spilled live range should not be used in call-like "
+                   "instructions");
+            continue;
+          }
         }
         liveNow.insert(liveRange);
       }

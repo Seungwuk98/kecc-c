@@ -17,6 +17,7 @@ public:
   using Color = GraphColoring::Color;
 
   as::Register getRegister(ir::Value value);
+  as::Register getRegister(ir::Function *function, LiveRange liveRange);
 
 private:
   void allocateRegisters();

@@ -1,11 +1,14 @@
 #include "kecc/translate/IRTranslater.h"
 #include "kecc/asm/AsmBuilder.h"
+#include "kecc/asm/AsmInstruction.h"
 #include "kecc/asm/Register.h"
-#include "kecc/ir/IRAnalyses.h"
+#include "kecc/ir/IRInstructions.h"
+#include "kecc/ir/IRTypes.h"
+#include "kecc/ir/Instruction.h"
+#include "kecc/ir/WalkSupport.h"
 #include "kecc/translate/InterferenceGraph.h"
 #include "kecc/translate/SpillAnalysis.h"
 #include <format>
-#include <queue>
 
 namespace kecc {
 
@@ -54,6 +57,140 @@ FunctionTranslater::FunctionTranslater(IRTranslater *translater,
   assert(liveRangeAnalysis && livenessAnalysis && spillAnalysis &&
          "LiveRangeAnalysis, LivenessAnalysis, and SpillAnalysis must be "
          "available");
+
+  init();
+}
+
+void FunctionTranslater::init() {
+  liveRangeToIndexMap =
+      liveRangeAnalysis->getCurrLRIdMap(spillAnalysis->getSpillInfo());
+
+  // initialize `hasCall`
+  function->walk([&](ir::InstructionStorage *inst) -> ir::WalkResult {
+    hasCall |= inst->hasTrait<ir::CallLike>();
+    return ir::WalkResult::advance();
+  });
+
+  if (hasCall) {
+    stack.setReturnAddressSize(module->getContext()->getArchitectureByteSize());
+    auto sp = stack.returnAddress(0);
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
+    anonymousRegisterToSp.try_emplace(anon, sp);
+    returnAddressMemory = anon;
+  }
+
+  llvm::SmallVector<LiveRange> spillLiveRange;
+  llvm::SmallVector<as::Register> calleeSavedRegisters;
+  for (const auto &[liveRange, _] : liveRangeToIndexMap) {
+    auto reg = regAlloc.getRegister(function, liveRange);
+    if (reg.isCalleeSaved())
+      calleeSavedRegisters.emplace_back(reg);
+
+    if (spillAnalysis->getSpillInfo().spilled.contains(liveRange))
+      spillLiveRange.emplace_back(liveRange);
+  }
+
+  // initialize callee saved registers
+  llvm::sort(calleeSavedRegisters, [](as::Register a, as::Register b) {
+    auto aFloat = a.isFloatingPoint();
+    auto bFloat = b.isFloatingPoint();
+    if (aFloat != bFloat)
+      return aFloat < bFloat;
+    return a.getABIIndex() < b.getABIIndex();
+  });
+
+  size_t totalCalleeSavedSize = 0;
+  for (const auto &reg : calleeSavedRegisters) {
+    auto sp = stack.calleeSavedRegister(totalCalleeSavedSize);
+    totalCalleeSavedSize += module->getContext()->getArchitectureByteSize();
+
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
+    anonymousRegisterToSp.try_emplace(anon, sp);
+  }
+
+  stack.setCalleeSavedRegistersSize(totalCalleeSavedSize);
+
+  // initialize local variables
+  size_t totalLocalVarSize = 0;
+  for (ir::InstructionStorage *storage : *function->getAllocationBlock()) {
+    ir::inst::LocalVariable localVar =
+        storage->getDefiningInst<ir::inst::LocalVariable>();
+    assert(localVar &&
+           "LocalVariable instruction must be defined in the allocation block");
+
+    auto type = localVar.getType().cast<ir::PointerT>().getPointeeType();
+    auto dataSize = getDataSize(type);
+    auto sp = stack.localVariable(totalLocalVarSize);
+    totalLocalVarSize += dataSize.getByteSize();
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
+    anonymousRegisterToSp.try_emplace(anon, std::make_pair(sp, dataSize));
+    localVariablesInfo.emplace_back(anon);
+  }
+  stack.setLocalVariablesSize(totalLocalVarSize);
+
+  // initialize spill
+
+  size_t argIntIndex = 0u;
+  size_t argFloatIndex = 0u;
+  size_t offset = 0u;
+  for (ir::InstructionStorage *inst : *function->getEntryBlock()) {
+    ir::inst::FunctionArgument arg =
+        inst->getDefiningInst<ir::inst::FunctionArgument>();
+    if (!arg)
+      break;
+
+    auto liveRange = liveRangeAnalysis->getLiveRange(function, arg);
+
+    if (arg.getType().isa<ir::FloatT>()) {
+      if (argFloatIndex >= getFloatArgRegisters().size()) {
+        auto sp = stack.functionArgument(offset);
+        offset += module->getContext()->getArchitectureByteSize();
+        auto anon = createAnonRegister(as::RegisterType::Integer, sp);
+        anonymousRegisterToSp.try_emplace(anon, sp);
+
+        if (isSpilled(liveRange)) {
+          spillMemories.try_emplace(liveRange, anon);
+        }
+
+        functionFloatArgMemories.emplace_back(anon);
+      }
+      argFloatIndex++;
+    } else {
+      if (argIntIndex >= getIntArgRegisters().size()) {
+        auto sp = stack.functionArgument(offset);
+        offset += module->getContext()->getArchitectureByteSize();
+        auto anon = createAnonRegister(as::RegisterType::Integer, sp);
+        anonymousRegisterToSp.try_emplace(anon, sp);
+
+        if (isSpilled(liveRange)) {
+          spillMemories.try_emplace(liveRange, anon);
+        }
+
+        functionIntArgMemories.emplace_back(anon);
+      }
+      argIntIndex++;
+    }
+  }
+
+  llvm::sort(spillLiveRange, [&](const LiveRange &a, const LiveRange &b) {
+    return liveRangeToIndexMap[a] < liveRangeToIndexMap[b];
+  });
+
+  size_t totalSpillSize = 0;
+  for (const auto &liveRange : spillLiveRange) {
+    if (spillMemories.contains(liveRange))
+      continue; // Already processed
+
+    auto type = liveRangeAnalysis->getLiveRangeType(function, liveRange);
+    auto dataSize = getDataSize(type);
+    auto sp = stack.spilledRegister(totalSpillSize);
+    totalSpillSize += dataSize.getByteSize();
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
+    anonymousRegisterToSp.try_emplace(anon, std::make_pair(sp, dataSize));
+    spillMemories.try_emplace(liveRange, anon);
+  }
+
+  stack.setSpilledRegistersSize(totalCalleeSavedSize);
 }
 
 llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
@@ -71,13 +208,7 @@ llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
   llvm::SmallVector<as::Register> anonRegs;
   anonRegs.reserve(datas.size());
   for (const auto &sp : stackPoint) {
-    auto anon = as::Register::createAnonymousRegister(
-        context->getAnonymousRegStorage(), as::RegisterType::Integer,
-        as::CallingConvension::None,
-        std::format("{}_call{}_{}", function->getName().str(),
-                    getCurrCallIndex(), getCurrCallRegIndex()));
-
-    incrementCallRegIndex();
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
     anonymousRegisterToSp.try_emplace(anon, sp);
     anonRegs.emplace_back(anon);
   }
@@ -141,6 +272,9 @@ as::Function *FunctionTranslater::translate() {
   blocks.emplace_back(funcEntryBlock);
 
   as::AsmBuilder builder;
+  builder.setInsertionPointStart(funcEntryBlock);
+  writeFunctionStart(builder);
+
   for (ir::Block *block : *function) {
     auto *asBlock = createBlock(block);
     blocks.emplace_back(asBlock);
@@ -153,6 +287,161 @@ as::Function *FunctionTranslater::translate() {
   }
 
   return new as::Function(blocks);
+}
+
+void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
+  auto tempReg = getTranslateContext()->getTempRegisters()[0];
+
+  if (stack.getTotalSize() > 0) {
+    auto *imm = getImmOrLoad(builder, tempReg,
+                             -static_cast<std::int32_t>(stack.getTotalSize()));
+    if (imm) {
+      builder.create<as::itype::Addi>(as::Register::sp(), as::Register::sp(),
+                                      *imm, as::DataSize::doubleWord());
+    } else {
+      builder.create<as::rtype::Add>(as::Register::sp(), as::Register::sp(),
+                                     tempReg, as::DataSize::doubleWord());
+    }
+  }
+
+  if (stack.getReturnAddressSize() > 0) {
+    auto sp = stack.returnAddress(0);
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
+    anonymousRegisterToSp.try_emplace(anon, sp);
+    builder.create<as::stype::Store>(as::Register::ra(), anon, getImmediate(0),
+                                     as::DataSize::doubleWord());
+  }
+
+  saveCalleeSavedRegisters(builder);
+
+  auto localVarIdx = 0u;
+  for (ir::InstructionStorage *inst : *function->getAllocationBlock()) {
+    auto localVar = inst->getDefiningInst<ir::inst::LocalVariable>();
+    assert(localVar && "LocalVariable instruction must be defined in the "
+                       "allocation block");
+    auto liveRange = liveRangeAnalysis->getLiveRange(function, localVar);
+
+    auto rd = getRegister(localVar);
+    builder.create<as::pseudo::Mv>(rd, localVariablesInfo[localVarIdx++]);
+    if (isSpilled(liveRange)) {
+      spillRegister(builder, liveRange);
+    }
+  }
+
+  // handle arguments
+  size_t argIntIndex = 0u;
+  size_t argFloatIndex = 0u;
+  for (ir::InstructionStorage *inst : *function->getEntryBlock()) {
+    auto arg = inst->getDefiningInst<ir::inst::FunctionArgument>();
+    if (!arg)
+      break;
+
+    auto liveRange = liveRangeAnalysis->getLiveRange(function, arg);
+    auto rd = getRegister(arg);
+    auto dataSize = getDataSize(arg.getType());
+
+    if (arg.getType().isa<ir::FloatT>()) {
+      if (argFloatIndex >= getFloatArgRegisters().size()) {
+        auto sp = functionFloatArgMemories[argFloatIndex -
+                                           getFloatArgRegisters().size()];
+        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize);
+        // If the argument is spilled, we don't need to spill it again because
+        // it already has a memory from caller
+      } else {
+        auto argReg = getFloatArgRegisters()[argFloatIndex];
+        assert(argReg == rd &&
+               "Argument register must match the register allocated for the "
+               "argument");
+        if (isSpilled(liveRange)) {
+          spillRegister(builder, liveRange);
+        }
+      }
+      argFloatIndex++;
+    } else {
+      if (argIntIndex >= getIntArgRegisters().size()) {
+        auto sp =
+            functionIntArgMemories[argIntIndex - getIntArgRegisters().size()];
+        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize);
+        // If the argument is spilled, we don't need to spill it again because
+        // it already has a memory from caller
+      } else {
+        auto argReg = getIntArgRegisters()[argIntIndex];
+        assert(argReg == rd &&
+               "Argument register must match the register allocated for the "
+               "argument");
+        if (isSpilled(liveRange)) {
+          spillRegister(builder, liveRange);
+        }
+      }
+      argIntIndex++;
+    }
+  }
+}
+
+void FunctionTranslater::writeFunctionEnd(as::AsmBuilder &builder) {
+  // Restore callee saved registers
+  loadCalleeSavedRegisters(builder);
+
+  // Restore return address
+  if (stack.getReturnAddressSize() > 0) {
+    auto sp = *returnAddressMemory;
+    builder.create<as::itype::Load>(as::Register::ra(), sp, getImmediate(0),
+                                    as::DataSize::doubleWord());
+  }
+
+  // stack cleanup
+  if (stack.getTotalSize() > 0) {
+    auto tempReg = getTranslateContext()->getTempRegisters()[0];
+    auto *imm = getImmOrLoad(builder, tempReg, stack.getTotalSize());
+    if (imm) {
+      builder.create<as::itype::Addi>(as::Register::sp(), as::Register::sp(),
+                                      *imm, as::DataSize::doubleWord());
+    } else {
+      builder.create<as::rtype::Add>(as::Register::sp(), as::Register::sp(),
+                                     tempReg, as::DataSize::doubleWord());
+    }
+  }
+}
+
+void FunctionTranslater::spillRegister(as::AsmBuilder &builder,
+                                       LiveRange liveRange) {
+  auto memory = spillMemories.at(liveRange);
+  auto type = liveRangeAnalysis->getLiveRangeType(function, liveRange);
+  auto dataSize = getDataSize(type);
+  auto reg = regAlloc.getRegister(function, liveRange);
+
+  builder.create<as::stype::Store>(memory, reg, getImmediate(0), dataSize);
+}
+
+as::Register FunctionTranslater::restoreOperand(as::AsmBuilder &builder,
+                                                const ir::Operand *operand) {
+  auto restoredLiveRange = spillAnalysis->getSpillInfo().restore.at(operand);
+  auto spilledLiveRange = liveRangeAnalysis->getLiveRange(function, *operand);
+  assert(!isSpilled(restoredLiveRange) && "Restored value must not be spilled");
+
+  auto spilledMemory = spillMemories.at(spilledLiveRange);
+  auto type = operand->getType();
+  auto dataSize = getDataSize(type);
+  auto rd = regAlloc.getRegister(function, restoredLiveRange);
+
+  builder.create<as::itype::Load>(rd, spilledMemory, getImmediate(0), dataSize);
+  return rd;
+}
+
+void FunctionTranslater::saveCalleeSavedRegisters(as::AsmBuilder &builder) {
+  for (const auto &[reg, sp] : calleeSaveInfo) {
+    auto dataSize = reg.isFloatingPoint() ? as::DataSize::doublePrecision()
+                                          : as::DataSize::doubleWord();
+    builder.create<as::stype::Store>(sp, reg, getImmediate(0), dataSize);
+  }
+}
+
+void FunctionTranslater::loadCalleeSavedRegisters(as::AsmBuilder &builder) {
+  for (const auto &[reg, sp] : calleeSaveInfo) {
+    auto dataSize = reg.isFloatingPoint() ? as::DataSize::doublePrecision()
+                                          : as::DataSize::doubleWord();
+    builder.create<as::itype::Load>(reg, sp, getImmediate(0), dataSize);
+  }
 }
 
 } // namespace kecc

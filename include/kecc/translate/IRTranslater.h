@@ -59,8 +59,11 @@ public:
 
   as::Register restoreOperand(as::AsmBuilder &builder,
                               const ir::Operand *operand);
+  void spillRegister(as::AsmBuilder &builder, LiveRange liveRange);
+  bool isSpilled(LiveRange liveRange) const;
 
   void writeFunctionEnd(as::AsmBuilder &builder);
+  void writeFunctionStart(as::AsmBuilder &builder);
 
   void moveRegisters(as::AsmBuilder &builder, llvm::ArrayRef<as::Register> srcs,
                      llvm::ArrayRef<as::Register> dsts);
@@ -103,6 +106,10 @@ public:
                                   const StackPoint &sp);
 
 private:
+  void init();
+  void saveCalleeSavedRegisters(as::AsmBuilder &builder);
+  void loadCalleeSavedRegisters(as::AsmBuilder &builder);
+
   IRTranslater *irTranslater;
   TranslateContext *context;
   ir::Module *module;
@@ -121,7 +128,14 @@ private:
 
   llvm::SmallVector<as::Register, 8> intArgRegisters;
   llvm::SmallVector<as::Register, 8> floatArgRegisters;
+
+  llvm::SmallVector<std::pair<as::Register, as::Register>> calleeSaveInfo;
+  llvm::SmallVector<as::Register> localVariablesInfo;
+  llvm::SmallVector<as::Register> functionIntArgMemories;
+  llvm::SmallVector<as::Register> functionFloatArgMemories;
+  std::optional<as::Register> returnAddressMemory;
   size_t anonRegIndex = 0;
+  bool hasCall = false;
 };
 
 class TranslateRuleSet {

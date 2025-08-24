@@ -231,6 +231,9 @@ public:
     architectrureBitSize = bitSize;
   }
   size_t getArchitectureBitSize() const { return architectrureBitSize; }
+  size_t getArchitectureByteSize() const {
+    return getArchitectureBitSize() / BITS_OF_BYTE;
+  }
 
 private:
   template <typename T, typename AbstractTableTy> struct GetAbstractTable {

@@ -75,7 +75,13 @@ SpillInfo LiveRangeAnalysisImpl::spill(
   llvm::DenseMap<const ir::Operand *, LiveRange> restoreMap;
   for (ir::Block *block : *func) {
     for (ir::InstructionStorage *inst : *block) {
-      for (const ir::Operand &operand : inst->getOperands()) {
+      llvm::ArrayRef<ir::Operand> operands;
+      if (auto call = inst->getDefiningInst<ir::inst::Call>()) {
+        operands = call.getFunctionAsOperand();
+      } else {
+        operands = inst->getOperands();
+      }
+      for (const ir::Operand &operand : operands) {
         if (operand.isConstant())
           continue;
 

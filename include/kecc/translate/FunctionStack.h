@@ -13,10 +13,12 @@ struct StackPoint {
   StackPoint &operator=(const StackPoint &) = default;
 
   enum Area {
+    FunctionArgument,     // actually this area is part of the caller's stack
     ReturnAddress,        // 0 or 8 bytes
     SpilledRegisters,     // spilled registers
     CalleeSavedRegisters, // callee saved registers
     CallerSavedRegisters, // caller saved registers
+    LocalVariables,       // local variables
     CallArguments         // call arguments
   };
 
@@ -43,6 +45,8 @@ struct StackPoint {
 ///--------------------------------------------------------------------------///
 /// caller saved registers
 ///--------------------------------------------------------------------------///
+/// local variables
+///--------------------------------------------------------------------------///
 /// call arguments
 ///--------------------------------------------------------------------------///
 class FunctionStack {
@@ -57,11 +61,12 @@ public:
   size_t getCallerSavedRegistersSize() const {
     return callerSavedRegistersSize;
   }
+  size_t getLocalVariableSize() const { return localVariablesSize; }
   size_t getCallArgumentsSize() const { return callArgumentsSize; }
 
   size_t getTotalSize() const {
     return returnAddressSize + spilledRegistersSize + calleeSavedRegistersSize +
-           callerSavedRegistersSize + callArgumentsSize;
+           callerSavedRegistersSize + localVariablesSize + callArgumentsSize;
   }
 
   void setReturnAddressSize(size_t size) { returnAddressSize = size; }
@@ -72,9 +77,14 @@ public:
   void setCallerSavedRegistersSize(size_t size) {
     callerSavedRegistersSize = size;
   }
+  void setLocalVariablesSize(size_t size) { localVariablesSize = size; }
   void setCallArgumentsSize(size_t size) { callArgumentsSize = size; }
 
   size_t fromBottom(const StackPoint &point) const;
+
+  StackPoint functionArgument(size_t offset) {
+    return StackPoint{this, StackPoint::FunctionArgument, offset};
+  }
 
   StackPoint returnAddress(size_t offset) {
     assert(offset == 0);
@@ -93,6 +103,10 @@ public:
     return StackPoint{this, StackPoint::CallerSavedRegisters, offset};
   }
 
+  StackPoint localVariable(size_t offset) {
+    return StackPoint{this, StackPoint::LocalVariables, offset};
+  }
+
   StackPoint callArgument(size_t offset) {
     return StackPoint{this, StackPoint::CallArguments, offset};
   }
@@ -102,6 +116,7 @@ private:
   size_t spilledRegistersSize = 0;
   size_t calleeSavedRegistersSize = 0;
   size_t callerSavedRegistersSize = 0;
+  size_t localVariablesSize = 0;
   size_t callArgumentsSize = 0;
 };
 

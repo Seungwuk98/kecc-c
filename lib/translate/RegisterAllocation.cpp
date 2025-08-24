@@ -27,14 +27,19 @@ as::Register RegisterAllocation::getRegister(ir::Value value) {
   LiveRange liveRange = liveRangeAnalysis->getLiveRange(value);
   ir::Function *function =
       value.getInstruction()->getParentBlock()->getParentFunction();
+  return getRegister(function, liveRange);
+}
 
+as::Register RegisterAllocation::getRegister(ir::Function *function,
+                                             LiveRange liveRange) {
   if (auto it = liveRangeToRegisterMap[function].find(liveRange);
       it != liveRangeToRegisterMap[function].end()) {
     return it->second;
   }
   InterferenceGraph *interferenceGraph;
   as::RegisterType regType;
-  if (value.getType().isa<ir::FloatT>()) {
+  if (liveRangeAnalysis->getLiveRangeType(function, liveRange)
+          .isa<ir::FloatT>()) {
     interferenceGraph = spillAnalysis->getInterferenceGraph(
         function, as::RegisterType::FloatingPoint);
     regType = as::RegisterType::FloatingPoint;

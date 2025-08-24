@@ -686,7 +686,7 @@ public:
 
 private:
   friend class ::kecc::as::AsmBuilder;
-  Store(Register rs1, Register rs2, Immediate *imm, DataSize dataSize);
+  Store(Register dst, Register src, Immediate *imm, DataSize dataSize);
   DataSize dataSize;
 };
 } // namespace stype
