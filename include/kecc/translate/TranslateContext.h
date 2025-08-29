@@ -6,6 +6,9 @@
 
 namespace kecc {
 
+class TranslateRuleSet;
+
+struct TranslateContextImpl;
 class TranslateContext {
 public:
   TranslateContext() = default;
@@ -21,16 +24,12 @@ public:
 
   utils::LogicalResult setRegistersFromOption(llvm::StringRef option);
 
-  as::AnonymousRegisterStorage *getAnonymousRegStorage() {
-    return &anonymousRegStorage;
-  }
+  as::AnonymousRegisterStorage *getAnonymousRegStorage();
+
+  TranslateRuleSet *getTranslateRuleSet();
 
 private:
-  llvm::SmallVector<as::Register, 32> tempIntRegisters;
-  llvm::SmallVector<as::Register, 32> registersForAllocateInt;
-  llvm::SmallVector<as::Register, 32> registersForAllocateFloat;
-
-  as::AnonymousRegisterStorage anonymousRegStorage;
+  std::unique_ptr<TranslateContextImpl> impl;
 };
 
 } // namespace kecc

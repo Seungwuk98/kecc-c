@@ -1,6 +1,7 @@
 #include "kecc/translate/TranslateContext.h"
 #include "kecc/asm/Register.h"
 #include "kecc/asm/RegisterParser.h"
+#include "kecc/translate/IRTranslater.h"
 #include "kecc/utils/LogicalResult.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
@@ -9,14 +10,26 @@
 #include <format>
 
 namespace kecc {
+
+struct TranslateContextImpl {
+  TranslateRuleSet translateRules;
+
+  llvm::SmallVector<as::Register, 32> tempIntRegisters;
+  llvm::SmallVector<as::Register, 32> registersForAllocateInt;
+  llvm::SmallVector<as::Register, 32> registersForAllocateFloat;
+
+  as::AnonymousRegisterStorage anonymousRegStorage;
+};
+
 llvm::ArrayRef<as::Register> TranslateContext::getTempRegisters() const {
-  return tempIntRegisters;
+  return impl->tempIntRegisters;
 }
 
 llvm::ArrayRef<as::Register>
 TranslateContext::getRegistersForAllocate(as::RegisterType regType) {
-  return (regType == as::RegisterType::Integer) ? registersForAllocateInt
-                                                : registersForAllocateFloat;
+  return (regType == as::RegisterType::Integer)
+             ? impl->registersForAllocateInt
+             : impl->registersForAllocateFloat;
 }
 
 void TranslateContext::setTempRegisters(llvm::ArrayRef<as::Register> regs) {
@@ -24,17 +37,17 @@ void TranslateContext::setTempRegisters(llvm::ArrayRef<as::Register> regs) {
              regs, [&](const as::Register &reg) { return reg.isInteger(); }) &&
          "Temporary registers must be integer registers");
 
-  tempIntRegisters.clear();
-  tempIntRegisters.append(regs.begin(), regs.end());
+  impl->tempIntRegisters.clear();
+  impl->tempIntRegisters.append(regs.begin(), regs.end());
 }
 
 void TranslateContext::setRegistersForAllocate(
     llvm::ArrayRef<as::Register> intRegs,
     llvm::ArrayRef<as::Register> floatRegs) {
-  registersForAllocateInt.clear();
-  registersForAllocateInt.append(intRegs.begin(), intRegs.end());
-  registersForAllocateFloat.clear();
-  registersForAllocateFloat.append(floatRegs.begin(), floatRegs.end());
+  impl->registersForAllocateInt.clear();
+  impl->registersForAllocateInt.append(intRegs.begin(), intRegs.end());
+  impl->registersForAllocateFloat.clear();
+  impl->registersForAllocateFloat.append(floatRegs.begin(), floatRegs.end());
 }
 
 static llvm::SmallVector<as::Register>
@@ -70,7 +83,7 @@ TranslateContext::setRegistersFromOption(llvm::StringRef option) {
 
   auto index = srcMgr.AddNewSourceBuffer(std::move(memBuffer), llvm::SMLoc());
   llvm::StringRef content = srcMgr.getMemoryBuffer(index)->getBuffer();
-  as::RegisterParser parser(&anonymousRegStorage, srcMgr, content);
+  as::RegisterParser parser(&impl->anonymousRegStorage, srcMgr, content);
 
   auto registerOptions = parser.parseRegiserOptions();
   if (!registerOptions)
@@ -166,6 +179,14 @@ TranslateContext::setRegistersFromOption(llvm::StringRef option) {
   setRegistersForAllocate(intRegisters, floatRegisters);
 
   return utils::LogicalResult::success();
+}
+
+as::AnonymousRegisterStorage *TranslateContext::getAnonymousRegStorage() {
+  return &impl->anonymousRegStorage;
+}
+
+TranslateRuleSet *TranslateContext::getTranslateRuleSet() {
+  return &impl->translateRules;
 }
 
 } // namespace kecc

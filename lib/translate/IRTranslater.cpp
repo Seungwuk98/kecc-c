@@ -12,6 +12,28 @@
 
 namespace kecc {
 
+extern as::Block *translateBlock(as::AsmBuilder &builder,
+                                 FunctionTranslater &translater,
+                                 ir::Block *block);
+
+extern void registerBinayTranslationRules(TranslateContext *context);
+extern void registerUnaryTranslationRules(TranslateContext *context);
+extern void registerConstantTranslationRules(TranslateContext *context);
+extern void registerExitTranslationRules(TranslateContext *context);
+extern void registerCallTranslationRules(TranslateContext *context);
+extern void registerTypeCastTranslationRules(TranslateContext *context);
+extern void registerMemoryInstTranslationRules(TranslateContext *context);
+
+void registerDefaultTranslationRules(TranslateContext *context) {
+  registerBinayTranslationRules(context);
+  registerUnaryTranslationRules(context);
+  registerConstantTranslationRules(context);
+  registerExitTranslationRules(context);
+  registerCallTranslationRules(context);
+  registerTypeCastTranslationRules(context);
+  registerMemoryInstTranslationRules(context);
+}
+
 void defaultRegisterSetup(TranslateContext *context) {
   static llvm::ArrayRef<as::Register> tempIntRegs = {
       as::Register::t0(),
@@ -39,10 +61,6 @@ void defaultRegisterSetup(TranslateContext *context) {
 
   context->setRegistersForAllocate(intRegs, floatRegs);
 }
-
-extern void translateInstruction(as::AsmBuilder &builder,
-                                 FunctionTranslater &translater,
-                                 ir::InstructionStorage *inst);
 
 FunctionTranslater::FunctionTranslater(IRTranslater *translater,
                                        TranslateContext *context,
@@ -276,14 +294,8 @@ as::Function *FunctionTranslater::translate() {
   writeFunctionStart(builder);
 
   for (ir::Block *block : *function) {
-    auto *asBlock = createBlock(block);
+    auto asBlock = translateBlock(builder, *this, block);
     blocks.emplace_back(asBlock);
-
-    // Translate instructions in the block
-    for (ir::InstructionStorage *inst : *block) {
-      builder.setInsertionPointLast(asBlock);
-      translateInstruction(builder, *this, inst);
-    }
   }
 
   return new as::Function(blocks);

@@ -48,6 +48,7 @@ public:
 
   TranslateContext *getTranslateContext() const { return context; }
 
+  as::Register getRegister(LiveRange liveRange);
   as::Register getRegister(ir::Value value);
   as::Register getOperandRegister(const ir::Operand *operand);
 
@@ -80,6 +81,8 @@ public:
   LiveRangeAnalysis *getLiveRangeAnalysis() const { return liveRangeAnalysis; }
   LivenessAnalysis *getLivenessAnalysis() const { return livenessAnalysis; }
   SpillAnalysis *getSpillAnalysis() const { return spillAnalysis; }
+  RegisterAllocation *getRegisterAllocation() { return &regAlloc; }
+  ir::Function *getFunction() const { return function; }
 
   std::optional<as::Register> getSpillMemory(ir::Value value) const {
     auto liveRange = liveRangeAnalysis->getLiveRange(value);
@@ -143,6 +146,10 @@ public:
   TranslateRuleSet();
   ~TranslateRuleSet();
 
+  void addRule(TypeID id, std::unique_ptr<TranslationRule> rule);
+
+  TranslationRule *getRule(TypeID id) const;
+
 private:
   llvm::DenseMap<TypeID, std::unique_ptr<TranslationRule>> rules;
 };
@@ -160,11 +167,9 @@ public:
   virtual bool callFunction() const { return false; }
 
   TypeID getId() const { return typeId; }
-  int getBenefit() const { return benefit; }
 
 private:
   TypeID typeId;
-  int benefit;
 };
 
 template <typename ConcreteInst>
@@ -204,7 +209,16 @@ void loadData(as::AsmBuilder &builder, FunctionTranslater &translater,
               as::Register rd, as::Register rs, as::DataSize dataSize,
               std::int64_t offset);
 
+template <typename Rule, typename... Args>
+void registerTranslationRule(TranslateContext *context, Args &&...args) {
+  TranslateRuleSet *ruleSet = context->getTranslateRuleSet();
+  auto rule = std::make_unique<Rule>(std::forward<Args>(args)...);
+  ruleSet->addRule(rule->getId(), std::move(rule));
+}
+
 #define KECC_UNREACHABLE_LABEL "kecc.unreachable"
+
+void registerDefaultTranslationRules(TranslateContext *context);
 
 } // namespace kecc
 

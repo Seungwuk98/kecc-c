@@ -204,6 +204,16 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
   return os << reg.toString();
 }
 
+struct CommonRegisterComparator {
+  int operator()(const Register &lhs, const Register &rhs) const;
+};
+
+struct CommonRegisterLess {
+  bool operator()(const Register &lhs, const Register &rhs) const {
+    return CommonRegisterComparator()(lhs, rhs) < 0;
+  }
+};
+
 } // namespace kecc::as
 
 namespace llvm {
