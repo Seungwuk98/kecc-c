@@ -14,6 +14,9 @@ public:
   TranslateContext();
   ~TranslateContext();
 
+  TranslateContext(const TranslateContext &) = delete;
+  TranslateContext &operator=(const TranslateContext &) = delete;
+
   llvm::ArrayRef<as::Register> getTempRegisters() const;
 
   llvm::ArrayRef<as::Register>

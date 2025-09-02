@@ -573,6 +573,10 @@ public:
 
   std::string toString() const override;
 
+  as::Register getDst() const { return this->getRd(); }
+  as::Register getBase() const { return this->getRs1(); }
+  as::Immediate *getOffset() const { return this->getImm(); }
+
 private:
   friend class ::kecc::as::AsmBuilder;
   Load(Register rd, Register rs1, Immediate *imm, DataSize dataSize,
@@ -700,9 +704,13 @@ public:
 
   std::string toString() const override;
 
+  Register getSrc() const { return this->getRs2(); }
+  Register getBase() const { return this->getRs1(); }
+  Immediate *getOffset() const { return this->getImm(); }
+
 private:
   friend class ::kecc::as::AsmBuilder;
-  Store(Register dst, Register src, Immediate *imm, DataSize dataSize);
+  Store(Register base, Register src, Immediate *imm, DataSize dataSize);
   DataSize dataSize;
 };
 } // namespace stype

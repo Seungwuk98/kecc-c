@@ -23,7 +23,6 @@ enum Action {
   DumpInterferenceGraph,
   DumpLiveRangeWithSpill,
   DumpSpillCost,
-  DumpRegisterAllocation,
   TranslateIR,
 };
 
@@ -44,8 +43,6 @@ static llvm::cl::opt<Action>
                clEnumValN(DumpLiveRangeWithSpill, "dump-live-range-with-spill",
                           "Dump live range with spill"),
                clEnumValN(DumpSpillCost, "dump-spill-cost", "Dump spill cost"),
-               clEnumValN(DumpRegisterAllocation, "dump-register-allocation",
-                          "Dump register allocation"),
                clEnumValN(TranslateIR, "translate-ir", "Translate IR to ASM")));
 
 static llvm::cl::opt<int> spillIterationsCount(
@@ -196,6 +193,19 @@ int keccTranslateMain() {
         os << '\n';
       });
     }
+  }
+
+  registerDefaultTranslationRules(&translateContext);
+  IRTranslater irTranslater(&translateContext, module.get());
+  auto asmModule = irTranslater.translate();
+  if (!asmModule) {
+    llvm::errs() << "Translation failed\n";
+    return 1;
+  }
+
+  if (cl::action == cl::TranslateIR) {
+    dump([&](llvm::raw_ostream &os) { asmModule->print(os); });
+    return 0;
   }
 
   return 0;

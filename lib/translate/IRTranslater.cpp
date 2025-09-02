@@ -29,22 +29,35 @@ void defaultRegisterSetup(TranslateContext *context) {
 
   context->setTempRegisters(tempIntRegs);
 
-  llvm::SmallVector<as::Register, 32> intRegs;
-  auto tempIntRegsForAlloc = as::getIntTempRegisters();
-  tempIntRegsForAlloc = tempIntRegsForAlloc.drop_front(tempIntRegs.size());
-  intRegs.append(tempIntRegsForAlloc.begin(), tempIntRegsForAlloc.end());
-  intRegs.append(as::getIntArgRegisters().begin(),
-                 as::getIntArgRegisters().end());
-  intRegs.append(as::getIntSavedRegisters().begin(),
-                 as::getIntSavedRegisters().end());
+  static llvm::ArrayRef<as::Register> intRegs = {
+      as::Register::a0(), as::Register::a1(),  as::Register::a2(),
+      as::Register::a3(), as::Register::a4(),  as::Register::a5(),
+      as::Register::a6(), as::Register::a7(),  as::Register::t2(),
 
-  llvm::SmallVector<as::Register, 32> floatRegs;
-  floatRegs.append(as::getFpTempRegisters().begin(),
-                   as::getFpTempRegisters().end());
-  floatRegs.append(as::getFpArgRegisters().begin(),
-                   as::getFpArgRegisters().end());
-  floatRegs.append(as::getFpSavedRegisters().begin(),
-                   as::getFpSavedRegisters().end());
+      as::Register::t3(), as::Register::t4(),  as::Register::t5(),
+      as::Register::t6(),
+
+      as::Register::s0(), as::Register::s1(),  as::Register::s2(),
+      as::Register::s3(), as::Register::s4(),  as::Register::s5(),
+      as::Register::s6(), as::Register::s7(),  as::Register::s8(),
+      as::Register::s9(), as::Register::s10(), as::Register::s11(),
+  };
+
+  static llvm::ArrayRef<as::Register> floatRegs = {
+      as::Register::fa0(), as::Register::fa1(),  as::Register::fa2(),
+      as::Register::fa3(), as::Register::fa4(),  as::Register::fa5(),
+      as::Register::fa6(), as::Register::fa7(),
+
+      as::Register::ft0(), as::Register::ft1(),  as::Register::ft2(),
+      as::Register::ft3(), as::Register::ft4(),  as::Register::ft5(),
+      as::Register::ft6(), as::Register::ft7(),  as::Register::ft8(),
+      as::Register::ft9(), as::Register::ft10(), as::Register::ft11(),
+
+      as::Register::fs0(), as::Register::fs1(),  as::Register::fs2(),
+      as::Register::fs3(), as::Register::fs4(),  as::Register::fs5(),
+      as::Register::fs6(), as::Register::fs7(),  as::Register::fs8(),
+      as::Register::fs9(), as::Register::fs10(), as::Register::fs11(),
+  };
 
   context->setRegistersForAllocate(intRegs, floatRegs);
 }
@@ -99,25 +112,46 @@ IRTranslater::getOrCreateConstantLabel(int64_t value) {
 
 std::unique_ptr<as::Asm> IRTranslater::translate() {
   llvm::SmallVector<as::Section<as::Function> *> functions;
+  llvm::SmallVector<as::Section<as::Variable> *> variables;
 
+  bool fail = false;
   for (ir::InstructionStorage *inst : *module->getIR()->getGlobalBlock()) {
     auto globalVar =
         inst->getDefiningInst<ir::inst::GlobalVariableDefinition>();
     assert(globalVar && "Expected global variable");
-    translateGlobalVariable(globalVar);
+    auto *variable = translateGlobalVariable(globalVar);
+    if (!variable) {
+      fail = true;
+      break;
+    }
+    variables.emplace_back(new as::Section<as::Variable>({}, variable));
   }
 
-  for (ir::Function *function : *module->getIR()) {
-    if (!function->hasDefinition())
-      continue;
-    auto *asFunction = translateFunction(function);
-    assert(asFunction && "Function translation failed");
+  if (!fail) {
+    for (ir::Function *function : *module->getIR()) {
+      if (!function->hasDefinition())
+        continue;
+      auto *asFunction = translateFunction(function);
+      if (!asFunction) {
+        fail = true;
+        break;
+      }
+      assert(asFunction && "Function translation failed");
 
-    auto *section = new as::Section<as::Function>({}, asFunction);
-    functions.emplace_back(section);
+      auto *section = new as::Section<as::Function>({}, asFunction);
+      functions.emplace_back(section);
+    }
   }
 
-  return nullptr;
+  if (fail) {
+    for (auto *func : functions)
+      delete func;
+    for (auto *var : variables)
+      delete var;
+    return nullptr;
+  }
+
+  return std::make_unique<as::Asm>(functions, variables);
 }
 
 as::Function *IRTranslater::translateFunction(ir::Function *function) {
@@ -604,7 +638,9 @@ utils::LogicalResult translateInstruction(as::AsmBuilder &builder,
 
   if (!rule->restoreActively()) {
     for (const ir::Operand &operand : inst->getOperands()) {
-      translater.restoreOperand(builder, &operand);
+      if (translater.getSpillAnalysis()->getSpillInfo().restore.contains(
+              &operand))
+        translater.restoreOperand(builder, &operand);
     }
   }
 
@@ -631,9 +667,13 @@ utils::LogicalResult translateInstruction(as::AsmBuilder &builder,
 
 as::Block *translateBlock(as::AsmBuilder &builder,
                           FunctionTranslater &translater, ir::Block *block) {
+  as::AsmBuilder::InsertionGuard guard(builder);
   auto newBlock = translater.createBlock(block);
+  builder.setInsertionPointStart(newBlock);
+
   for (auto I = block->tempBegin(), E = block->end(); I != E; ++I) {
     ir::InstructionStorage *inst = *I;
+
     auto result = translateInstruction(builder, translater, inst);
     if (!result.succeeded()) {
       delete newBlock;
@@ -656,10 +696,18 @@ as::Function *FunctionTranslater::translate() {
 
   for (ir::Block *block : *function) {
     auto asBlock = translateBlock(builder, *this, block);
+    if (!asBlock) {
+      for (auto *b : blocks)
+        delete b;
+      return nullptr;
+    }
     blocks.emplace_back(asBlock);
   }
 
-  return new as::Function(blocks);
+  as::Function *newFunction = new as::Function(blocks);
+
+  substitueAnonymousRegisters(newFunction);
+  return newFunction;
 }
 
 void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
@@ -931,6 +979,78 @@ as::Register FunctionTranslater::createAnonRegister(as::RegisterType regType,
       as::CallingConvension::None, getAnonRegLabel());
   anonymousRegisterToSp.try_emplace(anon, sp, dataSize, isSigned);
   return anon;
+}
+
+void FunctionTranslater::substitueAnonymousRegisters(as::Function *function) {
+  llvm::SmallVector<as::Instruction *> toSubst;
+
+  function->walk([&](as::Instruction *inst) {
+    if (auto *mv = inst->dyn_cast<as::pseudo::Mv>()) {
+      if (mv->getRs().isAnonymous())
+        toSubst.emplace_back(inst);
+    } else if (auto *load = inst->dyn_cast<as::itype::Load>()) {
+      if (load->getBase().isAnonymous()) {
+        assert(load->getOffset()->isZero());
+        toSubst.emplace_back(inst);
+      }
+    } else if (auto *store = inst->dyn_cast<as::stype::Store>()) {
+      if (store->getBase().isAnonymous()) {
+        assert(store->getOffset()->isZero());
+        toSubst.emplace_back(inst);
+      }
+    }
+  });
+
+  as::AsmBuilder builder;
+  auto tempReg = getTranslateContext()->getTempRegisters()[0];
+  for (as::Instruction *inst : toSubst) {
+    as::AsmBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointBeforeInst(inst);
+    if (auto *mv = inst->dyn_cast<as::pseudo::Mv>()) {
+      auto [sp, dataSize, isSigned] = anonymousRegisterToSp.at(mv->getRs());
+      auto offset = sp.fromBottom();
+
+      auto imm = getImmOrLoad(builder, tempReg, offset);
+      if (imm) {
+        builder.create<as::itype::Addi>(mv->getRd(), as::Register::sp(), imm,
+                                        as::DataSize::doubleWord());
+      } else {
+        builder.create<as::rtype::Add>(mv->getRd(), as::Register::sp(), tempReg,
+                                       as::DataSize::doubleWord());
+      }
+    } else if (auto *load = inst->dyn_cast<as::itype::Load>()) {
+      auto [sp, dataSize, isSigned] = anonymousRegisterToSp.at(load->getBase());
+      auto offset = sp.fromBottom();
+
+      auto imm = getImmOrLoad(builder, tempReg, offset);
+      if (imm) {
+        builder.create<as::itype::Load>(load->getDst(), as::Register::sp(), imm,
+                                        dataSize, isSigned);
+      } else {
+        builder.create<as::rtype::Add>(tempReg, as::Register::sp(), tempReg,
+                                       as::DataSize::doubleWord());
+        builder.create<as::itype::Load>(load->getDst(), tempReg,
+                                        getImmediate(0), dataSize, isSigned);
+      }
+    } else /* store */ {
+      auto *store = inst->cast<as::stype::Store>();
+      auto [sp, dataSize, isSigned] =
+          anonymousRegisterToSp.at(store->getBase());
+      auto offset = sp.fromBottom();
+      auto imm = getImmOrLoad(builder, tempReg, offset);
+      if (imm) {
+        builder.create<as::stype::Store>(as::Register::sp(), store->getBase(),
+                                         imm, dataSize);
+      } else {
+        builder.create<as::rtype::Add>(tempReg, as::Register::sp(), tempReg,
+                                       as::DataSize::doubleWord());
+        builder.create<as::stype::Store>(tempReg, store->getBase(),
+                                         getImmediate(0), dataSize);
+      }
+    }
+
+    inst->remove();
+  }
 }
 
 TranslationRuleSet::TranslationRuleSet() = default;

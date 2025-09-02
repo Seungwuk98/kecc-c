@@ -1,0 +1,11 @@
+// RUN: kecc-translate %s | FileCheck %s
+
+
+fun i32 @test () {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  ret 0:i32
+}

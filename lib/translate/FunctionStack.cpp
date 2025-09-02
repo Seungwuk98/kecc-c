@@ -2,6 +2,11 @@
 
 namespace kecc {
 
+size_t StackPoint::fromBottom() const {
+  assert(stack != nullptr);
+  return stack->fromBottom(*this);
+}
+
 size_t FunctionStack::fromBottom(const StackPoint &point) const {
   size_t offset = 0;
 

@@ -25,7 +25,15 @@ class Instruction;
 class Asm {
 public:
   void print(llvm::raw_ostream &os) const;
+
+  Asm(llvm::ArrayRef<Section<Function> *> functions,
+      llvm::ArrayRef<Section<Variable> *> variables)
+      : functions(functions.begin(), functions.end()),
+        variables(variables.begin(), variables.end()) {}
   ~Asm();
+
+  llvm::ArrayRef<Section<Function> *> getFunctions() const { return functions; }
+  llvm::ArrayRef<Section<Variable> *> getVariables() const { return variables; }
 
 private:
   llvm::SmallVector<Section<Function> *> functions;

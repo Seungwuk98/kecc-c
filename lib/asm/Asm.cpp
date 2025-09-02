@@ -4,6 +4,13 @@
 
 namespace kecc::as {
 
+Asm::~Asm() {
+  for (auto *section : functions)
+    delete section;
+  for (auto *section : variables)
+    delete section;
+}
+
 void Asm::print(llvm::raw_ostream &os) const {
   for (const auto *section : functions) {
     section->print(os, 0);
@@ -16,6 +23,11 @@ void Asm::print(llvm::raw_ostream &os) const {
   }
 }
 
+Function::~Function() {
+  for (auto *block : blocks)
+    delete block;
+}
+
 void Function::print(llvm::raw_ostream &os, size_t indent) const {
   for (const auto *block : blocks) {
     block->print(os, indent);
@@ -26,6 +38,11 @@ void Function::print(llvm::raw_ostream &os, size_t indent) const {
 void Function::walk(llvm::function_ref<void(Instruction *)> fn) const {
   for (auto *block : blocks)
     block->walk(fn);
+}
+
+Variable::~Variable() {
+  for (auto *directive : directives)
+    delete directive;
 }
 
 void Variable::print(llvm::raw_ostream &os, size_t indent) const {

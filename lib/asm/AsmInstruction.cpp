@@ -348,6 +348,10 @@ Ori::Ori(Register rd, Register rs1, Immediate *imm)
     : Base(TypeID::get<Ori>(), rd, rs1, imm) {}
 std::string Ori::toString() const { return "ori"; }
 
+Andi::Andi(Register rd, Register rs1, Immediate *imm)
+    : Base(TypeID::get<Andi>(), rd, rs1, imm) {}
+std::string Andi::toString() const { return "andi"; }
+
 Slli::Slli(Register rd, Register rs1, Immediate *imm, DataSize dataSize)
     : Base(TypeID::get<Slli>(), rd, rs1, imm), dataSize(dataSize) {}
 
@@ -388,8 +392,8 @@ void SType::print(llvm::raw_ostream &os) const {
 
 namespace stype {
 
-Store::Store(Register rs1, Register rs2, Immediate *imm, DataSize dataSize)
-    : Base(TypeID::get<Store>(), rs1, rs2, imm), dataSize(dataSize) {}
+Store::Store(Register base, Register src, Immediate *imm, DataSize dataSize)
+    : Base(TypeID::get<Store>(), base, src, imm), dataSize(dataSize) {}
 
 std::string Store::toString() const {
   if (dataSize.isInt())

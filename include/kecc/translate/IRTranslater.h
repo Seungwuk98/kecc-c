@@ -143,6 +143,8 @@ private:
   void saveCalleeSavedRegisters(as::AsmBuilder &builder);
   void loadCalleeSavedRegisters(as::AsmBuilder &builder);
 
+  void substitueAnonymousRegisters(as::Function *func);
+
   IRTranslater *irTranslater;
   TranslateContext *context;
   ir::Module *module;
