@@ -25,6 +25,7 @@ enum AnalysisKind {
   Dominance,
   LiveRange,
   Liveness,
+  CallLiveness,
   Loop,
 };
 
@@ -48,6 +49,8 @@ static llvm::cl::opt<AnalysisKind> dumpAnalysisKind(
         clEnumValN(Dominance, "dominance", "Dump dominance analysis results"),
         clEnumValN(LiveRange, "live-range", "Dump live range analysis results"),
         clEnumValN(Liveness, "liveness", "Dump liveness analysis results"),
+        clEnumValN(CallLiveness, "call-liveness",
+                   "Dump call liveness analysis results"),
         clEnumValN(Loop, "loop", "Dump loop analysis results")),
     llvm::cl::desc("Dump analysis results to the specified file"));
 
@@ -118,6 +121,14 @@ int dumpAnalysis(ir::Module *module) {
     auto livenessAnalysis = LivenessAnalysis::create(module);
     assert(livenessAnalysis && "Failed to create liveness analysis");
     dump([&](llvm::raw_ostream &os) { livenessAnalysis->dump(os); });
+    break;
+  }
+  case cl::CallLiveness: {
+    module->getOrCreateAnalysis<LiveRangeAnalysis>(module);
+    module->getOrCreateAnalysis<LivenessAnalysis>(module);
+    auto callLivenessAnalysis = CallLivenessAnalysis::create(module);
+    assert(callLivenessAnalysis && "Failed to create call liveness analysis");
+    dump([&](llvm::raw_ostream &os) { callLivenessAnalysis->dump(os); });
     break;
   }
   case cl::Loop: {

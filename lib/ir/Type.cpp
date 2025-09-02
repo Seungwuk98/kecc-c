@@ -51,4 +51,10 @@ Type::getSizeAndAlign(const StructSizeMap &sizeMap) const {
   return getImpl()->getSizeAndAlignFn()(*this, sizeMap);
 }
 
+bool Type::isSignedInt() const {
+  if (auto intType = dyn_cast<IntT>())
+    return intType.isSigned();
+  return false;
+}
+
 } // namespace kecc::ir

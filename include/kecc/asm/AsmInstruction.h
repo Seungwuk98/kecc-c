@@ -52,7 +52,7 @@ private:
 
 class ValueImmediate final : public Immediate {
 public:
-  ValueImmediate(std::size_t value) : Immediate(Kind::Value), value(value) {}
+  ValueImmediate(std::int64_t value) : Immediate(Kind::Value), value(value) {}
 
   std::int64_t getValue() const { return value; }
 
@@ -110,7 +110,7 @@ class AsmBuilder;
 
 class DataSize {
 public:
-  enum class Kind {
+  enum Kind {
     Byte,
     Half,
     Word,
@@ -159,7 +159,23 @@ public:
            kind == Kind::Double;
   }
 
-  size_t getByteSize() const;
+  size_t getByteSize() const {
+    switch (kind) {
+    case Byte:
+      return 1;
+    case Half:
+      return 2;
+    case Word:
+      return 4;
+    case Double:
+      return 8;
+    case SinglePrecision:
+      return 4;
+    case DoublePrecision:
+      return 8;
+    }
+  }
+  Kind getKind() const { return kind; }
 
 private:
   Kind kind;

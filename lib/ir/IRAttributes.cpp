@@ -485,6 +485,20 @@ void InitializerAttr::printInitializer(IRPrintContext &context) const {
       });
 }
 
+llvm::SMRange InitializerAttr::getRange() const {
+  return llvm::TypeSwitch<Attribute, llvm::SMRange>(*this)
+      .Case([&](ASTInitializerList initializerList) {
+        return initializerList.getRange();
+      })
+      .Case([&](ASTUnaryOp unaryOp) { return unaryOp.getRange(); })
+      .Case([&](ASTInteger integer) { return integer.getRange(); })
+      .Case([&](ASTFloat floatAttr) { return floatAttr.getRange(); })
+      .Case([&](ASTGroupOp groupAttr) { return groupAttr.getRange(); })
+      .Default([&](Attribute) -> llvm::SMRange {
+        llvm_unreachable("Unsupported Initializer Attribute type for getRange");
+      });
+}
+
 //==------------------------------------------------------------------------==//
 /// AST Initializer List
 //==------------------------------------------------------------------------==//

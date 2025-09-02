@@ -6,12 +6,13 @@
 
 namespace kecc {
 
-class TranslateRuleSet;
+class TranslationRuleSet;
 
 struct TranslateContextImpl;
 class TranslateContext {
 public:
-  TranslateContext() = default;
+  TranslateContext();
+  ~TranslateContext();
 
   llvm::ArrayRef<as::Register> getTempRegisters() const;
 
@@ -26,7 +27,7 @@ public:
 
   as::AnonymousRegisterStorage *getAnonymousRegStorage();
 
-  TranslateRuleSet *getTranslateRuleSet();
+  TranslationRuleSet *getTranslateRuleSet();
 
 private:
   std::unique_ptr<TranslateContextImpl> impl;

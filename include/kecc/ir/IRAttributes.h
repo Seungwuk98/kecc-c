@@ -156,6 +156,7 @@ public:
 
   Attribute interpret() const;
   void printInitializer(IRPrintContext &context) const;
+  llvm::SMRange getRange() const;
 
   static bool classof(Attribute attr);
 };

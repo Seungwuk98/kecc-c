@@ -1,3 +1,4 @@
+#include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/IRAttributes.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/IRTransforms.h"
@@ -270,7 +271,15 @@ CanonicalizeStruct::CanonicalizeStruct() {}
 CanonicalizeStruct::~CanonicalizeStruct() = default;
 
 void CanonicalizeStruct::init(Module *module) {
-  auto [structSizeMap, structFieldsMap] = module->calcStructSizeMap();
+  StructSizeAnalysis *structSizeAnalysis =
+      module->getAnalysis<StructSizeAnalysis>();
+  if (!structSizeAnalysis) {
+    auto newAnalysis = StructSizeAnalysis::create(module);
+    structSizeAnalysis = newAnalysis.get();
+    module->insertAnalysis(std::move(newAnalysis));
+  }
+  const auto &structSizeMap = structSizeAnalysis->getStructSizeMap();
+  const auto &structFieldsMap = structSizeAnalysis->getStructFieldsMap();
 
   llvm::DenseMap<Function *, llvm::DenseMap<size_t, Phi>> retIdx2ArgMap;
   for (Function *function : *module->getIR()) {
@@ -626,9 +635,8 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
       auto voidInt64_2Ptr =
           builder.create<inst::TypeCast>(load.getRange(), int64_2Ptr, voidPtrT);
 
-      if (pointer.getType() != voidPtrT)
-        pointer =
-            builder.create<inst::TypeCast>(load.getRange(), pointer, voidPtrT);
+      pointer =
+          builder.create<inst::TypeCast>(load.getRange(), pointer, voidPtrT);
 
       builder.create<inst::Call>(
           load.getRange(), memcpy,
@@ -646,6 +654,22 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
       auto newLoad1 = builder.create<inst::Load>(load.getRange(), ptr1);
       newValues.emplace_back(newLoad1);
     }
+  } else if (auto constant = value.getDefiningInst<inst::OutlineConstant>()) {
+    auto inlineConstant =
+        constant.getConstant().getDefiningInst<ir::inst::Constant>();
+    assert(inlineConstant && "Expected constant value");
+    auto constantValue = inlineConstant.getValue();
+    assert(constantValue.isa<ir::ConstantUndefAttr>() && "Expected undef");
+
+    IRBuilder::InsertionGuard guard(builder);
+
+    builder.setInsertionPoint(module->getIR()->getConstantBlock());
+    auto undefI64 = builder.create<ir::inst::Constant>(
+        {}, ir::ConstantUndefAttr::get(module->getContext(), i64T));
+
+    newValues.emplace_back(undefI64);
+    if (size > 8)
+      newValues.emplace_back(undefI64);
   } else {
     llvm_unreachable("Unexpected instruction type for struct manipulation.");
   }
@@ -1000,6 +1024,15 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
         load.getRange(), memcpy,
         llvm::SmallVector<Value>{voidStructPtr, pointer, constMemSize});
     storedPointer = structValuePtr;
+  } else if (auto outlineConstant =
+                 inst->getDefiningInst<inst::OutlineConstant>()) {
+    IRBuilder builder(module->getContext());
+    builder.setInsertionPoint(
+        inst->getParentBlock()->getParentFunction()->getAllocationBlock());
+
+    storedPointer = builder.create<inst::LocalVariable>(
+        {}, PointerT::get(builder.getContext(), value.getType()));
+
   } else
     llvm_unreachable("Unexpected instruction type for struct manipulation.");
 

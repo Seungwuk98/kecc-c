@@ -150,4 +150,70 @@ CallLivenessAnalysis::create(ir::Module *module) {
       new CallLivenessAnalysis(module, std::move(liveIn)));
 }
 
+const llvm::DenseSet<LiveRange> &
+CallLivenessAnalysis::getLiveIn(ir::InstructionStorage *inst) const {
+  assert(inst->hasTrait<ir::CallLike>() && "Instruction must be CallLike");
+  return liveIn.at(inst);
+}
+
+void CallLivenessAnalysis::dump(llvm::raw_ostream &os) const {
+  llvm::SmallVector<ir::InstructionStorage *> insts;
+  insts.reserve(liveIn.size());
+
+  for (const auto &[key, _] : liveIn)
+    insts.emplace_back(key);
+
+  ir::IRPrintContext printContext(llvm::outs());
+
+  for (ir::Function *func : *getModule()->getIR()) {
+    func->registerAllInstInfo(printContext);
+  }
+
+  llvm::sort(insts, [&](const auto *l, const auto *r) {
+    ir::Function *lFunc = l->getParentBlock()->getParentFunction();
+    ir::Function *rFunc = r->getParentBlock()->getParentFunction();
+    if (lFunc != rFunc)
+      return lFunc->getName() < rFunc->getName();
+
+    auto lResult0 = l->getResult(0);
+    auto rResult0 = r->getResult(0);
+
+    auto lRid = printContext.getId(lResult0);
+    auto rRid = printContext.getId(rResult0);
+
+    return lRid < rRid;
+  });
+
+  llvm::DenseMap<LiveRange, size_t> currLRToId;
+  LiveRangeAnalysis *liveRangeAnalysis =
+      getModule()->getAnalysis<LiveRangeAnalysis>();
+  assert(liveRangeAnalysis);
+  if (auto spillAnalysis = getModule()->getAnalysis<SpillAnalysis>()) {
+    currLRToId =
+        liveRangeAnalysis->getCurrLRIdMap(spillAnalysis->getSpillInfo());
+  } else {
+    currLRToId = liveRangeAnalysis->getCurrLRIdMap();
+  }
+
+  ir::Function *prevFunc = nullptr;
+  os << "Call Liveness dump:\n";
+  for (const auto *inst : insts) {
+    if (prevFunc != inst->getParentBlock()->getParentFunction()) {
+      prevFunc = inst->getParentBlock()->getParentFunction();
+      os << "Call instructions in function @" << prevFunc->getName() << ":\n";
+    }
+    const auto liveInVars = liveIn.at(inst);
+    llvm::SmallVector<LiveRange> lives(liveInVars.begin(), liveInVars.end());
+    llvm::sort(lives, [&](auto lr0, auto lr1) {
+      return currLRToId.at(lr0) < currLRToId.at(lr1);
+    });
+
+    inst->print(os);
+    os << " <-- live in:";
+    for (LiveRange lr : lives)
+      os << " L" << currLRToId.at(lr);
+    os << '\n';
+  }
+}
+
 } // namespace kecc

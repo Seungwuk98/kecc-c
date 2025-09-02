@@ -1,3 +1,4 @@
+#include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/IRBuilder.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/IRTransforms.h"
@@ -180,7 +181,10 @@ static void convertAllValues(Module *module, const StructSizeMap &sizeMap) {
 } // namespace
 
 PassResult OutlineMultipleResults::run(Module *module) {
-  auto [sizeMap, fieldsMap] = module->calcStructSizeMap();
+  auto *structSizeAnalysis =
+      module->getOrCreateAnalysis<StructSizeAnalysis>(module);
+  const auto &sizeMap = structSizeAnalysis->getStructSizeMap();
+  const auto &fieldsMap = structSizeAnalysis->getStructFieldsMap();
 
   llvm::DenseMap<Function *, llvm::DenseMap<size_t, Phi>> retPhisMap;
   llvm::SmallVector<inst::Call> callsToUpdate;

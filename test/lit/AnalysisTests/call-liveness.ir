@@ -1,0 +1,82 @@
+// RUN: kecc-opt %s --inline-call --outline-constant --dump-analysis=live-range | FileCheck %s --check-prefix=LR
+// RUN: kecc-opt %s --inline-call --outline-constant --dump-analysis=liveness | FileCheck %s --check-prefix=LN
+// RUN: kecc-opt %s --inline-call --outline-constant --dump-analysis=call-liveness | FileCheck %s --check-prefix=CLN
+
+
+fun i32 @callee() 
+
+fun i32 @test_func() {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:i0:i32 = add 0:i32 1:i32
+  %b0:i1:i32 = add 0:i32 2:i32
+  %b0:i2:i1 = typecast %b0:i0:i32 to i1
+  br %b0:i2:i1, b1(), b2()
+
+block b1:
+  %b1:i0:i32 = add 1:i32 %b0:i0:i32
+  %b1:i1:i32 = call @test_func:[ret:i32 params:()]*()
+  %b1:i2:i32 = add %b1:i0:i32 %b1:i1:i32
+  j b3(%b1:i2:i32)
+
+block b2:
+  j b3(0:i32)
+
+block b3:
+  %b3:p0:i32
+  %b3:i0:i32 = call @test_func:[ret:i32 params:()]*()
+  %b3:i1:i32 = add %b0:i1:i32 %b3:i0:i32
+  ret %b3:i1:i32
+}
+
+
+// LR: Live Range Analysis dump:
+// LR-LABEL: fun i32 @callee ()
+ 
+// LR-LABEL: fun i32 @test_func () {
+// LR-NEXT: init:
+// LR-NEXT:   bid: b0
+// LR-NEXT:   allocations:
+ 
+// LR-LABEL:  block b0:
+// LR-NEXT:    L0:i32 = outline constant 1:i32
+// LR-NEXT:    L1:i32 = add 0:i32 L0:i32
+// LR-NEXT:    L2:i32 = outline constant 2:i32
+// LR-NEXT:    L3:i32 = add 0:i32 L2:i32
+// LR-NEXT:    L4:i1 = typecast L1:i32 to i1
+// LR-NEXT:    br L4:i1, b1, b2
+ 
+// LR-LABEL:  block b1:
+// LR-NEXT:    L5:i32 = add 1:i32 L1:i32
+// LR-NEXT:    L6:i32 = inline call @test_func:[ret:i32 params:()]))
+// LR-NEXT:    L7:i32 = add L5:i32 L6:i32
+// LR-NEXT:    L9 = L7
+// LR-NEXT:    j b3
+ 
+// LR-LABEL:  block b2:
+// LR-NEXT:    L8:i32 = outline constant 0:i32
+// LR-NEXT:    L9 = L8
+// LR-NEXT:    j b3
+ 
+// LR-LABEL:  block b3:
+// LR-NEXT:    L10:i32 = inline call @test_func:[ret:i32 params:()]))
+// LR-NEXT:    L11:i32 = add L3:i32 L10:i32
+// LR-NEXT:    ret L11:i32
+// LR-NEXT:  }
+
+
+// LN: Liveness Analysis dump:
+// LN-NEXT: Function: @test_func
+// LN-NEXT:   block b0: L1, L3
+// LN-NEXT:   block b1: L3
+// LN-NEXT:   block b2: L3
+// LN-NEXT:   block b3: <empty>
+
+// CLN: Call Liveness dump:
+// CLN-LABEL: Call instructions in function @test_func:
+// CLN-NEXT: %b1:i1:i32 = inline call @test_func:[ret:i32 params:()]() <-- live in: L3 L5
+// CLN-NEXT: %b3:i0:i32 = inline call @test_func:[ret:i32 params:()]() <-- live in: L3
+

@@ -45,7 +45,6 @@ block b0:
 // CHECK-NEXT:    %b0:i11:unit* = typecast %l3:struct B* to unit*
 // CHECK-NEXT:    %b0:i12:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i10:unit*, %b0:i11:unit*, 24:i64)
 // CHECK-NEXT:    ret %b0:i4:i64, %b0:i6:i64
-
 }
 
 fun unit @callee_func1 (struct S, struct B) {

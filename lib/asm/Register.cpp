@@ -373,6 +373,8 @@ bool Register::isInteger() const {
 bool Register::isFloatingPoint() const {
   return impl->getType() == RegisterType::FloatingPoint;
 }
+int Register::getABIIndex() const { return impl->getABIIndex(); }
+bool Register::isArg() const { return impl->getABIKind() == ABIKind::Arg; }
 
 std::optional<std::pair<RegisterType, std::size_t>> Register::getTemp() const {
   if (impl->getABIKind() != ABIKind::Temp)
@@ -460,6 +462,10 @@ bool Register::definedAnonymousRegister(AnonymousRegisterStorage *storage,
   return storage->contains(name);
 }
 
+bool Register::isAnonymous() const {
+  return static_cast<int>(impl->getMnemonic()) == -1;
+}
+
 Register Register::createAnonymousRegister(AnonymousRegisterStorage *storage,
                                            RegisterType type,
                                            CallingConvension callingConvention,
@@ -484,6 +490,8 @@ Register Register::getAnonymousRegister(AnonymousRegisterStorage *storage,
 
 Register Register::getX(size_t index) { return detail::xRegisters[index]; }
 Register Register::getF(size_t index) { return detail::fRegisters[index]; }
+llvm::StringRef Register::getName() const { return impl->getPrintName(); }
+ABIKind Register::getABIKind() const { return impl->getABIKind(); }
 
 AnonymousRegisterStorage::AnonymousRegisterStorage() {}
 AnonymousRegisterStorage::~AnonymousRegisterStorage() = default;
@@ -503,4 +511,29 @@ Register AnonymousRegisterStorage::get(llvm::StringRef name) {
   return impls.at(name).get();
 }
 
+int CommonRegisterComparator::operator()(const Register &lhs,
+                                         const Register &rhs) const {
+  if (lhs.isAnonymous() && rhs.isAnonymous())
+    return lhs.getName().compare(rhs.getName());
+
+  if (lhs.isAnonymous())
+    return 1;
+
+  if (rhs.isAnonymous())
+    return -1;
+
+  if (lhs.isFloatingPoint() != rhs.isFloatingPoint())
+    return static_cast<int>(lhs.isFloatingPoint()) -
+           static_cast<int>(rhs.isFloatingPoint());
+
+  if (lhs.getABIKind() != rhs.getABIKind())
+    return static_cast<int>(lhs.getABIKind()) -
+           static_cast<int>(rhs.getABIKind());
+
+  if (lhs.getABIIndex() != rhs.getABIIndex())
+    return lhs.getABIIndex() - rhs.getABIIndex();
+
+  // same register
+  return 0;
+}
 } // namespace kecc::as

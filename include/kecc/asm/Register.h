@@ -140,6 +140,7 @@ public:
   bool isCallerSaved() const;
   bool isCalleeSaved() const;
   llvm::StringRef getDescription() const;
+  llvm::StringRef getName() const;
   bool isXRegister() const;
   bool isFRegister() const;
 
@@ -150,7 +151,10 @@ public:
   bool isTemp() const;
   bool isSaved() const;
 
+  bool isAnonymous() const;
+
   int getABIIndex() const;
+  ABIKind getABIKind() const;
 
   friend inline llvm::hash_code hash_value(const Register &reg) {
     return llvm::DenseMapInfo<RegisterImpl *>::getHashValue(reg.impl);

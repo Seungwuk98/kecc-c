@@ -290,7 +290,7 @@ PRINT_FUNC(Store) {
   printOperand(inst.getPointerAsOperand());
 }
 PRINT_FUNC(Call) {
-  os << "call ";
+  os << " = call ";
   printOperand(inst.getFunctionAsOperand());
   os << "(";
   for (size_t i = 0; i < inst.getArguments().size(); ++i) {

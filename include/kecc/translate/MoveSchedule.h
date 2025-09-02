@@ -41,12 +41,13 @@ MoveManagement<T>::MoveManagement(llvm::ArrayRef<T> dst, llvm::ArrayRef<T> src,
 }
 
 template <typename T> void MoveManagement<T>::swap(int a, int b) {
-  assert(nodeToIndex.contains(indexToNode[a]) &&
+  assert(nodeToIndex.contains(indexToNode.at(a)) &&
          "a must be a valid node index");
-  assert(nodeToIndex.contains(indexToNode[b]) &&
+  assert(nodeToIndex.contains(indexToNode.at(b)) &&
          "b must be a valid node index");
 
-  moveSchedule.emplace_back(Movement::Swap, indexToNode[a], indexToNode[b]);
+  moveSchedule.emplace_back(Movement::Swap, indexToNode.at(a),
+                            indexToNode.at(b));
   moveGraph[a] = moveGraph[b] = -1;
   moveGraphRev[a] = moveGraphRev[b] = -1;
   unresolvedNode.erase(a);
@@ -54,13 +55,14 @@ template <typename T> void MoveManagement<T>::swap(int a, int b) {
 }
 
 template <typename T> void MoveManagement<T>::move(int dst, int src) {
-  assert(nodeToIndex.contains(indexToNode[dst]) &&
+  assert(nodeToIndex.contains(indexToNode.at(dst)) &&
          "dst must be a valid node index");
-  assert(nodeToIndex.contains(indexToNode[src]) &&
+  assert(nodeToIndex.contains(indexToNode.at(src)) &&
          "src must be a valid node index");
   assert(moveGraph[dst] == -1 && "dst must not have any move scheduled to it");
 
-  moveSchedule.emplace_back(Movement::Move, indexToNode[dst], indexToNode[src]);
+  moveSchedule.emplace_back(Movement::Move, indexToNode.at(dst),
+                            indexToNode.at(src));
   moveGraph[src] = -1;
   moveGraphRev[dst] = -1;
   unresolvedNode.erase(dst);
@@ -72,14 +74,14 @@ void MoveManagement<T>::init(llvm::ArrayRef<T> dst, llvm::ArrayRef<T> src,
   assert(dst.size() == src.size() && "dst and src must have the same size");
 
   int index = 0;
-  indexToNode[index] = temp;
+  indexToNode.try_emplace(index, temp);
   nodeToIndex[temp] = index++;
 
   for (const auto &d : dst) {
     if (nodeToIndex.contains(d))
       continue;
 
-    indexToNode[index] = d;
+    indexToNode.try_emplace(index, d);
     nodeToIndex[d] = index++;
   }
 
@@ -87,7 +89,7 @@ void MoveManagement<T>::init(llvm::ArrayRef<T> dst, llvm::ArrayRef<T> src,
     if (nodeToIndex.contains(s))
       continue;
 
-    indexToNode[index] = s;
+    indexToNode.try_emplace(index, s);
     nodeToIndex[s] = index++;
   }
 

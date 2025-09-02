@@ -77,6 +77,8 @@ public:
     return static_cast<TypeImpl *>(impl);
   }
 
+  bool isSignedInt() const;
+
 private:
   TypeImpl *impl;
 };

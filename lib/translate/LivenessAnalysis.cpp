@@ -108,6 +108,8 @@ void LivenessAnalysisBuilder::build(ir::Module *module) {
       module->getAnalysis<LiveRangeAnalysis>();
 
   for (ir::Function *func : *module->getIR()) {
+    if (!func->hasDefinition())
+      continue;
     auto order = visitOrderAnalysis->getReversePreOrder(func);
     bool changed;
     do {

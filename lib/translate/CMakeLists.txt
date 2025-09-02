@@ -1,4 +1,3 @@
-add_subdirectory(TranslationRules)
 
 add_library(
   KeccTranslate
@@ -9,8 +8,10 @@ add_library(
   TranslateContext.cpp
   LiveRangeAnalysis.cpp
   LivenessAnalysis.cpp
+  CallLivenessAnalysis.cpp
   RegisterAllocation.cpp
   FunctionStack.cpp
+  DefaultTranslationRules.cpp
 )
 
 target_link_libraries(KeccTranslate
@@ -19,5 +20,4 @@ target_link_libraries(KeccTranslate
   MLIRSupport
   KeccIR
   KeccASM
-  KeccTranslationRules
 )

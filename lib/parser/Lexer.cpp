@@ -193,6 +193,7 @@ void Lexer::lexRegisterId() {
       currentKind = Token::Tok_identifier;
     } else {
       currentKind = Token::Tok_unknown;
+      break;
     }
     if (!lexNumberSequence())
       currentKind = Token::Tok_unknown;

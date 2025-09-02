@@ -69,6 +69,8 @@ public:
 
   ~Variable();
   void print(llvm::raw_ostream &os, size_t indent) const;
+  llvm::StringRef getLabel() const { return label; }
+  llvm::ArrayRef<Directive *> getDirectives() const { return directives; }
 
 private:
   std::string label;
@@ -239,7 +241,7 @@ private:
 
 class WordDirective : public Directive {
 public:
-  WordDirective(std::int32_t value) : Directive(Kind::Word), value(value) {}
+  WordDirective(std::uint32_t value) : Directive(Kind::Word), value(value) {}
   std::string toString() const override;
   std::uint32_t getValue() const { return value; }
 

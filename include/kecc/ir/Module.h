@@ -46,6 +46,17 @@ public:
     return nullptr;
   }
 
+  template <typename ConcreteAnalysis, typename... Args>
+  ConcreteAnalysis *getOrCreateAnalysis(Args &&...args) {
+    if (auto *analysis = getAnalysis<ConcreteAnalysis>()) {
+      return analysis;
+    }
+
+    auto analysis = ConcreteAnalysis::create(std::forward<Args>(args)...);
+    insertAnalysis(std::move(analysis));
+    return getAnalysis<ConcreteAnalysis>();
+  }
+
   template <typename ConcreteAnalysis>
   void insertAnalysis(std::unique_ptr<ConcreteAnalysis> analysis) {
     TypeID typeId = TypeID::get<ConcreteAnalysis>();
@@ -60,8 +71,6 @@ public:
   IRContext *getContext() const;
 
   void updatePredsAndSuccs();
-
-  std::pair<StructSizeMap, StructFieldsMap> calcStructSizeMap() const;
 
   void addBlockRelation(Block *pred, Block *succ) {
     predecessors[succ].insert(pred);

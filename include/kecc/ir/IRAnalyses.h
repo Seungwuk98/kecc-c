@@ -162,6 +162,25 @@ private:
   std::unique_ptr<LoopAnalysisImpl> impl;
 };
 
+class StructSizeAnalysis : public Analysis {
+public:
+  static std::unique_ptr<StructSizeAnalysis> create(Module *module);
+
+  const StructFieldsMap &getStructFieldsMap() const { return structFieldsMap; }
+  const StructSizeMap &getStructSizeMap() const { return structSizeMap; }
+
+private:
+  std::pair<StructSizeMap, StructFieldsMap> calcStructSizeMap() const;
+
+  StructSizeAnalysis(Module *module, StructFieldsMap structFieldsMap,
+                     StructSizeMap structSizeMap)
+      : Analysis(module), structFieldsMap(std::move(structFieldsMap)),
+        structSizeMap(std::move(structSizeMap)) {}
+
+  StructFieldsMap structFieldsMap;
+  StructSizeMap structSizeMap;
+};
+
 } // namespace kecc::ir
 
 namespace llvm {

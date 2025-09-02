@@ -12,7 +12,7 @@
 namespace kecc {
 
 struct TranslateContextImpl {
-  TranslateRuleSet translateRules;
+  TranslationRuleSet translateRules;
 
   llvm::SmallVector<as::Register, 32> tempIntRegisters;
   llvm::SmallVector<as::Register, 32> registersForAllocateInt;
@@ -20,6 +20,11 @@ struct TranslateContextImpl {
 
   as::AnonymousRegisterStorage anonymousRegStorage;
 };
+
+TranslateContext::TranslateContext()
+    : impl(std::make_unique<TranslateContextImpl>()) {}
+
+TranslateContext::~TranslateContext() = default;
 
 llvm::ArrayRef<as::Register> TranslateContext::getTempRegisters() const {
   return impl->tempIntRegisters;
@@ -185,7 +190,7 @@ as::AnonymousRegisterStorage *TranslateContext::getAnonymousRegStorage() {
   return &impl->anonymousRegStorage;
 }
 
-TranslateRuleSet *TranslateContext::getTranslateRuleSet() {
+TranslationRuleSet *TranslateContext::getTranslateRuleSet() {
   return &impl->translateRules;
 }
 

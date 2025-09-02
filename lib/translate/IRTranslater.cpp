@@ -1,38 +1,25 @@
 #include "kecc/translate/IRTranslater.h"
+#include "kecc/asm/Asm.h"
 #include "kecc/asm/AsmBuilder.h"
 #include "kecc/asm/AsmInstruction.h"
 #include "kecc/asm/Register.h"
+#include "kecc/ir/IRAnalyses.h"
+#include "kecc/ir/IRAttributes.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/IRTypes.h"
 #include "kecc/ir/Instruction.h"
+#include "kecc/ir/TypeAttributeSupport.h"
 #include "kecc/ir/WalkSupport.h"
 #include "kecc/translate/InterferenceGraph.h"
+#include "kecc/translate/MoveSchedule.h"
 #include "kecc/translate/SpillAnalysis.h"
+#include "kecc/utils/Diag.h"
+#include "llvm/ADT/TypeSwitch.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/SourceMgr.h"
 #include <format>
 
 namespace kecc {
-
-extern as::Block *translateBlock(as::AsmBuilder &builder,
-                                 FunctionTranslater &translater,
-                                 ir::Block *block);
-
-extern void registerBinayTranslationRules(TranslateContext *context);
-extern void registerUnaryTranslationRules(TranslateContext *context);
-extern void registerConstantTranslationRules(TranslateContext *context);
-extern void registerExitTranslationRules(TranslateContext *context);
-extern void registerCallTranslationRules(TranslateContext *context);
-extern void registerTypeCastTranslationRules(TranslateContext *context);
-extern void registerMemoryInstTranslationRules(TranslateContext *context);
-
-void registerDefaultTranslationRules(TranslateContext *context) {
-  registerBinayTranslationRules(context);
-  registerUnaryTranslationRules(context);
-  registerConstantTranslationRules(context);
-  registerExitTranslationRules(context);
-  registerCallTranslationRules(context);
-  registerTypeCastTranslationRules(context);
-  registerMemoryInstTranslationRules(context);
-}
 
 void defaultRegisterSetup(TranslateContext *context) {
   static llvm::ArrayRef<as::Register> tempIntRegs = {
@@ -60,6 +47,267 @@ void defaultRegisterSetup(TranslateContext *context) {
                    as::getFpSavedRegisters().end());
 
   context->setRegistersForAllocate(intRegs, floatRegs);
+}
+
+std::pair<llvm::StringRef, std::optional<as::DataSize>>
+IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
+  if (auto it = constantToLabelMap.find(constant);
+      it != constantToLabelMap.end()) {
+    return it->second;
+  }
+
+  auto label = std::format(".LC{}", constantIndex++);
+  as::Variable *newVariable;
+  as::DataSize dataSize = as::DataSize::word();
+  if (auto intConst = constant.dyn_cast<ir::ConstantIntAttr>()) {
+    auto quad = new as::QuadDirective(intConst.getValue());
+    auto variable = new as::Variable(label, {quad});
+  } else if (auto floatConst = constant.dyn_cast<ir::ConstantFloatAttr>()) {
+    auto value = floatConst.getValue();
+    auto bits = value.bitcastToAPInt();
+
+    std::uint64_t data;
+    as::Directive *directive;
+    if (floatConst.getFloatType().getBitWidth() == 4) {
+      data = bits.getZExtValue() & 0xFFFFFFFF;
+      dataSize = as::DataSize::singlePrecision();
+      directive = new as::WordDirective(static_cast<std::uint32_t>(data));
+    } else if (floatConst.getFloatType().getBitWidth() == 8) {
+      data = bits.getZExtValue();
+      dataSize = as::DataSize::doublePrecision();
+      directive = new as::QuadDirective(data);
+    } else {
+      llvm_unreachable("Unsupported float bit width");
+    }
+
+    newVariable = new as::Variable(label, {directive});
+  } else {
+    llvm_unreachable("Unsupported constant type");
+  }
+
+  globalVariables.emplace_back(newVariable);
+  constantToLabelMap.try_emplace(constant, newVariable->getLabel(), dataSize);
+  return {label, dataSize};
+}
+
+std::pair<llvm::StringRef, std::optional<as::DataSize>>
+IRTranslater::getOrCreateConstantLabel(int64_t value) {
+  auto constInt =
+      ir::ConstantIntAttr::get(module->getContext(), value, 64, true);
+  return getOrCreateConstantLabel(constInt);
+}
+
+std::unique_ptr<as::Asm> IRTranslater::translate() {
+  llvm::SmallVector<as::Section<as::Function> *> functions;
+
+  for (ir::InstructionStorage *inst : *module->getIR()->getGlobalBlock()) {
+    auto globalVar =
+        inst->getDefiningInst<ir::inst::GlobalVariableDefinition>();
+    assert(globalVar && "Expected global variable");
+    translateGlobalVariable(globalVar);
+  }
+
+  for (ir::Function *function : *module->getIR()) {
+    if (!function->hasDefinition())
+      continue;
+    auto *asFunction = translateFunction(function);
+    assert(asFunction && "Function translation failed");
+
+    auto *section = new as::Section<as::Function>({}, asFunction);
+    functions.emplace_back(section);
+  }
+
+  return nullptr;
+}
+
+as::Function *IRTranslater::translateFunction(ir::Function *function) {
+  FunctionTranslater translater(this, context, module, function);
+  return translater.translate();
+}
+
+as::Variable *IRTranslater::translateGlobalVariable(
+    ir::inst::GlobalVariableDefinition globalVar) {
+  auto type = globalVar.getType();
+
+  ir::StructSizeAnalysis *structAnalysis =
+      module->getOrCreateAnalysis<ir::StructSizeAnalysis>(module);
+  llvm::SmallVector<as::Directive *, 4> directives;
+  size_t currSize = 0;
+  if (auto astAttr = globalVar.getInitializer().cast<ir::InitializerAttr>()) {
+    globalVar.interpretInitializer();
+    if (module->getContext()->diag().hasError())
+      return nullptr;
+
+    translateGlobalVariableImpl(type, globalVar.getInitializer(), astAttr,
+                                structAnalysis, directives, currSize);
+  } else {
+    translateGlobalVariableImpl(type, nullptr, nullptr, structAnalysis,
+                                directives, currSize);
+  }
+
+  auto [size, align] = type.getSizeAndAlign(structAnalysis->getStructSizeMap());
+  assert(size == currSize && "Size mismatch");
+  (void)size;
+
+  return new as::Variable(globalVar.getName(), directives);
+}
+
+void IRTranslater::translateGlobalVariableImpl(
+    ir::Type type, ir::Attribute init, ir::InitializerAttr astAttr,
+    ir::StructSizeAnalysis *structSizeAnalysis,
+    llvm::SmallVectorImpl<as::Directive *> &directives, size_t &currSize) {
+
+  auto isZero = !init;
+  if (auto array = init.dyn_cast_or_null<ir::ArrayAttr>()) {
+    if (array.getValues().empty())
+      isZero = true;
+  }
+
+  if (isZero) {
+    auto [size, align] =
+        type.getSizeAndAlign(structSizeAnalysis->getStructSizeMap());
+    if (size < align)
+      size = align;
+
+    directives.emplace_back(new as::ZeroDirective(size));
+    currSize += size;
+    return;
+  }
+
+  utils::DiagEngine &diag = type.getContext()->diag();
+  llvm::TypeSwitch<ir::Type, void>(type)
+      .Case([&](ir::IntT intT) {
+        auto intAttr = init.dyn_cast<ir::ConstantIntAttr>();
+        if (!intAttr) {
+          diag.report(astAttr.getRange(), llvm::SourceMgr::DK_Error,
+                      "Initializer type mismatch: expected integer");
+          return;
+        }
+        auto bitWidth = intT.getBitWidth();
+        auto value = intAttr.getValue();
+        as::Directive *intDirective;
+
+        as::DataSize dataSize = getDataSize(intT);
+        switch (dataSize.getKind()) {
+        case as::DataSize::Byte: {
+          intDirective = new as::ByteDirective(value & 0xFF);
+          break;
+        }
+        case as::DataSize::Half: {
+          intDirective = new as::HalfDirective(value & 0xFFFF);
+          break;
+        }
+        case as::DataSize::Word: {
+          intDirective = new as::WordDirective(value & 0xFFFFFFFF);
+          break;
+        }
+        case as::DataSize::Double: {
+          intDirective = new as::QuadDirective(value);
+          break;
+        }
+        default:
+          llvm_unreachable("Unsupported integer data size");
+        }
+
+        currSize += dataSize.getByteSize();
+      })
+
+      .Case([&](ir::FloatT floatT) {
+        auto floatAttr = init.dyn_cast<ir::ConstantFloatAttr>();
+        if (!floatAttr) {
+          diag.report(astAttr.getRange(), llvm::SourceMgr::DK_Error,
+                      "Initializer type mismatch: expected float");
+          return;
+        }
+
+        auto value = floatAttr.getValue();
+        auto bits = value.bitcastToAPInt();
+
+        std::uint64_t data;
+        as::Directive *directive;
+        if (floatT.getBitWidth() == 32) {
+          data = bits.getZExtValue() & 0xFFFFFFFF;
+          directive = new as::WordDirective(static_cast<std::uint32_t>(data));
+        } else if (floatT.getBitWidth() == 64) {
+          data = bits.getZExtValue();
+          directive = new as::QuadDirective(data);
+        } else {
+          diag.report(astAttr.getRange(), llvm::SourceMgr::DK_Error,
+                      "Unsupported float bit width");
+          return;
+        }
+
+        directives.emplace_back(directive);
+        currSize += floatT.getBitWidth() / ir::BITS_OF_BYTE;
+      })
+
+      .Case([&](ir::ArrayT arrayT) {
+        auto arrayAttr = init.dyn_cast<ir::ArrayAttr>();
+        if (!arrayAttr) {
+          diag.report(astAttr.getRange(), llvm::SourceMgr::DK_Error,
+                      "Expected array initalizer");
+          return;
+        }
+
+        auto arrayInitializer = astAttr.cast<ir::ASTInitializerList>();
+        auto elementT = arrayT.getElementType();
+        for (const auto &[value, ast] :
+             llvm::zip(arrayAttr.getValues(), arrayInitializer.getValues())) {
+          translateGlobalVariableImpl(elementT, value, ast, structSizeAnalysis,
+                                      directives, currSize);
+        }
+
+        if (arrayT.getSize() < arrayAttr.getValues().size()) {
+          auto [size, align] =
+              elementT.getSizeAndAlign(structSizeAnalysis->getStructSizeMap());
+          if (size < align)
+            size = align;
+
+          auto zeroSize =
+              size * (arrayT.getSize() - arrayAttr.getValues().size());
+          directives.emplace_back(new as::ZeroDirective(zeroSize));
+          currSize += zeroSize;
+        }
+      })
+
+      .Case([&](ir::NameStruct structT) {
+        auto arrayAttr = init.dyn_cast<ir::ArrayAttr>();
+        if (!arrayAttr) {
+          diag.report(astAttr.getRange(), llvm::SourceMgr::DK_Error,
+                      "Expected array initalizer");
+          return;
+        }
+
+        auto arrayInitializer = astAttr.cast<ir::ASTInitializerList>();
+        const auto &[size, align, offsets] =
+            structSizeAnalysis->getStructSizeMap().at(structT.getName());
+
+        auto fields =
+            structSizeAnalysis->getStructFieldsMap().at(structT.getName());
+
+        size_t structSize = 0;
+        for (const auto &[idx, field, offset] :
+             llvm::enumerate(fields, offsets)) {
+          if (offset != structSize) {
+            auto zeroSize = offset - structSize;
+            directives.emplace_back(new as::ZeroDirective(zeroSize));
+            structSize += zeroSize;
+          }
+
+          translateGlobalVariableImpl(
+              field,
+              idx < arrayAttr.getValues().size() ? arrayAttr.getValues()[idx]
+                                                 : nullptr,
+              idx < arrayInitializer.getValues().size()
+                  ? arrayInitializer.getValues()[idx]
+                  : nullptr,
+              structSizeAnalysis, directives, structSize);
+        }
+
+        currSize += structSize;
+      })
+      .Default(
+          [&](ir::Type) { llvm_unreachable("Can't initialize this type"); });
 }
 
 FunctionTranslater::FunctionTranslater(IRTranslater *translater,
@@ -92,8 +340,8 @@ void FunctionTranslater::init() {
   if (hasCall) {
     stack.setReturnAddressSize(module->getContext()->getArchitectureByteSize());
     auto sp = stack.returnAddress(0);
-    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-    anonymousRegisterToSp.try_emplace(anon, sp);
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp,
+                                   as::DataSize::doubleWord(), false);
     returnAddressMemory = anon;
   }
 
@@ -122,8 +370,11 @@ void FunctionTranslater::init() {
     auto sp = stack.calleeSavedRegister(totalCalleeSavedSize);
     totalCalleeSavedSize += module->getContext()->getArchitectureByteSize();
 
-    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-    anonymousRegisterToSp.try_emplace(anon, sp);
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp,
+                                   reg.isFloatingPoint()
+                                       ? as::DataSize::doublePrecision()
+                                       : as::DataSize::doubleWord(),
+                                   false);
   }
 
   stack.setCalleeSavedRegistersSize(totalCalleeSavedSize);
@@ -140,8 +391,8 @@ void FunctionTranslater::init() {
     auto dataSize = getDataSize(type);
     auto sp = stack.localVariable(totalLocalVarSize);
     totalLocalVarSize += dataSize.getByteSize();
-    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-    anonymousRegisterToSp.try_emplace(anon, std::make_pair(sp, dataSize));
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp, dataSize,
+                                   type.isSignedInt());
     localVariablesInfo.emplace_back(anon);
   }
   stack.setLocalVariablesSize(totalLocalVarSize);
@@ -158,14 +409,14 @@ void FunctionTranslater::init() {
       break;
 
     auto liveRange = liveRangeAnalysis->getLiveRange(function, arg);
+    auto dataSize = getDataSize(arg.getType());
 
     if (arg.getType().isa<ir::FloatT>()) {
       if (argFloatIndex >= getFloatArgRegisters().size()) {
         auto sp = stack.functionArgument(offset);
         offset += module->getContext()->getArchitectureByteSize();
-        auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-        anonymousRegisterToSp.try_emplace(anon, sp);
-
+        auto anon =
+            createAnonRegister(as::RegisterType::Integer, sp, dataSize, false);
         if (isSpilled(liveRange)) {
           spillMemories.try_emplace(liveRange, anon);
         }
@@ -177,8 +428,8 @@ void FunctionTranslater::init() {
       if (argIntIndex >= getIntArgRegisters().size()) {
         auto sp = stack.functionArgument(offset);
         offset += module->getContext()->getArchitectureByteSize();
-        auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-        anonymousRegisterToSp.try_emplace(anon, sp);
+        auto anon = createAnonRegister(as::RegisterType::Integer, sp, dataSize,
+                                       arg.getType().isSignedInt());
 
         if (isSpilled(liveRange)) {
           spillMemories.try_emplace(liveRange, anon);
@@ -203,37 +454,60 @@ void FunctionTranslater::init() {
     auto dataSize = getDataSize(type);
     auto sp = stack.spilledRegister(totalSpillSize);
     totalSpillSize += dataSize.getByteSize();
-    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-    anonymousRegisterToSp.try_emplace(anon, std::make_pair(sp, dataSize));
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp, dataSize,
+                                   type.isSignedInt());
     spillMemories.try_emplace(liveRange, anon);
   }
 
   stack.setSpilledRegistersSize(totalCalleeSavedSize);
 }
 
+as::Register FunctionTranslater::getRegister(ir::Value value) {
+  return regAlloc.getRegister(value);
+}
+
+as::Register FunctionTranslater::getRegister(LiveRange liveRange) {
+  return regAlloc.getRegister(function, liveRange);
+}
+
+as::Register
+FunctionTranslater::getOperandRegister(const ir::Operand *operand) {
+  assert(!operand->isConstant() &&
+         "Constant operands should be handled separately");
+  if (auto it = spillAnalysis->getSpillInfo().restore.find(operand);
+      it != spillAnalysis->getSpillInfo().restore.end()) {
+    auto restoredLiveRange = it->second;
+    return regAlloc.getRegister(function, restoredLiveRange);
+  }
+  return getRegister(*operand);
+}
+
 llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
     as::AsmBuilder &builder,
-    llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas) {
+    llvm::ArrayRef<std::pair<as::Register, ir::Type>> datas) {
   size_t totalSize = 0u;
 
-  llvm::SmallVector<StackPoint> stackPoint;
+  llvm::SmallVector<std::tuple<StackPoint, as::DataSize, bool>> stackPoint;
   stackPoint.reserve(datas.size());
-  for (const auto &[reg, dataSize] : datas) {
-    stackPoint.emplace_back(stack.callerSavedRegister(totalSize));
+  for (const auto &[reg, type] : datas) {
+    auto dataSize = getDataSize(type);
+    stackPoint.emplace_back(stack.callerSavedRegister(totalSize), dataSize,
+                            type.isSignedInt());
     totalSize += dataSize.getByteSize();
   }
 
   llvm::SmallVector<as::Register> anonRegs;
   anonRegs.reserve(datas.size());
-  for (const auto &sp : stackPoint) {
-    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-    anonymousRegisterToSp.try_emplace(anon, sp);
+  for (const auto &[sp, dataSize, isSigned] : stackPoint) {
+    auto anon =
+        createAnonRegister(as::RegisterType::Integer, sp, dataSize, isSigned);
     anonRegs.emplace_back(anon);
   }
 
   for (size_t i = 0; i < datas.size(); ++i) {
-    const auto &[reg, dataSize] = datas[i];
+    const auto &[reg, type] = datas[i];
     const auto &anonStackReg = anonRegs[i];
+    auto dataSize = std::get<1>(stackPoint[i]);
 
     storeData(builder, *this, anonStackReg, reg, dataSize, 0);
   }
@@ -243,15 +517,16 @@ llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
 
 void FunctionTranslater::loadCallerSavedRegisters(
     as::AsmBuilder &builder, llvm::ArrayRef<as::Register> stackpointers,
-    llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas) {
+    llvm::ArrayRef<std::pair<as::Register, ir::Type>> datas) {
   assert(stackpointers.size() == datas.size() &&
          "Stack pointers and data sizes must match in size");
 
   for (size_t i = 0; i < stackpointers.size(); ++i) {
     const auto &sp = stackpointers[i];
-    const auto &[reg, dataSize] = datas[i];
+    const auto &[reg, type] = datas[i];
+    auto dataSize = getDataSize(type);
 
-    loadData(builder, *this, reg, sp, dataSize, 0);
+    loadData(builder, *this, reg, sp, dataSize, 0, type.isSignedInt());
   }
 }
 
@@ -267,20 +542,106 @@ as::Block *FunctionTranslater::createBlock(ir::Block *block) {
   return newBlock;
 }
 
-std::unique_ptr<as::Asm> IRTranslater::translate() {
-  llvm::SmallVector<as::Section<as::Function> *> functions;
+utils::LogicalResult
+translateCallLikeInstruction(as::AsmBuilder &builder, TranslationRule *rule,
+                             FunctionTranslater &translater,
+                             ir::InstructionStorage *inst) {
+  assert(rule->restoreActively() && "Call instructions must restore actively");
 
-  for (ir::Function *function : *module->getIR()) {
-    FunctionTranslater translater(this, context, module, function);
-
-    auto *asFunction = translater.translate();
-    assert(asFunction && "Function translation failed");
-
-    auto *section = new as::Section<as::Function>({}, asFunction);
-    functions.emplace_back(section);
+  auto *module = translater.getModule();
+  CallLivenessAnalysis *callLiveness =
+      module->getAnalysis<CallLivenessAnalysis>();
+  if (!callLiveness) {
+    auto callLivenessAnalysis = CallLivenessAnalysis::create(module);
+    module->insertAnalysis(std::move(callLivenessAnalysis));
+    callLiveness = module->getAnalysis<CallLivenessAnalysis>();
   }
 
-  return nullptr;
+  RegisterAllocation *regAlloc = translater.getRegisterAllocation();
+  LiveRangeAnalysis *liveRangeAnalysis = translater.getLiveRangeAnalysis();
+
+  llvm::DenseSet<LiveRange> liveIn = callLiveness->getLiveIn(inst);
+  llvm::SmallVector<std::pair<as::Register, ir::Type>, 16> toSave;
+  for (LiveRange lr : liveIn) {
+    auto reg = regAlloc->getRegister(translater.getFunction(), lr);
+    if (reg.isCallerSaved()) {
+      auto type =
+          liveRangeAnalysis->getLiveRangeType(translater.getFunction(), lr);
+      toSave.emplace_back(reg, type);
+    }
+  }
+
+  llvm::sort(toSave, [](const auto &a, const auto &b) {
+    as::Register regA = a.first;
+    as::Register regB = b.first;
+    as::CommonRegisterLess less;
+    return less(regA, regB);
+  });
+
+  auto memoryStackPointers =
+      translater.saveCallerSavedRegisters(builder, toSave);
+
+  auto result = rule->translate(builder, translater, inst);
+  if (!result.succeeded())
+    return result;
+
+  translater.loadCallerSavedRegisters(builder, memoryStackPointers, toSave);
+
+  return utils::LogicalResult::success();
+}
+
+utils::LogicalResult translateInstruction(as::AsmBuilder &builder,
+                                          FunctionTranslater &translater,
+                                          ir::InstructionStorage *inst) {
+  auto *rule = translater.getTranslateContext()->getTranslateRuleSet()->getRule(
+      inst->getAbstractInstruction()->getId());
+  if (!rule) {
+    inst->getContext()->diag().report(
+        inst->getRange(), llvm::SourceMgr::DK_Error,
+        std::format("No translation rule for instruction"));
+    return utils::LogicalResult::error();
+  }
+
+  if (!rule->restoreActively()) {
+    for (const ir::Operand &operand : inst->getOperands()) {
+      translater.restoreOperand(builder, &operand);
+    }
+  }
+
+  if (rule->callFunction()) {
+    auto result = translateCallLikeInstruction(builder, rule, translater, inst);
+    if (!result.succeeded())
+      return result;
+  } else {
+    auto result = rule->translate(builder, translater, inst);
+    if (!result.succeeded())
+      return result;
+  }
+
+  for (ir::Value result : inst->getResults()) {
+    auto liveRange = translater.getLiveRangeAnalysis()->getLiveRange(
+        translater.getFunction(), result);
+    if (translater.isSpilled(liveRange)) {
+      translater.spillRegister(builder, liveRange);
+    }
+  }
+
+  return utils::LogicalResult::success();
+}
+
+as::Block *translateBlock(as::AsmBuilder &builder,
+                          FunctionTranslater &translater, ir::Block *block) {
+  auto newBlock = translater.createBlock(block);
+  for (auto I = block->tempBegin(), E = block->end(); I != E; ++I) {
+    ir::InstructionStorage *inst = *I;
+    auto result = translateInstruction(builder, translater, inst);
+    if (!result.succeeded()) {
+      delete newBlock;
+      return nullptr;
+    }
+  }
+
+  return newBlock;
 }
 
 as::Function *FunctionTranslater::translate() {
@@ -309,7 +670,7 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
                              -static_cast<std::int32_t>(stack.getTotalSize()));
     if (imm) {
       builder.create<as::itype::Addi>(as::Register::sp(), as::Register::sp(),
-                                      *imm, as::DataSize::doubleWord());
+                                      imm, as::DataSize::doubleWord());
     } else {
       builder.create<as::rtype::Add>(as::Register::sp(), as::Register::sp(),
                                      tempReg, as::DataSize::doubleWord());
@@ -318,8 +679,8 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
 
   if (stack.getReturnAddressSize() > 0) {
     auto sp = stack.returnAddress(0);
-    auto anon = createAnonRegister(as::RegisterType::Integer, sp);
-    anonymousRegisterToSp.try_emplace(anon, sp);
+    auto anon = createAnonRegister(as::RegisterType::Integer, sp,
+                                   as::DataSize::doubleWord(), false);
     builder.create<as::stype::Store>(as::Register::ra(), anon, getImmediate(0),
                                      as::DataSize::doubleWord());
   }
@@ -356,7 +717,8 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
       if (argFloatIndex >= getFloatArgRegisters().size()) {
         auto sp = functionFloatArgMemories[argFloatIndex -
                                            getFloatArgRegisters().size()];
-        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize);
+        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize,
+                                        true);
         // If the argument is spilled, we don't need to spill it again because
         // it already has a memory from caller
       } else {
@@ -370,10 +732,16 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
       }
       argFloatIndex++;
     } else {
+      bool isSigned = false;
+      if (auto intT = arg.getType().dyn_cast<ir::IntT>()) {
+        isSigned = intT.isSigned();
+      }
+
       if (argIntIndex >= getIntArgRegisters().size()) {
         auto sp =
             functionIntArgMemories[argIntIndex - getIntArgRegisters().size()];
-        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize);
+        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize,
+                                        isSigned);
         // If the argument is spilled, we don't need to spill it again because
         // it already has a memory from caller
       } else {
@@ -398,7 +766,7 @@ void FunctionTranslater::writeFunctionEnd(as::AsmBuilder &builder) {
   if (stack.getReturnAddressSize() > 0) {
     auto sp = *returnAddressMemory;
     builder.create<as::itype::Load>(as::Register::ra(), sp, getImmediate(0),
-                                    as::DataSize::doubleWord());
+                                    as::DataSize::doubleWord(), true);
   }
 
   // stack cleanup
@@ -407,10 +775,99 @@ void FunctionTranslater::writeFunctionEnd(as::AsmBuilder &builder) {
     auto *imm = getImmOrLoad(builder, tempReg, stack.getTotalSize());
     if (imm) {
       builder.create<as::itype::Addi>(as::Register::sp(), as::Register::sp(),
-                                      *imm, as::DataSize::doubleWord());
+                                      imm, as::DataSize::doubleWord());
     } else {
       builder.create<as::rtype::Add>(as::Register::sp(), as::Register::sp(),
                                      tempReg, as::DataSize::doubleWord());
+    }
+  }
+}
+
+void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
+                                       llvm::ArrayRef<as::Register> srcs,
+                                       llvm::ArrayRef<as::Register> dsts) {
+  assert(srcs.size() == dsts.size() &&
+         "Source and destination sizes must match");
+  auto tempReg0 = getTranslateContext()->getTempRegisters()[0];
+  auto scheduler = MoveManagement<as::Register>(dsts, srcs, tempReg0);
+  auto moveSchedule = scheduler.getMoveSchedule();
+
+  for (auto [movement, dst, src] : moveSchedule) {
+    auto dataSize = src.isFloatingPoint() ? as::DataSize::doublePrecision()
+                                          : as::DataSize::doubleWord();
+
+    switch (movement) {
+    case Movement::Move:
+      if (dst.isAnonymous() && !src.isAnonymous()) {
+        // store to dst
+        builder.create<as::stype::Store>(dst, src, getImmediate(0), dataSize);
+      } else if (src.isAnonymous()) {
+        // load from src
+        if (dst.isAnonymous()) {
+          // load from src to temp, then store to dst
+          builder.create<as::itype::Load>(tempReg0, src, getImmediate(0),
+                                          as::DataSize::doubleWord(), false);
+          builder.create<as::stype::Store>(dst, tempReg0, getImmediate(0),
+                                           as::DataSize::doubleWord());
+        } else {
+          // load from src to dst
+          builder.create<as::itype::Load>(dst, src, getImmediate(0), dataSize,
+                                          false);
+        }
+      } else {
+        // register to register move
+        builder.create<as::pseudo::Mv>(dst, src);
+      }
+    case Movement::Swap: {
+      if (!dst.isAnonymous() && !src.isAnonymous()) {
+        // swap(a, b) ->
+        //    a = a ^ b;
+        //    b = a ^ b;
+        //    a = a ^ b;
+        builder.create<as::rtype::Xor>(dst, dst, src);
+        builder.create<as::rtype::Xor>(src, dst, src);
+        builder.create<as::rtype::Xor>(dst, dst, src);
+      } else if (dst.isAnonymous() != src.isAnonymous()) {
+        if (dst.isAnonymous())
+          std::swap(dst, src);
+        // dst is register, src is memory
+        dataSize = dst.isFloatingPoint() ? as::DataSize::doublePrecision()
+                                         : as::DataSize::doubleWord();
+
+        // swap(a, mem) ->
+        //   temp = a
+        //   load a from mem
+        //   store temp to mem
+
+        if (dst.isFloatingPoint())
+          builder.create<as::rtype::FmvFloatToInt>(
+              tempReg0, dst, std::nullopt, as::DataSize::doublePrecision());
+        else
+          builder.create<as::pseudo::Mv>(tempReg0, dst);
+
+        builder.create<as::itype::Load>(dst, src, getImmediate(0), dataSize,
+                                        false);
+
+        builder.create<as::stype::Store>(src, tempReg0, getImmediate(0),
+                                         dataSize);
+      } else {
+        // both are memory
+        // swap(mem1, mem2) ->
+        // temp1 = load mem1
+        // temp2 = load mem2
+        // store temp1 to mem2
+        // store temp2 to mem1
+        auto tempReg1 = getTranslateContext()->getTempRegisters()[1];
+        builder.create<as::itype::Load>(tempReg0, dst, getImmediate(0),
+                                        as::DataSize::doubleWord(), false);
+        builder.create<as::itype::Load>(tempReg1, src, getImmediate(0),
+                                        as::DataSize::doubleWord(), false);
+        builder.create<as::stype::Store>(src, tempReg0, getImmediate(0),
+                                         as::DataSize::doubleWord());
+        builder.create<as::stype::Store>(dst, tempReg1, getImmediate(0),
+                                         as::DataSize::doubleWord());
+      }
+    }
     }
   }
 }
@@ -425,6 +882,10 @@ void FunctionTranslater::spillRegister(as::AsmBuilder &builder,
   builder.create<as::stype::Store>(memory, reg, getImmediate(0), dataSize);
 }
 
+bool FunctionTranslater::isSpilled(LiveRange liveRange) const {
+  return spillAnalysis->getSpillInfo().spilled.contains(liveRange);
+}
+
 as::Register FunctionTranslater::restoreOperand(as::AsmBuilder &builder,
                                                 const ir::Operand *operand) {
   auto restoredLiveRange = spillAnalysis->getSpillInfo().restore.at(operand);
@@ -434,9 +895,14 @@ as::Register FunctionTranslater::restoreOperand(as::AsmBuilder &builder,
   auto spilledMemory = spillMemories.at(spilledLiveRange);
   auto type = operand->getType();
   auto dataSize = getDataSize(type);
+  bool isSigned = false;
+  if (auto intT = type.dyn_cast<ir::IntT>())
+    isSigned = intT.isSigned();
+
   auto rd = regAlloc.getRegister(function, restoredLiveRange);
 
-  builder.create<as::itype::Load>(rd, spilledMemory, getImmediate(0), dataSize);
+  builder.create<as::itype::Load>(rd, spilledMemory, getImmediate(0), dataSize,
+                                  isSigned);
   return rd;
 }
 
@@ -452,8 +918,166 @@ void FunctionTranslater::loadCalleeSavedRegisters(as::AsmBuilder &builder) {
   for (const auto &[reg, sp] : calleeSaveInfo) {
     auto dataSize = reg.isFloatingPoint() ? as::DataSize::doublePrecision()
                                           : as::DataSize::doubleWord();
-    builder.create<as::itype::Load>(reg, sp, getImmediate(0), dataSize);
+    builder.create<as::itype::Load>(reg, sp, getImmediate(0), dataSize, true);
   }
+}
+
+as::Register FunctionTranslater::createAnonRegister(as::RegisterType regType,
+                                                    const StackPoint &sp,
+                                                    as::DataSize dataSize,
+                                                    bool isSigned) {
+  auto anon = as::Register::createAnonymousRegister(
+      getTranslateContext()->getAnonymousRegStorage(), regType,
+      as::CallingConvension::None, getAnonRegLabel());
+  anonymousRegisterToSp.try_emplace(anon, sp, dataSize, isSigned);
+  return anon;
+}
+
+TranslationRuleSet::TranslationRuleSet() = default;
+TranslationRuleSet::~TranslationRuleSet() = default;
+
+void TranslationRuleSet::addRule(TypeID id,
+                                 std::unique_ptr<TranslationRule> rule) {
+  auto [it, inserted] = rules.try_emplace(id, std::move(rule));
+  assert(inserted && "Rule for this TypeID already exists");
+  (void)inserted;
+}
+
+TranslationRule *TranslationRuleSet::getRule(TypeID id) const {
+  auto it = rules.find(id);
+  if (it != rules.end())
+    return it->second.get();
+  return nullptr;
+}
+
+as::Immediate *getImmediate(int64_t value) {
+  return new as::ValueImmediate(value);
+}
+as::Immediate *getImmediate(ir::ConstantAttr constAttr) {
+  auto intConst = constAttr.dyn_cast<ir::ConstantIntAttr>();
+  assert(intConst && "Only ConstantIntAttr is supported");
+  return getImmediate(intConst.getValue());
+}
+as::Immediate *getImmediate(ir::inst::Constant constant) {
+  return getImmediate(constant.getValue());
+}
+
+static constexpr std::int32_t HI12 = (1 << 11) - 1;
+static constexpr std::int32_t LO12 = -(1 << 11);
+
+void loadInt32(as::AsmBuilder &builder, as::Register rd, std::int32_t value) {
+
+  if (LO12 <= value && value <= HI12) {
+    builder.create<as::itype::Addi>(rd, as::Register::zero(),
+                                    getImmediate(value), as::DataSize::word());
+  } else {
+    std::uint32_t hi12 = (value >> 12);
+    std::uint32_t lo12 = value & ((1 << 12) - 1);
+    bool isNegative = lo12 >> 11;
+    if (isNegative) {
+      hi12 += 1;
+    }
+
+    builder.create<as::utype::Lui>(rd, getImmediate(hi12));
+    if (lo12 != 0) {
+      builder.create<as::itype::Addi>(rd, rd, getImmediate(lo12),
+                                      as::DataSize::word());
+    }
+  }
+}
+void loadInt(as::AsmBuilder &builder, FunctionTranslater &translater,
+             as::Register rd, std::int64_t value, ir::IntT intT) {
+  if (intT.getBitWidth() <= 32 || (static_cast<std::int32_t>(value) == value)) {
+    // If the value can fit in a 32-bit signed integer, treat it as a small int.
+    loadInt32(builder, rd, static_cast<std::int32_t>(value));
+  } else {
+    // Otherwise, treat it as a big int.
+    loadInt64(builder, translater, rd, value);
+  }
+}
+
+void loadInt64(as::AsmBuilder &builder, FunctionTranslater &translater,
+               as::Register rd, std::int64_t value) {
+  // If the low bits are zero, shift the whole value to the right, treat it as a
+  // small int and load it, then shift it back to the left.
+
+  std::int64_t shiftedValue = value;
+  size_t shiftRight = 0;
+  while (!(shiftedValue & 1)) {
+    shiftedValue >>= 1;
+    shiftRight++;
+  }
+
+  if (static_cast<std::int32_t>(shiftedValue) == shiftedValue) {
+    // If the value can fit in a 32-bit signed integer, treat it as a small int.
+    loadInt32(builder, rd, static_cast<std::int32_t>(shiftedValue));
+
+    if (shiftRight > 0) {
+      builder.create<as::itype::Slli>(rd, rd, getImmediate(shiftRight),
+                                      as::DataSize::word());
+    }
+  } else {
+    auto [label, dataSize] = translater.getConstantLabel(value);
+    builder.create<as::pseudo::La>(rd, label);
+    builder.create<as::itype::Load>(rd, rd, getImmediate(0), *dataSize, true);
+  }
+}
+
+as::Immediate *getImmOrLoad(as::AsmBuilder &builder, as::Register rd,
+                            std::int32_t value) {
+
+  if (LO12 <= value && value <= HI12) {
+    return getImmediate(value);
+  } else {
+    loadInt32(builder, rd, value);
+    return nullptr; // indicates that a load was created
+  }
+}
+
+void storeData(as::AsmBuilder &builder, FunctionTranslater &translater,
+               as::Register rd, as::Register rs, as::DataSize dataSize,
+               std::int32_t offset) {
+  auto tempReg = translater.getTranslateContext()->getTempRegisters()[0];
+  auto *imm = getImmOrLoad(builder, tempReg, offset);
+  if (imm) {
+    builder.create<as::stype::Store>(rd, rs, imm, dataSize);
+  } else {
+    builder.create<as::rtype::Add>(rd, rd, tempReg, as::DataSize::doubleWord());
+    builder.create<as::stype::Store>(rd, rs, getImmediate(0), dataSize);
+  }
+}
+
+void loadData(as::AsmBuilder &builder, FunctionTranslater &translater,
+              as::Register rd, as::Register rs, as::DataSize dataSize,
+              std::int32_t offset, bool isSigned) {
+  auto tempReg = translater.getTranslateContext()->getTempRegisters()[0];
+  auto *imm = getImmOrLoad(builder, tempReg, offset);
+  if (imm) {
+    builder.create<as::itype::Load>(rd, rs, imm, dataSize, true);
+  }
+}
+
+as::DataSize getDataSize(ir::Type type) {
+  auto [size, _] = type.getSizeAndAlign(ir::StructSizeMap{});
+  if (type.isa<ir::FloatT>()) {
+    if (size == 4) {
+      return as::DataSize::singlePrecision();
+    } else if (size == 8) {
+      return as::DataSize::doublePrecision();
+    }
+  } else {
+    if (size <= 1) {
+      return as::DataSize::byte();
+    } else if (size == 2) {
+      return as::DataSize::half();
+    } else if (size == 4) {
+      return as::DataSize::word();
+    } else if (size == 8) {
+      return as::DataSize::doubleWord();
+    }
+  }
+  llvm::report_fatal_error(llvm::StringRef(std::format(
+      "Unsupported type to convert to data size: {}", type.toString())));
 }
 
 } // namespace kecc

@@ -243,10 +243,15 @@ InterferenceGraph::InterferenceGraph(
     ir::Module *module, ir::Function *function, bool isFloat,
     llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph)
     : module(module), function(function), isFloat(isFloat),
-      graph(std::move(graph)) {
+      graph(std::move(graph)), graphColoring(nullptr) {
   mcs.reset(new MaximumCardinalitySearch(this));
 }
 InterferenceGraph::~InterferenceGraph() = default;
+
+GraphColoring *InterferenceGraph::coloring() {
+  graphColoring = std::make_unique<GraphColoring>(this);
+  return getGraphColoring();
+}
 
 void InterferenceGraph::dump(llvm::raw_ostream &os) const {
   LiveRangeAnalysis *liveRangeAnalysis =

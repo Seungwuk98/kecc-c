@@ -4,6 +4,7 @@
 #include "kecc/asm/Asm.h"
 #include "kecc/asm/AsmBuilder.h"
 #include "kecc/asm/AsmInstruction.h"
+#include "kecc/ir/IRAttributes.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/Module.h"
 #include "kecc/ir/Value.h"
@@ -31,9 +32,30 @@ public:
   TranslateContext *getContext() const { return context; }
   ir::Module *getModule() const { return module; }
 
+  std::pair<llvm::StringRef, std::optional<as::DataSize>>
+  getOrCreateConstantLabel(ir::ConstantAttr constant);
+  std::pair<llvm::StringRef, std::optional<as::DataSize>>
+  getOrCreateConstantLabel(std::int64_t value);
+
 private:
+  as::Function *translateFunction(ir::Function *function);
+  as::Variable *
+  translateGlobalVariable(ir::inst::GlobalVariableDefinition globalVar);
+
+  void translateGlobalVariableImpl(
+      ir::Type type, ir::Attribute init, ir::InitializerAttr astAttr,
+      ir::StructSizeAnalysis *structSizeAnalysis,
+      llvm::SmallVectorImpl<as::Directive *> &directives, size_t &currSize);
+
+  as::Variable *translateConstant(ir::inst::Constant constant);
+
   TranslateContext *context;
   ir::Module *module;
+  llvm::DenseMap<ir::ConstantAttr,
+                 std::pair<llvm::StringRef, std::optional<as::DataSize>>>
+      constantToLabelMap;
+  llvm::SmallVector<as::Variable *, 8> globalVariables;
+  size_t constantIndex = 0;
 };
 
 class FunctionTranslater {
@@ -52,9 +74,14 @@ public:
   as::Register getRegister(ir::Value value);
   as::Register getOperandRegister(const ir::Operand *operand);
 
-  std::pair<llvm::StringRef, as::DataSize>
-  getConstantLabel(ir::ConstantAttr constant);
-  std::pair<llvm::StringRef, as::DataSize> getConstantLabel(std::int64_t value);
+  std::pair<llvm::StringRef, std::optional<as::DataSize>>
+  getConstantLabel(ir::ConstantAttr constant) {
+    return irTranslater->getOrCreateConstantLabel(constant);
+  }
+  std::pair<llvm::StringRef, std::optional<as::DataSize>>
+  getConstantLabel(std::int64_t value) {
+    return irTranslater->getOrCreateConstantLabel(value);
+  }
 
   ir::Module *getModule() const { return module; }
 
@@ -66,17 +93,19 @@ public:
   void writeFunctionEnd(as::AsmBuilder &builder);
   void writeFunctionStart(as::AsmBuilder &builder);
 
+  // move srcs to dsts
+  // If there are anonymout registers, it handles them as 8byte memory
   void moveRegisters(as::AsmBuilder &builder, llvm::ArrayRef<as::Register> srcs,
                      llvm::ArrayRef<as::Register> dsts);
 
   // return anonymous registers which means stack points
   llvm::SmallVector<as::Register> saveCallerSavedRegisters(
       as::AsmBuilder &builder,
-      llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas);
+      llvm::ArrayRef<std::pair<as::Register, ir::Type>> datas);
 
   void loadCallerSavedRegisters(
       as::AsmBuilder &builder, llvm::ArrayRef<as::Register> stackpointers,
-      llvm::ArrayRef<std::pair<as::Register, as::DataSize>> datas);
+      llvm::ArrayRef<std::pair<as::Register, ir::Type>> datas);
 
   LiveRangeAnalysis *getLiveRangeAnalysis() const { return liveRangeAnalysis; }
   LivenessAnalysis *getLivenessAnalysis() const { return livenessAnalysis; }
@@ -106,7 +135,8 @@ public:
   FunctionStack *getStack() { return &stack; }
 
   as::Register createAnonRegister(as::RegisterType regType,
-                                  const StackPoint &sp);
+                                  const StackPoint &sp, as::DataSize dataSize,
+                                  bool isSigned);
 
 private:
   void init();
@@ -126,7 +156,7 @@ private:
 
   llvm::DenseMap<LiveRange, as::Register> spillMemories;
   llvm::DenseMap<LiveRange, size_t> liveRangeToIndexMap;
-  llvm::DenseMap<as::Register, std::pair<StackPoint, as::DataSize>>
+  llvm::DenseMap<as::Register, std::tuple<StackPoint, as::DataSize, bool>>
       anonymousRegisterToSp;
 
   llvm::SmallVector<as::Register, 8> intArgRegisters;
@@ -141,10 +171,10 @@ private:
   bool hasCall = false;
 };
 
-class TranslateRuleSet {
+class TranslationRuleSet {
 public:
-  TranslateRuleSet();
-  ~TranslateRuleSet();
+  TranslationRuleSet();
+  ~TranslationRuleSet();
 
   void addRule(TypeID id, std::unique_ptr<TranslationRule> rule);
 
@@ -198,20 +228,24 @@ as::DataSize getDataSize(ir::Type type);
 
 as::Immediate *getImmOrLoad(as::AsmBuilder &builder, as::Register rd,
                             std::int32_t value);
+void loadInt32(as::AsmBuilder &builder, as::Register rd, std::int32_t value);
+void loadInt64(as::AsmBuilder &builder, FunctionTranslater &translater,
+               as::Register rd, std::int64_t value);
+
 void loadInt(as::AsmBuilder &builder, FunctionTranslater &translater,
              as::Register rd, std::int64_t value, ir::IntT intT);
 
 void storeData(as::AsmBuilder &builder, FunctionTranslater &translater,
                as::Register rd, as::Register rs, as::DataSize dataSize,
-               std::int64_t offset);
+               std::int32_t offset);
 
 void loadData(as::AsmBuilder &builder, FunctionTranslater &translater,
               as::Register rd, as::Register rs, as::DataSize dataSize,
-              std::int64_t offset);
+              std::int32_t offset, bool isSigned);
 
 template <typename Rule, typename... Args>
 void registerTranslationRule(TranslateContext *context, Args &&...args) {
-  TranslateRuleSet *ruleSet = context->getTranslateRuleSet();
+  TranslationRuleSet *ruleSet = context->getTranslateRuleSet();
   auto rule = std::make_unique<Rule>(std::forward<Args>(args)...);
   ruleSet->addRule(rule->getId(), std::move(rule));
 }
