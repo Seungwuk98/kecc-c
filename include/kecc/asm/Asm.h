@@ -58,6 +58,8 @@ public:
   llvm::ArrayRef<Block *> getBlocks() const { return blocks; }
   void print(llvm::raw_ostream &os, size_t indent) const;
 
+  void walk(llvm::function_ref<void(Instruction *)> func) const;
+
 private:
   llvm::SmallVector<Block *> blocks;
 };
@@ -125,6 +127,8 @@ public:
     Block *block;
     Iterator it;
   };
+
+  void walk(llvm::function_ref<void(Instruction *)> func) const;
 
 private:
   std::string label;

@@ -23,6 +23,11 @@ void Function::print(llvm::raw_ostream &os, size_t indent) const {
   }
 }
 
+void Function::walk(llvm::function_ref<void(Instruction *)> fn) const {
+  for (auto *block : blocks)
+    block->walk(fn);
+}
+
 void Variable::print(llvm::raw_ostream &os, size_t indent) const {
   os << label << ":\n";
   for (const auto *directive : directives) {
@@ -43,6 +48,11 @@ void Block::print(llvm::raw_ostream &os, size_t indent) const {
     inst->print(os);
     os << '\n';
   }
+}
+
+void Block::walk(llvm::function_ref<void(Instruction *)> fn) const {
+  for (auto *inst : *this)
+    fn(inst);
 }
 
 std::string AlignDirective::toString() const {
