@@ -45,9 +45,7 @@ class RegisterImpl;
 class Register {
 public:
   Register &operator=(const Register &other) {
-    if (this != &other) {
-      impl = other.impl;
-    }
+    impl = other.impl;
     return *this;
   }
   Register(const Register &other) : impl(other.impl) {}

@@ -2,10 +2,30 @@
 
 
 fun i32 @test () {
+// CHECK: test:
 init:
   bid: b0
   allocations:
 
 block b0:
+// CHECK-LABEL: .test_L0:
   ret 0:i32
+  // CHECK-NEXT: addiw  a0,zero,0
+  // CHECK-NEXT: ret 
+}
+
+fun i32 @add0 (i32, i32) {
+// CHECK: add0
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .add0_L0:
+  %b0:p0:i32 
+  %b0:p1:i32
+  %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+  // CHECK-NEXT: addw  a0,a0,a1
+  ret %b0:i0:i32
+  // CHECK-NEXT: ret
 }

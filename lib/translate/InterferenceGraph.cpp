@@ -179,8 +179,8 @@ void InterferenceGraphBuilder::build() {
 }
 
 void InterferenceGraphBuilder::insert(LiveRange lr1, LiveRange lr2) {
-  auto lr1T = liveRangeAnalysis->getLiveRangeType(func, lr1);
-  auto lr2T = liveRangeAnalysis->getLiveRangeType(func, lr2);
+  auto lr1T = lr1.getType();
+  auto lr2T = lr2.getType();
   auto lr1IsFloat = lr1T.isa<ir::FloatT>();
   auto lr2IsFloat = lr2T.isa<ir::FloatT>();
 
@@ -196,19 +196,10 @@ void InterferenceGraphBuilder::insert(LiveRange lr1, LiveRange lr2) {
 std::unique_ptr<InterferenceGraph> InterferenceGraph::create(ir::Module *module,
                                                              ir::Function *func,
                                                              bool isFloat) {
-  auto *liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  if (!liveRangeAnalysis) {
-    auto analysis = LiveRangeAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  }
-
-  auto *livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  if (!livenessAnalysis) {
-    auto analysis = LivenessAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  }
+  auto *liveRangeAnalysis =
+      module->getOrCreateAnalysis<LiveRangeAnalysis>(module);
+  auto *livenessAnalysis =
+      module->getOrCreateAnalysis<LivenessAnalysis>(module);
 
   InterferenceGraphBuilder builder(module, func, liveRangeAnalysis,
                                    livenessAnalysis, isFloat);

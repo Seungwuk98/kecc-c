@@ -38,8 +38,7 @@ as::Register RegisterAllocation::getRegister(ir::Function *function,
   }
   InterferenceGraph *interferenceGraph;
   as::RegisterType regType;
-  if (liveRangeAnalysis->getLiveRangeType(function, liveRange)
-          .isa<ir::FloatT>()) {
+  if (liveRange.getType().isa<ir::FloatT>()) {
     interferenceGraph = spillAnalysis->getInterferenceGraph(
         function, as::RegisterType::FloatingPoint);
     regType = as::RegisterType::FloatingPoint;
@@ -99,7 +98,7 @@ void RegisterAllocation::allocateRegistersForFunction(
 
   using Color = GraphColoring::Color;
 
-  llvm::DenseSet<as::Register> allocatedRegisters;
+  llvm::DenseSet<as::Register> usedRegisters;
   llvm::DenseMap<Color, as::Register> intColorToRegister;
   llvm::DenseMap<Color, as::Register> floatColorToRegister;
 
@@ -137,8 +136,8 @@ void RegisterAllocation::allocateRegistersForFunction(
     as::Register reg = intArgRegisters[idx];
     auto [_, inserted] = intColorToRegister.try_emplace(color, reg);
     assert(inserted && "Argument register color already assigned");
-    inserted = allocatedRegisters.insert(reg).second;
-    assert(inserted && "Argument register already used");
+    inserted = usedRegisters.insert(reg).second;
+    assert(inserted && "register already used");
   }
 
   for (auto idx = 0u;
@@ -149,18 +148,17 @@ void RegisterAllocation::allocateRegistersForFunction(
     as::Register reg = floatArgRegisters[idx];
     auto [_, inserted] = floatColorToRegister.try_emplace(color, reg);
     assert(inserted && "Argument register color already assigned");
-    inserted = allocatedRegisters.insert(reg).second;
-    assert(inserted && "Argument register already used");
+    inserted = usedRegisters.insert(reg).second;
+    assert(inserted && "register already used");
   }
 
   // 2) function return value
-
-  static llvm::ArrayRef<as::Register> intReturnRegisters = {
+  static llvm::SmallVector<as::Register> intReturnRegisters = {
       as::Register::a0(),
       as::Register::a1(),
   };
 
-  static llvm::ArrayRef<as::Register> floatReturnRegisters = {
+  static llvm::SmallVector<as::Register> floatReturnRegisters = {
       as::Register::fa0(),
       as::Register::fa1(),
   };
@@ -197,10 +195,12 @@ void RegisterAllocation::allocateRegistersForFunction(
       Color color = intGraphColoring->getColor(liveRange);
       if (intColorToRegister.contains(color))
         continue;
+
       as::Register reg = intReturnRegisters[idx];
-      if (allocatedRegisters.contains(reg))
+      if (usedRegisters.contains(reg))
         continue;
       intColorToRegister.try_emplace(color, reg);
+      usedRegisters.insert(reg);
     }
 
     for (auto idx = 0u; idx < floatReturnLiveRanges.size(); ++idx) {
@@ -209,9 +209,10 @@ void RegisterAllocation::allocateRegistersForFunction(
       if (floatColorToRegister.contains(color))
         continue;
       as::Register reg = floatReturnRegisters[idx];
-      if (allocatedRegisters.contains(reg))
+      if (usedRegisters.contains(reg))
         continue;
       floatColorToRegister.try_emplace(color, reg);
+      usedRegisters.insert(reg);
     }
     return ir::WalkResult::advance();
   });
@@ -221,10 +222,11 @@ void RegisterAllocation::allocateRegistersForFunction(
     if (intColorToRegister.contains(color))
       continue;
 
-    for (; allocatedRegisters.contains(intRegisters[intRegIdx]); ++intRegIdx)
+    for (; usedRegisters.contains(intRegisters[intRegIdx]); ++intRegIdx)
       ;
     as::Register reg = intRegisters[intRegIdx++];
     intColorToRegister.try_emplace(color, reg);
+    usedRegisters.insert(reg);
   }
 
   auto floatRegIdx = 0u;
@@ -232,11 +234,11 @@ void RegisterAllocation::allocateRegistersForFunction(
     if (floatColorToRegister.contains(color))
       continue;
 
-    for (; allocatedRegisters.contains(floatRegisters[floatRegIdx]);
-         ++floatRegIdx)
+    for (; usedRegisters.contains(floatRegisters[floatRegIdx]); ++floatRegIdx)
       ;
     as::Register reg = floatRegisters[floatRegIdx++];
     floatColorToRegister.try_emplace(color, reg);
+    usedRegisters.insert(reg);
   }
 
   for (const auto &[color, reg] : intColorToRegister) {
@@ -244,6 +246,7 @@ void RegisterAllocation::allocateRegistersForFunction(
     auto [_, inserted] = colorMap.try_emplace(
         std::make_pair(as::RegisterType::Integer, color), reg);
     assert(inserted && "Integer register color already assigned");
+    (void)inserted;
   }
 
   for (const auto &[color, reg] : floatColorToRegister) {
@@ -251,6 +254,7 @@ void RegisterAllocation::allocateRegistersForFunction(
     auto [_, inserted] = colorMap.try_emplace(
         std::make_pair(as::RegisterType::FloatingPoint, color), reg);
     assert(inserted && "Floating point register color already assigned");
+    (void)inserted;
   }
 }
 

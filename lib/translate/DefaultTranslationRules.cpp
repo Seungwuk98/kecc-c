@@ -1,5 +1,6 @@
 #include "kecc/asm/Asm.h"
 #include "kecc/asm/AsmInstruction.h"
+#include "kecc/asm/Register.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/IRTypes.h"
 #include "kecc/translate/IRTranslater.h"
@@ -909,10 +910,10 @@ static void finalizeCall(as::AsmBuilder &builder,
                          FunctionTranslater &translater,
                          llvm::ArrayRef<ir::Type> retTypes,
                          llvm::ArrayRef<as::Register> resultRegs) {
-  static llvm::ArrayRef<as::Register> intRetRegs = {as::Register::a0(),
-                                                    as::Register::a1()};
-  static llvm::ArrayRef<as::Register> floatRetRegs = {as::Register::fa0(),
-                                                      as::Register::fa1()};
+  static llvm::SmallVector<as::Register> intRetRegs = {as::Register::a0(),
+                                                       as::Register::a1()};
+  static llvm::SmallVector<as::Register> floatRetRegs = {as::Register::fa0(),
+                                                         as::Register::fa1()};
 
   llvm::SmallVector<as::Register, 8> intFromCallee;
   llvm::SmallVector<as::Register, 8> floatFromCallee;
@@ -1189,12 +1190,12 @@ public:
                                  FunctionTranslater &translater,
                                  ir::inst::Return inst) override {
 
-    static llvm::ArrayRef<as::Register> intReturnRegisters = {
+    static llvm::SmallVector<as::Register> intReturnRegisters{
         as::Register::a0(),
         as::Register::a1(),
     };
 
-    static llvm::ArrayRef<as::Register> floatReturnRegisters = {
+    static llvm::SmallVector<as::Register> floatReturnRegisters = {
         as::Register::fa0(),
         as::Register::fa1(),
     };
@@ -1219,15 +1220,16 @@ public:
            "Too many floating point return values for available registers");
 
     if (!intValueRegisters.empty()) {
-      translater.moveRegisters(
-          builder, intValueRegisters,
-          intReturnRegisters.take_front(intValueRegisters.size()));
+      translater.moveRegisters(builder, intValueRegisters,
+                               llvm::ArrayRef<as::Register>(intReturnRegisters)
+                                   .take_front(intValueRegisters.size()));
     }
 
     if (!floatValueRegisters.empty()) {
       translater.moveRegisters(
           builder, floatValueRegisters,
-          floatReturnRegisters.take_front(floatValueRegisters.size()));
+          llvm::ArrayRef<as::Register>(floatReturnRegisters)
+              .take_front(floatValueRegisters.size()));
     }
 
     translater.writeFunctionEnd(builder);
@@ -1447,6 +1449,19 @@ public:
   }
 };
 
+class FunctionArgTranslationRule
+    : public InstructionTranslationRule<ir::inst::FunctionArgument> {
+public:
+  FunctionArgTranslationRule() {}
+
+  utils::LogicalResult translate(as::AsmBuilder &builder,
+                                 FunctionTranslater &translater,
+                                 ir::inst::FunctionArgument inst) override {
+    // Function arguments are handled in the prologue of the function.
+    return utils::LogicalResult::success();
+  }
+};
+
 void registerDefaultTranslationRules(TranslateContext *context) {
   registerTranslationRule<BinaryTranslationRule>(context);
   registerTranslationRule<UnaryTranslationRule>(context);
@@ -1462,6 +1477,7 @@ void registerDefaultTranslationRules(TranslateContext *context) {
   registerTranslationRule<TypeCastTranslationRule>(context);
   registerTranslationRule<CallTranslationRule>(context);
   registerTranslationRule<InlineCallTranslationRule>(context);
+  registerTranslationRule<FunctionArgTranslationRule>(context);
 }
 
 } // namespace kecc

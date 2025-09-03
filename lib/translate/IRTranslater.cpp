@@ -22,14 +22,14 @@
 namespace kecc {
 
 void defaultRegisterSetup(TranslateContext *context) {
-  static llvm::ArrayRef<as::Register> tempIntRegs = {
+  static llvm::SmallVector<as::Register> tempIntRegs = {
       as::Register::t0(),
       as::Register::t1(),
   };
 
   context->setTempRegisters(tempIntRegs);
 
-  static llvm::ArrayRef<as::Register> intRegs = {
+  static llvm::SmallVector<as::Register> intRegs = {
       as::Register::a0(), as::Register::a1(),  as::Register::a2(),
       as::Register::a3(), as::Register::a4(),  as::Register::a5(),
       as::Register::a6(), as::Register::a7(),  as::Register::t2(),
@@ -43,7 +43,7 @@ void defaultRegisterSetup(TranslateContext *context) {
       as::Register::s9(), as::Register::s10(), as::Register::s11(),
   };
 
-  static llvm::ArrayRef<as::Register> floatRegs = {
+  static llvm::SmallVector<as::Register> floatRegs = {
       as::Register::fa0(), as::Register::fa1(),  as::Register::fa2(),
       as::Register::fa3(), as::Register::fa4(),  as::Register::fa5(),
       as::Register::fa6(), as::Register::fa7(),
@@ -112,7 +112,8 @@ IRTranslater::getOrCreateConstantLabel(int64_t value) {
 
 std::unique_ptr<as::Asm> IRTranslater::translate() {
   llvm::SmallVector<as::Section<as::Function> *> functions;
-  llvm::SmallVector<as::Section<as::Variable> *> variables;
+  llvm::SmallVector<as::Section<as::Variable> *> dataVariables;
+  llvm::SmallVector<as::Section<as::Variable> *> bssVariables;
 
   bool fail = false;
   for (ir::InstructionStorage *inst : *module->getIR()->getGlobalBlock()) {
@@ -124,7 +125,19 @@ std::unique_ptr<as::Asm> IRTranslater::translate() {
       fail = true;
       break;
     }
-    variables.emplace_back(new as::Section<as::Variable>({}, variable));
+    bool isData = globalVar.hasInitializer();
+    (isData ? dataVariables : bssVariables)
+        .emplace_back(new as::Section<as::Variable>(
+            {
+                new as::TypeDirective(globalVar.getName(),
+                                      as::TypeDirective::Kind::Object),
+                new as::SectionDirective(
+                    isData ? as::SectionDirective::SectionType::Data
+                           : as::SectionDirective::SectionType::Bss),
+                new as::GloblDirective(globalVar.getName()),
+                new as::AlignDirective(2),
+            },
+            variable));
   }
 
   if (!fail) {
@@ -138,7 +151,12 @@ std::unique_ptr<as::Asm> IRTranslater::translate() {
       }
       assert(asFunction && "Function translation failed");
 
-      auto *section = new as::Section<as::Function>({}, asFunction);
+      auto *section = new as::Section<as::Function>(
+          {new as::GloblDirective(function->getName()),
+           new as::AlignDirective(1),
+           new as::TypeDirective(function->getName(),
+                                 as::TypeDirective::Kind::Function)},
+          asFunction);
       functions.emplace_back(section);
     }
   }
@@ -146,12 +164,15 @@ std::unique_ptr<as::Asm> IRTranslater::translate() {
   if (fail) {
     for (auto *func : functions)
       delete func;
-    for (auto *var : variables)
+    for (auto *var : dataVariables)
+      delete var;
+    for (auto *var : bssVariables)
       delete var;
     return nullptr;
   }
 
-  return std::make_unique<as::Asm>(functions, variables);
+  dataVariables.append(bssVariables);
+  return std::make_unique<as::Asm>(functions, dataVariables);
 }
 
 as::Function *IRTranslater::translateFunction(ir::Function *function) {
@@ -349,7 +370,7 @@ FunctionTranslater::FunctionTranslater(IRTranslater *translater,
                                        ir::Module *module,
                                        ir::Function *function)
     : irTranslater(translater), context(context), module(module),
-      function(function), regAlloc(module, context) {
+      function(function) {
   liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
   livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
   spillAnalysis = module->getAnalysis<SpillAnalysis>();
@@ -362,6 +383,20 @@ FunctionTranslater::FunctionTranslater(IRTranslater *translater,
 }
 
 void FunctionTranslater::init() {
+  llvm::for_each(
+      getTranslateContext()->getRegistersForAllocate(as::RegisterType::Integer),
+      [&](as::Register reg) {
+        if (reg.isArg())
+          intArgRegisters.emplace_back(reg);
+      });
+
+  llvm::for_each(getTranslateContext()->getRegistersForAllocate(
+                     as::RegisterType::FloatingPoint),
+                 [&](as::Register reg) {
+                   if (reg.isArg())
+                     floatArgRegisters.emplace_back(reg);
+                 });
+
   liveRangeToIndexMap =
       liveRangeAnalysis->getCurrLRIdMap(spillAnalysis->getSpillInfo());
 
@@ -382,7 +417,8 @@ void FunctionTranslater::init() {
   llvm::SmallVector<LiveRange> spillLiveRange;
   llvm::SmallVector<as::Register> calleeSavedRegisters;
   for (const auto &[liveRange, _] : liveRangeToIndexMap) {
-    auto reg = regAlloc.getRegister(function, liveRange);
+    auto reg =
+        irTranslater->getRegisterAllocation().getRegister(function, liveRange);
     if (reg.isCalleeSaved())
       calleeSavedRegisters.emplace_back(reg);
 
@@ -484,7 +520,7 @@ void FunctionTranslater::init() {
     if (spillMemories.contains(liveRange))
       continue; // Already processed
 
-    auto type = liveRangeAnalysis->getLiveRangeType(function, liveRange);
+    auto type = liveRange.getType();
     auto dataSize = getDataSize(type);
     auto sp = stack.spilledRegister(totalSpillSize);
     totalSpillSize += dataSize.getByteSize();
@@ -497,11 +533,11 @@ void FunctionTranslater::init() {
 }
 
 as::Register FunctionTranslater::getRegister(ir::Value value) {
-  return regAlloc.getRegister(value);
+  return irTranslater->getRegisterAllocation().getRegister(value);
 }
 
 as::Register FunctionTranslater::getRegister(LiveRange liveRange) {
-  return regAlloc.getRegister(function, liveRange);
+  return irTranslater->getRegisterAllocation().getRegister(function, liveRange);
 }
 
 as::Register
@@ -511,7 +547,8 @@ FunctionTranslater::getOperandRegister(const ir::Operand *operand) {
   if (auto it = spillAnalysis->getSpillInfo().restore.find(operand);
       it != spillAnalysis->getSpillInfo().restore.end()) {
     auto restoredLiveRange = it->second;
-    return regAlloc.getRegister(function, restoredLiveRange);
+    return irTranslater->getRegisterAllocation().getRegister(function,
+                                                             restoredLiveRange);
   }
   return getRegister(*operand);
 }
@@ -591,16 +628,16 @@ translateCallLikeInstruction(as::AsmBuilder &builder, TranslationRule *rule,
     callLiveness = module->getAnalysis<CallLivenessAnalysis>();
   }
 
-  RegisterAllocation *regAlloc = translater.getRegisterAllocation();
+  RegisterAllocation &regAlloc =
+      translater.getIRTranslater()->getRegisterAllocation();
   LiveRangeAnalysis *liveRangeAnalysis = translater.getLiveRangeAnalysis();
 
   llvm::DenseSet<LiveRange> liveIn = callLiveness->getLiveIn(inst);
   llvm::SmallVector<std::pair<as::Register, ir::Type>, 16> toSave;
   for (LiveRange lr : liveIn) {
-    auto reg = regAlloc->getRegister(translater.getFunction(), lr);
+    auto reg = regAlloc.getRegister(translater.getFunction(), lr);
     if (reg.isCallerSaved()) {
-      auto type =
-          liveRangeAnalysis->getLiveRangeType(translater.getFunction(), lr);
+      auto type = lr.getType();
       toSave.emplace_back(reg, type);
     }
   }
@@ -788,8 +825,8 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
       if (argIntIndex >= getIntArgRegisters().size()) {
         auto sp =
             functionIntArgMemories[argIntIndex - getIntArgRegisters().size()];
-        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize,
-                                        isSigned);
+        auto load = builder.create<as::itype::Load>(rd, sp, getImmediate(0),
+                                                    dataSize, isSigned);
         // If the argument is spilled, we don't need to spill it again because
         // it already has a memory from caller
       } else {
@@ -923,9 +960,10 @@ void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
 void FunctionTranslater::spillRegister(as::AsmBuilder &builder,
                                        LiveRange liveRange) {
   auto memory = spillMemories.at(liveRange);
-  auto type = liveRangeAnalysis->getLiveRangeType(function, liveRange);
+  auto type = liveRange.getType();
   auto dataSize = getDataSize(type);
-  auto reg = regAlloc.getRegister(function, liveRange);
+  auto reg =
+      irTranslater->getRegisterAllocation().getRegister(function, liveRange);
 
   builder.create<as::stype::Store>(memory, reg, getImmediate(0), dataSize);
 }
@@ -947,7 +985,8 @@ as::Register FunctionTranslater::restoreOperand(as::AsmBuilder &builder,
   if (auto intT = type.dyn_cast<ir::IntT>())
     isSigned = intT.isSigned();
 
-  auto rd = regAlloc.getRegister(function, restoredLiveRange);
+  auto rd = irTranslater->getRegisterAllocation().getRegister(
+      function, restoredLiveRange);
 
   builder.create<as::itype::Load>(rd, spilledMemory, getImmediate(0), dataSize,
                                   isSigned);
@@ -1024,8 +1063,8 @@ void FunctionTranslater::substitueAnonymousRegisters(as::Function *function) {
 
       auto imm = getImmOrLoad(builder, tempReg, offset);
       if (imm) {
-        builder.create<as::itype::Load>(load->getDst(), as::Register::sp(), imm,
-                                        dataSize, isSigned);
+        auto loadInst = builder.create<as::itype::Load>(
+            load->getDst(), as::Register::sp(), imm, dataSize, isSigned);
       } else {
         builder.create<as::rtype::Add>(tempReg, as::Register::sp(), tempReg,
                                        as::DataSize::doubleWord());

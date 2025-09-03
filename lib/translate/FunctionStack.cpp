@@ -1,4 +1,5 @@
 #include "kecc/translate/FunctionStack.h"
+#include "llvm/Support/ErrorHandling.h"
 
 namespace kecc {
 
@@ -34,8 +35,19 @@ size_t FunctionStack::fromBottom(const StackPoint &point) const {
   } else
     offset += spilledRegistersSize;
 
-  assert(point.offset != 0);
-  return offset;
+  if (point.area == StackPoint::Area::ReturnAddress) {
+    assert(point.offset == 0);
+    return offset;
+  } else
+    offset += returnAddressSize;
+
+  if (point.area == StackPoint::Area::FunctionArgument) {
+    offset += point.offset;
+    return offset;
+  } else
+    offset += localVariablesSize;
+
+  llvm_unreachable("Invalid StackPoint");
 }
 
 } // namespace kecc

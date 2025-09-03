@@ -382,6 +382,7 @@ public:
   Attribute getInitializer() const;
   Type getType() const;
   void interpretInitializer();
+  bool hasInitializer() const { return getInitializer(); }
 
   static void printer(GlobalVariableDefinition op, IRPrintContext &context);
   struct Adaptor {

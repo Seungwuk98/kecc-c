@@ -76,6 +76,7 @@ TEST_CASE("Register Parser Tests") {
     CHECK(*reg == anon);
     CHECK(anon.isCallerSaved());
     CHECK(anon.isInteger());
+    CHECK(anon.toString() == "anonymous");
   }
 
   SUBCASE("registers") {

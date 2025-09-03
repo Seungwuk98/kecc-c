@@ -53,7 +53,6 @@ public:
 
   LiveRange getLiveRange(ir::Value value) const;
   LiveRange getLiveRange(ir::Function *func, ir::Value value) const;
-  ir::Type getLiveRangeType(ir::Function *func, LiveRange liveRange) const;
 
   llvm::ArrayRef<std::pair<LiveRange, LiveRange>>
   getCopyMap(ir::Block *block) const;

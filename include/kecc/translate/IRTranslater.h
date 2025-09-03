@@ -25,7 +25,7 @@ void defaultRegisterSetup(TranslateContext *context);
 class IRTranslater {
 public:
   IRTranslater(TranslateContext *context, ir::Module *module)
-      : context(context), module(module) {}
+      : context(context), module(module), regAlloc(module, context) {}
 
   std::unique_ptr<as::Asm> translate();
 
@@ -36,6 +36,8 @@ public:
   getOrCreateConstantLabel(ir::ConstantAttr constant);
   std::pair<llvm::StringRef, std::optional<as::DataSize>>
   getOrCreateConstantLabel(std::int64_t value);
+
+  RegisterAllocation &getRegisterAllocation() { return regAlloc; }
 
 private:
   as::Function *translateFunction(ir::Function *function);
@@ -51,6 +53,7 @@ private:
 
   TranslateContext *context;
   ir::Module *module;
+  RegisterAllocation regAlloc;
   llvm::DenseMap<ir::ConstantAttr,
                  std::pair<llvm::StringRef, std::optional<as::DataSize>>>
       constantToLabelMap;
@@ -69,6 +72,7 @@ public:
   as::Function *translate();
 
   TranslateContext *getTranslateContext() const { return context; }
+  IRTranslater *getIRTranslater() const { return irTranslater; }
 
   as::Register getRegister(LiveRange liveRange);
   as::Register getRegister(ir::Value value);
@@ -110,7 +114,6 @@ public:
   LiveRangeAnalysis *getLiveRangeAnalysis() const { return liveRangeAnalysis; }
   LivenessAnalysis *getLivenessAnalysis() const { return livenessAnalysis; }
   SpillAnalysis *getSpillAnalysis() const { return spillAnalysis; }
-  RegisterAllocation *getRegisterAllocation() { return &regAlloc; }
   ir::Function *getFunction() const { return function; }
 
   std::optional<as::Register> getSpillMemory(ir::Value value) const {
@@ -153,7 +156,6 @@ private:
   LiveRangeAnalysis *liveRangeAnalysis;
   LivenessAnalysis *livenessAnalysis;
   SpillAnalysis *spillAnalysis;
-  RegisterAllocation regAlloc;
   FunctionStack stack;
 
   llvm::DenseMap<LiveRange, as::Register> spillMemories;
