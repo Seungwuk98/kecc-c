@@ -41,6 +41,16 @@ public:
     return liveInMap;
   }
 
+  static llvm::DenseSet<LiveRange>
+  intersect(const llvm::DenseSet<LiveRange> &a,
+            const llvm::DenseSet<LiveRange> &b) {
+    llvm::DenseSet<LiveRange> result;
+    for (LiveRange elem : a)
+      if (b.contains(elem))
+        result.insert(elem);
+    return result;
+  }
+
 private:
   ir::Block *block;
   LivenessAnalysis *livenessAnalysis;
@@ -65,9 +75,7 @@ void CallLivenessAnalysisBuilder::build() {
     llvm::DenseSet<LiveRange> varKill;
     llvm::DenseSet<LiveRange> uevar;
 
-    for (auto i = I, e = end; i != e; ++i) {
-      ir::InstructionStorage *inst = *i;
-
+    auto procInst = [&](ir::InstructionStorage *inst) {
       if (inst->getDefiningInst<ir::BlockExit>()) {
         for (const auto &[to, from] : liveRangeAnalysis->getCopyMap(block)) {
           if (spill.restoreMemory.contains(from))
@@ -114,11 +122,28 @@ void CallLivenessAnalysisBuilder::build() {
       }
       // We need to handle spill values but the values are already inserted
       // in varKill, so we can skip them here.
+    };
+
+    auto *callInst = *I;
+    auto start = I;
+
+    for (auto i = ++start, e = end; i != e; ++i) {
+      ir::InstructionStorage *inst = *i;
+      procInst(inst);
     }
 
-    liveOut = unionSet(uevar, sub(liveOut, varKill));
+    auto callLiveOut = unionSet(uevar, sub(liveOut, varKill));
+
+    varKill.clear();
+    uevar.clear();
+
+    procInst(callInst);
+
+    auto callLiveIn = unionSet(uevar, sub(callLiveOut, varKill));
+
     end = I;
-    liveInMap[*I] = liveOut;
+    liveInMap[callInst] = intersect(callLiveIn, callLiveOut);
+    liveOut = callLiveIn;
   }
 }
 

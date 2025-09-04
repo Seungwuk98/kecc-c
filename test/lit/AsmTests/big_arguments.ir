@@ -1,0 +1,49 @@
+// RUN: kecc-translate %s | FileCheck %s
+
+// CHECK: .globl test
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type test, @function
+fun i32 @test (i32, i32, i32, i32, i32, i32, i32, i32, i32, i32) {
+// CHECK-NEXT: test
+init:
+  bid: b0
+  allocations:
+  // CHECK-NEXT: lw [[ARG_8:[a-z][0-9]+]],0(sp)
+  // CHECK-NEXT: lw [[ARG_9:[a-z][0-9]+]],8(sp)
+
+block b0:
+// CHECK-LABEL: .test_L0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:p2:i32
+  %b0:p3:i32
+  %b0:p4:i32
+  %b0:p5:i32
+  %b0:p6:i32
+  %b0:p7:i32
+  %b0:p8:i32
+  %b0:p9:i32
+
+  %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
+  // CHECK-NEXT: addw [[T0:[a-z][0-9]+]],a0,a1
+  %b0:i1:i32 = add %b0:p2:i32 %b0:p3:i32
+  // CHECK-NEXT: addw [[T1:[a-z][0-9]+]],a2,a3
+  %b0:i2:i32 = add %b0:p4:i32 %b0:p5:i32
+  // CHECK-NEXT: addw [[T2:[a-z][0-9]+]],a4,a5
+  %b0:i3:i32 = add %b0:p6:i32 %b0:p7:i32
+  // CHECK-NEXT: addw [[T3:[a-z][0-9]+]],a6,a7
+  %b0:i4:i32 = add %b0:p8:i32 %b0:p9:i32
+  // CHECK-NEXT: addw [[T4:[a-z][0-9]+]],[[ARG_8]],[[ARG_9]]
+
+  %b0:i5:i32 = add %b0:i0:i32 %b0:i1:i32
+  // CHECK-NEXT: addw [[T5:[a-z][0-9]+]],[[T0]],[[T1]]
+  %b0:i6:i32 = add %b0:i2:i32 %b0:i3:i32
+  // CHECK-NEXT: addw [[T6:[a-z][0-9]+]],[[T2]],[[T3]]
+  %b0:i7:i32 = add %b0:i4:i32 %b0:i5:i32
+  // CHECK-NEXT: addw [[T7:[a-z][0-9]+]],[[T4]],[[T5]] 
+  %b0:i8:i32 = add %b0:i6:i32 %b0:i7:i32
+  // CHECK-NEXT: addw a0,[[T6]],[[T7]]
+
+  ret %b0:i8:i32
+  // CHECK-NEXT: ret
+}

@@ -179,7 +179,10 @@ public:
               createOutline(rewriter, inst, value, [&](Value newValue) {
                 inst->setOperand(idx, newValue);
               });
-          constantCache[constantAttr] = outlineConstant;
+          if (!constantAttr.isa<ConstantUndefAttr>())
+            // Undef should not be cached
+            // because it cause unnecessary copies when we move registers
+            constantCache[constantAttr] = outlineConstant;
         }
 
         matched = true;
@@ -205,7 +208,8 @@ public:
                 createOutline(rewriter, inst, arg, [&](Value newValue) {
                   jumpArgState.setArg(argIdx, newValue);
                 });
-            constantCache[constantAttr] = outlineConstant;
+            if (!constantAttr.isa<ConstantUndefAttr>())
+              constantCache[constantAttr] = outlineConstant;
           }
 
           argMatched = true;

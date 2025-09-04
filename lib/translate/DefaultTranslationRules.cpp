@@ -123,7 +123,8 @@ utils::LogicalResult translateIntAdd(as::AsmBuilder &builder,
     auto lhsReg = translater.getOperandRegister(lhs);
     if (rhsImm->isZero()) {
       // mv dest, lhs
-      builder.create<as::pseudo::Mv>(rd, lhsReg);
+      if (rd != lhsReg)
+        builder.create<as::pseudo::Mv>(rd, lhsReg);
       return utils::LogicalResult::success();
     }
 
@@ -1042,12 +1043,8 @@ public:
     auto rd = translater.getRegister(inst.getResult());
 
     if (constant.getValue().isa<ir::ConstantUndefAttr>()) {
-      auto tempReg = translater.getTranslateContext()->getTempRegisters()[0];
-      if (rd.isFloatingPoint())
-        builder.create<as::rtype::FmvIntToFloat>(
-            rd, tempReg, std::nullopt, as::DataSize::doublePrecision());
-      else
-        builder.create<as::pseudo::Mv>(rd, tempReg);
+      // do nothing for undef
+      // just use whatever in rd
       return utils::LogicalResult::success();
     }
 
@@ -1233,10 +1230,6 @@ public:
     }
 
     translater.writeFunctionEnd(builder);
-
-    // Create a pseudo return instruction
-    builder.create<as::pseudo::Ret>();
-
     return utils::LogicalResult::success();
   }
 };

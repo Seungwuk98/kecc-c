@@ -1,8 +1,11 @@
 // RUN: kecc-translate %s | FileCheck %s
 
 
+// CHECK: .globl test 
+// CHECK-NEXT: .align 1 
+// CHECK-NEXT: .type test, @function
 fun i32 @test () {
-// CHECK: test:
+// CHECK-NEXT: test:
 init:
   bid: b0
   allocations:
@@ -14,6 +17,9 @@ block b0:
   // CHECK-NEXT: ret 
 }
 
+// CHECK: .globl add0 
+// CHECK-NEXT: .align 1 
+// CHECK-NEXT: .type add0, @function
 fun i32 @add0 (i32, i32) {
 // CHECK: add0
 init:
@@ -27,5 +33,48 @@ block b0:
   %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
   // CHECK-NEXT: addw  a0,a0,a1
   ret %b0:i0:i32
+  // CHECK-NEXT: ret
+}
+
+// CHECK: .globl add1
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type add1, @function
+fun i32 @add1 (i32) {
+// CHECK-NEXT: add1:
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .add1_L0:
+  %b0:p0:i32
+  %b0:i0:i32 = add %b0:p0:i32 1:i32
+  // addiw a0,a0,1
+  ret %b0:i0:i32 
+  // ret
+}
+
+
+// CHECK: .globl add1_caller
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type add1_caller, @function
+fun i32 @add1_caller () {
+// CHECK-NEXT: add1_caller:
+init:
+  bid: b0
+  allocations:
+// CHECK-NEXT:   addi  sp,sp,-8 
+// CHECK-NEXT:   sd    ra,0(sp) 
+
+block b0:
+// CHECK-LABEL: .add1_caller_L0
+  %b0:i0:i32 = add 0:i32 1:i32
+  // CHECK-NEXT: addiw a0,zero,1
+  %b0:i1:i32 = call @add1:[ret:i32 params:(i32)]*(%b0:i0:i32)
+  // CHECK-NEXT: call add1
+
+  ret %b0:i1:i32
+  // CHECK-NEXT: ldu   ra,0(sp)
+  // CHECK-NEXT: addi  sp,sp,8
   // CHECK-NEXT: ret
 }

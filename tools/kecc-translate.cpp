@@ -88,8 +88,8 @@ std::unique_ptr<ir::Module> parseAndBuildModule(ir::IRContext &context) {
 ir::PassResult runPasses(ir::Module *module) {
   ir::PassManager pm;
 
-  pm.addPass<ir::OutlineConstantPass>();
   pm.addPass<ir::InlineCallPass>();
+  pm.addPass<ir::OutlineConstantPass>();
   pm.addPass<ir::CanonicalizeStruct>();
   pm.addPass<ir::OutlineMultipleResults>();
   pm.addPass<ir::CreateFunctionArgument>();

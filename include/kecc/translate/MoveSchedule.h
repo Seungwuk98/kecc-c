@@ -4,6 +4,8 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/raw_ostream.h"
+#include <queue>
 #include <set>
 
 namespace kecc {
@@ -21,15 +23,25 @@ public:
     return moveSchedule;
   }
 
+  void dump(llvm::raw_ostream &os) const {
+    for (const auto &[movement, dst, src] : moveSchedule) {
+      if (movement == Movement::Move)
+        os << "Move " << dst << " <- " << src << "\n";
+      else
+        os << "Swap " << dst << " <-> " << src << "\n";
+    }
+  }
+
 private:
   void swap(int a, int b);
+  void copy(int dst, int src);
   void move(int dst, int src);
   void init(llvm::ArrayRef<T> dst, llvm::ArrayRef<T> src, T temp);
 
   llvm::DenseMap<T, int> nodeToIndex;
   llvm::DenseMap<int, T> indexToNode;
   std::set<int> unresolvedNode;
-  llvm::SmallVector<int> moveGraph;
+  llvm::SmallVector<std::set<int>> moveGraph;
   llvm::SmallVector<int> moveGraphRev;
   llvm::SmallVector<std::tuple<Movement, T, T>> moveSchedule;
 };
@@ -41,31 +53,57 @@ MoveManagement<T>::MoveManagement(llvm::ArrayRef<T> dst, llvm::ArrayRef<T> src,
 }
 
 template <typename T> void MoveManagement<T>::swap(int a, int b) {
-  assert(nodeToIndex.contains(indexToNode.at(a)) &&
-         "a must be a valid node index");
-  assert(nodeToIndex.contains(indexToNode.at(b)) &&
-         "b must be a valid node index");
+  assert(a != b && "a and b must be different");
+  auto nodeA = indexToNode.at(a);
+  auto nodeB = indexToNode.at(b);
+  if constexpr (requires {
+                  { nodeA < nodeB } -> std::convertible_to<bool>;
+                }) {
+    if (nodeA > nodeB)
+      std::swap(nodeA, nodeB);
+  }
+  moveSchedule.emplace_back(Movement::Swap, nodeA, nodeB);
 
-  moveSchedule.emplace_back(Movement::Swap, indexToNode.at(a),
-                            indexToNode.at(b));
-  moveGraph[a] = moveGraph[b] = -1;
+  // update graph
   moveGraphRev[a] = moveGraphRev[b] = -1;
   unresolvedNode.erase(a);
   unresolvedNode.erase(b);
+
+  auto moveA = moveGraph[a];
+  auto moveB = moveGraph[b];
+  moveA.erase(b);
+  moveB.erase(a);
+  moveGraph[a] = moveB;
+  moveGraph[b] = moveA;
+  for (int dst : moveGraph[a])
+    moveGraphRev[dst] = a;
+  for (int dst : moveGraph[b])
+    moveGraphRev[dst] = b;
+}
+
+template <typename T> void MoveManagement<T>::copy(int dst, int src) {
+  assert(dst != src && "dst and src must be different");
+  moveSchedule.emplace_back(Movement::Move, indexToNode.at(dst),
+                            indexToNode.at(src));
+
+  // update graph
+  moveGraphRev[dst] = -1;
+  unresolvedNode.erase(dst);
+  moveGraph[src].erase(dst);
 }
 
 template <typename T> void MoveManagement<T>::move(int dst, int src) {
-  assert(nodeToIndex.contains(indexToNode.at(dst)) &&
-         "dst must be a valid node index");
-  assert(nodeToIndex.contains(indexToNode.at(src)) &&
-         "src must be a valid node index");
-  assert(moveGraph[dst] == -1 && "dst must not have any move scheduled to it");
-
+  assert(dst != src && "dst and src must be different");
   moveSchedule.emplace_back(Movement::Move, indexToNode.at(dst),
                             indexToNode.at(src));
-  moveGraph[src] = -1;
+
+  // update graph
+  for (int originalDsts : moveGraph[src]) {
+    moveGraphRev[originalDsts] = dst;
+    moveGraph[dst].insert(originalDsts);
+  }
+  moveGraph[src].clear();
   moveGraphRev[dst] = -1;
-  unresolvedNode.erase(dst);
 }
 
 template <typename T>
@@ -93,69 +131,63 @@ void MoveManagement<T>::init(llvm::ArrayRef<T> dst, llvm::ArrayRef<T> src,
     nodeToIndex[s] = index++;
   }
 
-  moveGraph.resize(index, -1);
+  moveGraph.resize(index);
   moveGraphRev.resize(index, -1);
 
-  for (auto [d, s] : llvm::zip(dst, src)) {
+  for (size_t i = 0; i < dst.size(); ++i) {
+    int d = nodeToIndex[dst[i]];
+    int s = nodeToIndex[src[i]];
+
     if (d == s)
       continue;
 
-    int dIndex = nodeToIndex[d];
-    int sIndex = nodeToIndex[s];
-
-    moveGraph[sIndex] = dIndex;
-    moveGraphRev[dIndex] = sIndex;
+    moveGraph[s].insert(d);
+    moveGraphRev[d] = s;
+    unresolvedNode.insert(d);
   }
 
-  for (int i = 0; i < index; ++i) {
-    if (moveGraphRev[i] != -1)
-      unresolvedNode.insert(i);
-  }
-
-  for (int i = 0; i < index; ++i) {
-    if (!unresolvedNode.contains(i) || moveGraph[i] == -1)
-      continue;
-
-    int j = moveGraph[i];
-    if (j == -1)
-      continue;
-
-    if (unresolvedNode.contains(j) && moveGraph[j] == i)
-      swap(i, j);
-  }
-
-  llvm::SmallVector<int> stack;
-  for (int i = 0; i < index; ++i) {
+  // find swap
+  for (size_t i = 0; i < dst.size(); ++i) {
     if (!unresolvedNode.contains(i))
       continue;
 
-    if (moveGraph[i] == -1 && moveGraphRev[i] != -1) {
-      stack.emplace_back(i);
-    }
+    int j = moveGraphRev[i];
+    if (!moveGraph[i].contains(j))
+      continue;
+    assert(j != -1 && "src must exist");
+    if (moveGraph[j].contains(i))
+      swap(i, j);
+  }
+
+  std::queue<int> zeroOutUnresolved;
+
+  for (int node : unresolvedNode) {
+    if (moveGraph[node].empty())
+      zeroOutUnresolved.push(node);
   }
 
   while (!unresolvedNode.empty()) {
-    if (stack.empty()) {
-      // break a loop
-      auto it = unresolvedNode.begin();
-      int i = *it;
-      stack.emplace_back(i);
-
-      auto imove = moveGraph[i];
-      move(0, i); // move data to temp
-      moveGraph[0] = imove;
-      moveGraphRev[imove] = 0;
+    if (zeroOutUnresolved.empty()) {
+      // cycle exists
+      auto firstIter = unresolvedNode.begin();
+      int startNode = *firstIter;
+      move(0, startNode);
+      zeroOutUnresolved.push(startNode);
     }
 
-    while (!stack.empty()) {
-      auto v = stack.pop_back_val();
-      if (!unresolvedNode.contains(v))
-        continue;
-      auto rev = moveGraphRev[v];
-      assert(rev != -1);
-      move(v, rev);
-      if (moveGraphRev[rev] != -1)
-        stack.emplace_back(rev);
+    while (!zeroOutUnresolved.empty()) {
+      int node = zeroOutUnresolved.front();
+      zeroOutUnresolved.pop();
+      assert(unresolvedNode.contains(node) && "node must be in unresolvedNode");
+
+      int src = moveGraphRev[node];
+      assert(src != -1 && "src must exist");
+      copy(node, src);
+
+      moveGraphRev[node] = -1;
+      unresolvedNode.erase(node);
+      if (moveGraph[src].empty() && unresolvedNode.contains(src))
+        zeroOutUnresolved.push(src);
     }
   }
 }

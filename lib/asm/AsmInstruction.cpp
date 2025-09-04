@@ -1,6 +1,9 @@
 #include "kecc/asm/AsmInstruction.h"
+#include "kecc/ir/Interface.h"
+#include "llvm/ADT/StringRef.h"
 #include <format>
 
+DEFINE_KECC_TYPE_ID(kecc::as::CommentLine)
 DEFINE_KECC_TYPE_ID(kecc::as::rtype::Add)
 DEFINE_KECC_TYPE_ID(kecc::as::rtype::Sub)
 DEFINE_KECC_TYPE_ID(kecc::as::rtype::Sll)
@@ -83,6 +86,11 @@ void RelocationImmediate::print(llvm::raw_ostream &os) const {
 
 void Instruction::remove() { getNode()->remove(); }
 
+CommentLine::CommentLine(llvm::StringRef comment)
+    : Base(TypeID::get<CommentLine>()) {
+  setComment(comment);
+}
+
 bool RType::classof(const Instruction *inst) {
   return llvm::isa<rtype::Add, rtype::Sub, rtype::Sll, rtype::Srl, rtype::Sra,
                    rtype::Mul, rtype::Div, rtype::Rem, rtype::Slt, rtype::Xor,
@@ -92,7 +100,7 @@ bool RType::classof(const Instruction *inst) {
                    rtype::FcvtFloatToInt, rtype::FcvtFloatToFloat>(inst);
 }
 
-void RType::print(llvm::raw_ostream &os) const {
+void RType::printInner(llvm::raw_ostream &os) const {
   auto roundingMode = isa<rtype::FcvtFloatToInt>() ? ",rtz" : "";
   os << std::format("{}\t{},{}{}{}", toString(), rd.toString(), rs1.toString(),
                     rs2 ? std::format(",{}", rs2->toString()) : "",
@@ -311,7 +319,7 @@ bool IType::classof(const Instruction *inst) {
                    itype::Andi, itype::Slli, itype::Srli, itype::Srai,
                    itype::Slti>(inst);
 }
-void IType::print(llvm::raw_ostream &os) const {
+void IType::printInner(llvm::raw_ostream &os) const {
   if (isa<itype::Load>())
     os << std::format("{}\t{},{}({})", toString(), rd.toString(),
                       imm->toString(), rs1.toString());
@@ -385,7 +393,7 @@ SType::~SType() { delete imm; }
 bool SType::classof(const Instruction *inst) {
   return llvm::isa<stype::Store>(inst);
 }
-void SType::print(llvm::raw_ostream &os) const {
+void SType::printInner(llvm::raw_ostream &os) const {
   os << std::format("{}\t{},{}({})", toString(), rs2.toString(),
                     imm->toString(), rs1.toString());
 }
@@ -406,7 +414,7 @@ std::string Store::toString() const {
 bool BType::classof(const Instruction *inst) {
   return llvm::isa<btype::Beq, btype::Bne, btype::Blt, btype::Bge>(inst);
 }
-void BType::print(llvm::raw_ostream &os) const {
+void BType::printInner(llvm::raw_ostream &os) const {
   os << std::format("{}\t{},{}, {}", toString(), rs1.toString(), rs2.toString(),
                     imm);
 }
@@ -439,7 +447,7 @@ UType::~UType() { delete imm; }
 bool UType::classof(const Instruction *inst) {
   return llvm::isa<utype::Lui>(inst);
 }
-void UType::print(llvm::raw_ostream &os) const {
+void UType::printInner(llvm::raw_ostream &os) const {
   os << std::format("{}\t{}, {}", toString(), rd.toString(), imm->toString());
 }
 
@@ -455,7 +463,7 @@ bool Pseudo::classof(const Instruction *inst) {
                    pseudo::Call>(inst);
 }
 
-void Pseudo::print(llvm::raw_ostream &os) const { os << toString(); }
+void Pseudo::printInner(llvm::raw_ostream &os) const { os << toString(); }
 
 namespace pseudo {
 

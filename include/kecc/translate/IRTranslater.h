@@ -95,6 +95,8 @@ public:
   bool isSpilled(LiveRange liveRange) const;
 
   void writeFunctionEnd(as::AsmBuilder &builder);
+  void writeFunctionEndImpl(as::AsmBuilder &builder);
+  std::string functionEndLabel() const;
   void writeFunctionStart(as::AsmBuilder &builder);
 
   // move srcs to dsts
@@ -141,6 +143,8 @@ public:
                                   const StackPoint &sp, as::DataSize dataSize,
                                   bool isSigned);
 
+  bool hasMultipleReturn() const { return multipleReturn; }
+
 private:
   void init();
   void saveCalleeSavedRegisters(as::AsmBuilder &builder);
@@ -173,6 +177,7 @@ private:
   std::optional<as::Register> returnAddressMemory;
   size_t anonRegIndex = 0;
   bool hasCall = false;
+  bool multipleReturn = false;
 };
 
 class TranslationRuleSet {

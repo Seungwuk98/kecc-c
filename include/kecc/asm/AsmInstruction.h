@@ -188,9 +188,17 @@ public:
   Block *getParentBlock() const { return parent; }
   Block::Node *getNode() const { return node; }
 
-  virtual void print(llvm::raw_ostream &os) const = 0;
+  virtual void printInner(llvm::raw_ostream &os) const = 0;
+  void print(llvm::raw_ostream &os) const {
+    printInner(os);
+    if (!comment.empty())
+      os << "\t# " << comment;
+  }
 
   void remove();
+
+  void setComment(llvm::StringRef comment) { this->comment = comment; }
+  llvm::StringRef getComment() const { return comment; }
 
 protected:
   Instruction(TypeID id) : typeId(id) {}
@@ -202,6 +210,7 @@ private:
   Block *parent;
   Block::Node *node;
   TypeID typeId;
+  std::string comment;
 };
 
 template <typename ConreteInst, typename ParentInst>
@@ -215,6 +224,15 @@ public:
   }
 };
 
+class CommentLine final : public InstructionTemplate<CommentLine, Instruction> {
+public:
+  void printInner(llvm::raw_ostream &os) const override final { os << '\t'; }
+
+private:
+  friend class ::kecc::as::AsmBuilder;
+  CommentLine(llvm::StringRef comment);
+};
+
 class RType : public Instruction {
 public:
   Register getRd() const { return rd; }
@@ -223,7 +241,7 @@ public:
 
   static bool classof(const Instruction *inst);
 
-  void print(llvm::raw_ostream &os) const override final;
+  void printInner(llvm::raw_ostream &os) const override final;
 
   virtual std::string toString() const = 0;
 
@@ -550,7 +568,7 @@ public:
 
   static bool classof(const Instruction *inst);
 
-  void print(llvm::raw_ostream &os) const override final;
+  void printInner(llvm::raw_ostream &os) const override final;
 
   virtual std::string toString() const = 0;
 
@@ -683,7 +701,7 @@ public:
 
   static bool classof(const Instruction *inst);
 
-  void print(llvm::raw_ostream &os) const override final;
+  void printInner(llvm::raw_ostream &os) const override final;
 
   virtual std::string toString() const = 0;
 
@@ -723,7 +741,7 @@ public:
 
   static bool classof(const Instruction *inst);
 
-  void print(llvm::raw_ostream &os) const override final;
+  void printInner(llvm::raw_ostream &os) const override final;
 
   virtual std::string toString() const = 0;
 
@@ -790,7 +808,7 @@ public:
   Register getRd() const { return rd; }
   Immediate *getImm() const { return imm; }
 
-  void print(llvm::raw_ostream &os) const override final;
+  void printInner(llvm::raw_ostream &os) const override final;
 
   virtual std::string toString() const = 0;
 
@@ -818,7 +836,7 @@ class Pseudo : public Instruction {
 public:
   static bool classof(const Instruction *inst);
 
-  void print(llvm::raw_ostream &os) const override final;
+  void printInner(llvm::raw_ostream &os) const override final;
 
   virtual std::string toString() const = 0;
 
@@ -1035,6 +1053,7 @@ private:
 
 } // namespace kecc::as
 
+DECLARE_KECC_TYPE_ID(kecc::as::CommentLine)
 DECLARE_KECC_TYPE_ID(kecc::as::rtype::Add)
 DECLARE_KECC_TYPE_ID(kecc::as::rtype::Sub)
 DECLARE_KECC_TYPE_ID(kecc::as::rtype::Sll)

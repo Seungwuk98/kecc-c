@@ -104,6 +104,63 @@ TEST_CASE("Move schedule") {
     CHECK_EQ(moveSchedule.size(), expected.size());
     CHECK_EQ(moveSchedule, expected);
   }
+
+  SUBCASE("Loop case 4") {
+    // 2 <- 1
+    // 3 <- 1
+    // 1 <- 2
+    // 4 <- 2
+
+    llvm::ArrayRef<int> dst = {2, 3, 1, 4};
+    llvm::ArrayRef<int> src = {1, 1, 2, 2};
+    llvm::ArrayRef<std::tuple<Movement, int, int>> expected = {
+        {Movement::Swap, 1, 2},
+        {Movement::Move, 3, 2},
+        {Movement::Move, 4, 1},
+    };
+
+    MoveManagement<int> moveManagement(dst, src, 0);
+    auto moveSchedule = moveManagement.getMoveSchedule();
+    CHECK_EQ(moveSchedule.size(), expected.size());
+    CHECK_EQ(moveSchedule, expected);
+  }
+
+  SUBCASE("Include static case") {
+    // 1 <- 1
+    // 2 <- 1
+
+    llvm::ArrayRef<int> dst = {1, 2};
+    llvm::ArrayRef<int> src = {1, 1};
+    llvm::ArrayRef<std::tuple<Movement, int, int>> expected = {
+        {Movement::Move, 2, 1},
+    };
+    MoveManagement<int> moveManagement(dst, src, 0);
+    auto moveSchedule = moveManagement.getMoveSchedule();
+    CHECK_EQ(moveSchedule.size(), expected.size());
+    CHECK_EQ(moveSchedule, expected);
+  }
+
+  SUBCASE("Complex case") {
+    // 1 <- 3
+    // 2 <- 1
+    // 3 <- 2
+    // 4 <- 1
+    // 5 <- 3
+    // 6 <- 2
+    llvm::ArrayRef<int> dst = {1, 2, 3, 4, 5, 6};
+    llvm::ArrayRef<int> src = {3, 1, 2, 1, 3, 2};
+
+    llvm::ArrayRef<std::tuple<Movement, int, int>> expected = {
+        {Movement::Move, 4, 1}, {Movement::Move, 5, 3}, {Movement::Move, 6, 2},
+        {Movement::Move, 0, 1}, {Movement::Move, 1, 3}, {Movement::Move, 3, 2},
+        {Movement::Move, 2, 0},
+    };
+
+    MoveManagement<int> moveManagement(dst, src, 0);
+    auto moveSchedule = moveManagement.getMoveSchedule();
+    CHECK_EQ(moveSchedule.size(), expected.size());
+    CHECK_EQ(moveSchedule, expected);
+  }
 }
 
 } // namespace kecc
