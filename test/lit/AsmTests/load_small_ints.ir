@@ -1,0 +1,74 @@
+// RUN: kecc-translate %s | FileCheck %s
+
+
+// CHECK: .globl load_small_int
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type load_small_int, @function
+fun i32 @load_small_int () {
+// CHECK-NEXT: load_small_int
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_small_int_L0:
+  ret 15:i32
+  // CHECK-NEXT: addiw a0,zero,15
+  // CHECK-NEXT: ret
+}
+
+
+// CHECK: .globl load_small_int2
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type load_small_int2, @function
+fun i32 @load_small_int2 () {
+// CHECK: load_small_int2
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_small_int2
+  ret 4095:i32
+  // CHECK-NEXT: lui a0,1
+  // CHECK-NEXT: addiw a0,a0,-1
+  // CHECK-NEXT: ret
+}
+
+
+// CHECK: .globl load_big_shift
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type load_big_shift, @function
+fun u64 @load_big_shift () {
+// CHECK-NEXT: load_big_shift:
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_big_shift_L0:
+  ret 18446744069414584320:u64 // ((1 << 32) - 1) << 32
+  // CHECK-NEXT: addiw a0,zero,-1
+  // CHECK-NEXT: slli  a0,a0,32
+  // CHECK-NEXT: ret
+}
+
+
+// CHECK: .globl load_big_shift2
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type load_big_shift2, @function
+fun u64 @load_big_shift2 () {
+// CHECK-NEXT: load_big_shift2:
+init:
+  bid: b0 
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_big_shift2_L0:
+  ret 281406257233920:u64 // (1 << 12) - 1 << 36
+  // CHECK-NEXT: lui a0,1
+  // CHECK-NEXT: addiw a0,a0,-1
+  // CHECK-NEXT: slli a0,a0,36
+  // CHECK-NEXT: ret
+}
+

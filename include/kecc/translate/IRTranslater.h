@@ -26,6 +26,7 @@ class IRTranslater {
 public:
   IRTranslater(TranslateContext *context, ir::Module *module)
       : context(context), module(module), regAlloc(module, context) {}
+  ~IRTranslater();
 
   std::unique_ptr<as::Asm> translate();
 
@@ -57,7 +58,7 @@ private:
   llvm::DenseMap<ir::ConstantAttr,
                  std::pair<llvm::StringRef, std::optional<as::DataSize>>>
       constantToLabelMap;
-  llvm::SmallVector<as::Variable *, 8> globalVariables;
+  llvm::SmallVector<as::Variable *, 8> constants;
   size_t constantIndex = 0;
 };
 

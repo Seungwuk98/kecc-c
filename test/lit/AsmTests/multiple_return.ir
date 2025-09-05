@@ -1,0 +1,34 @@
+// RUN: kecc-translate %s | FileCheck %s
+
+
+// CHECK: .globl multiple_return
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type multiple_return, @function
+fun i32 @multiple_return (i1) {
+// CHECK-NEXT: multiple_return:
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .multiple_return_L0:
+  %b0:p0:i1 
+  br %b0:p0:i1, b1(), b2()
+  // beq  a0,zero,  .multiple_return_L2:
+  // j  .multiple_return_L1
+
+block b1:
+// CHECK-LABEL: .multiple_return_L1:
+  ret 0:i32 
+  // CHECK-NEXT: addiw a0,zero,0
+  // CHECK-NEXT: j .multiple_return_Lend
+
+block b2:
+// CHECK-LABEL: .multiple_return_L2:
+  ret 1:i32
+  // CHECK-NEXT: addiw a0,zero,1
+  // CHECK-NEXT: j .multiple_return_Lend
+
+// CHECK-LABEL: .multiple_return_Lend:
+// CHECK-NEXT:    ret
+}

@@ -448,7 +448,7 @@ bool UType::classof(const Instruction *inst) {
   return llvm::isa<utype::Lui>(inst);
 }
 void UType::printInner(llvm::raw_ostream &os) const {
-  os << std::format("{}\t{}, {}", toString(), rd.toString(), imm->toString());
+  os << std::format("{}\t{},{}", toString(), rd.toString(), imm->toString());
 }
 
 namespace utype {

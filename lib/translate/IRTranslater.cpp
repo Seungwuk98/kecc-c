@@ -62,6 +62,12 @@ void defaultRegisterSetup(TranslateContext *context) {
   context->setRegistersForAllocate(intRegs, floatRegs);
 }
 
+IRTranslater::~IRTranslater() {
+  for (as::Variable *constant : constants) {
+    delete constant;
+  }
+}
+
 std::pair<llvm::StringRef, std::optional<as::DataSize>>
 IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
   if (auto it = constantToLabelMap.find(constant);
@@ -71,7 +77,7 @@ IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
 
   auto label = std::format(".LC{}", constantIndex++);
   as::Variable *newVariable;
-  as::DataSize dataSize = as::DataSize::word();
+  as::DataSize dataSize = as::DataSize::doubleWord();
   if (auto intConst = constant.dyn_cast<ir::ConstantIntAttr>()) {
     auto quad = new as::QuadDirective(intConst.getValue());
     newVariable = new as::Variable(label, {quad});
@@ -98,9 +104,9 @@ IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
     llvm_unreachable("Unsupported constant type");
   }
 
-  globalVariables.emplace_back(newVariable);
+  constants.emplace_back(newVariable);
   constantToLabelMap.try_emplace(constant, newVariable->getLabel(), dataSize);
-  return {label, dataSize};
+  return {newVariable->getLabel(), dataSize};
 }
 
 std::pair<llvm::StringRef, std::optional<as::DataSize>>
@@ -172,6 +178,18 @@ std::unique_ptr<as::Asm> IRTranslater::translate() {
   }
 
   dataVariables.append(bssVariables);
+  for (as::Variable *constant : constants) {
+    dataVariables.emplace_back(new as::Section<as::Variable>(
+        {
+            new as::TypeDirective(constant->getLabel(),
+                                  as::TypeDirective::Kind::Object),
+            new as::SectionDirective(as::SectionDirective::SectionType::Rodata),
+            new as::AlignDirective(2),
+        },
+        constant));
+  }
+  constants.clear();
+
   return std::make_unique<as::Asm>(functions, dataVariables);
 }
 
@@ -894,7 +912,7 @@ void FunctionTranslater::writeFunctionEndImpl(as::AsmBuilder &builder) {
 }
 
 std::string FunctionTranslater::functionEndLabel() const {
-  return std::format("{}_Lend", function->getName().str());
+  return std::format(".{}_Lend", function->getName().str());
 }
 
 void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
@@ -1174,15 +1192,13 @@ static constexpr std::int32_t HI12 = (1 << 11) - 1;
 static constexpr std::int32_t LO12 = -(1 << 11);
 
 void loadInt32(as::AsmBuilder &builder, as::Register rd, std::int32_t value) {
-
   if (LO12 <= value && value <= HI12) {
     builder.create<as::itype::Addi>(rd, as::Register::zero(),
                                     getImmediate(value), as::DataSize::word());
   } else {
-    std::uint32_t hi12 = (value >> 12);
-    std::uint32_t lo12 = value & ((1 << 12) - 1);
-    bool isNegative = lo12 >> 11;
-    if (isNegative) {
+    std::uint32_t hi12 = (static_cast<std::uint32_t>(value) >> 12u);
+    std::int32_t lo12 = (value << 20) >> 20;
+    if (lo12 < 0) {
       hi12 += 1;
     }
 
@@ -1222,7 +1238,7 @@ void loadInt64(as::AsmBuilder &builder, FunctionTranslater &translater,
 
     if (shiftRight > 0) {
       builder.create<as::itype::Slli>(rd, rd, getImmediate(shiftRight),
-                                      as::DataSize::word());
+                                      as::DataSize::doubleWord());
     }
   } else {
     auto [label, dataSize] = translater.getConstantLabel(value);
