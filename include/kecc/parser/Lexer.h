@@ -101,6 +101,9 @@ private:
                         Token::Kind failure = Token::Tok_unknown);
   void lexToTokenIndex(size_t index, LexMode mode);
 
+  void lexLineComment();
+  bool lexBlockComment();
+
   char advance();
   char peek() const;
   char prev() const;

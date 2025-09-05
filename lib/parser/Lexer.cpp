@@ -105,14 +105,59 @@ void Lexer::lexToTokenIndex(size_t index, LexMode mode) {
   }
 }
 
+void Lexer::lexLineComment() {
+  // '/' has already been consumed and guaranteed to be followed by '/'
+  advance(); // consume second '/'
+
+  char c = peek();
+  while (c != CHAR_EOF && c != '\n') {
+    advance();
+    if (c == '\\') {
+      if (peek() == '\n') {
+        advance(); // consume '\n'
+      }
+    }
+    c = peek();
+  }
+}
+
+bool Lexer::lexBlockComment() {
+  // '/' has already been consumed and guaranteed to be followed by '*'
+  advance(); // consume '*'
+
+  char c = peek();
+  while (c != CHAR_EOF) {
+    advance();
+    if (c == '/') {
+      if (peek() == '*') {
+        auto failed = lexBlockComment();
+        if (failed)
+          return true;
+      }
+    } else if (c == '*') {
+      if (peek() == '/') {
+        advance(); // consume '/'
+        return false;
+      }
+    }
+    c = peek();
+  }
+
+  return true; // EOF reached before closing */
+}
+
 #define LEX_COMMENT(LexFunction)                                               \
   case '/':                                                                    \
     if (peek() == '/') {                                                       \
-      while (peek() != '\n')                                                   \
-        advance();                                                             \
-      advance();                                                               \
+      lexLineComment();                                                        \
       LexFunction();                                                           \
       break;                                                                   \
+    } else if (peek() == '*') {                                                \
+      bool failed = lexBlockComment();                                         \
+      if (!failed) {                                                           \
+        LexFunction();                                                         \
+        break;                                                                 \
+      }                                                                        \
     }                                                                          \
     currentKind = Token::Tok_unknown;                                          \
     break;
