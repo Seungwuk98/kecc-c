@@ -1,4 +1,4 @@
-// RUN: kecc-translate %s | FileCheck %s
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
 
 
 // CHECK: .globl load_small_int
@@ -72,3 +72,25 @@ block b0:
   // CHECK-NEXT: ret
 }
 
+///////////// main.c
+
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+// RESULT: load small int: 15
+// RESULT: load small int2: 4095
+// RESULT: load big shift: 18446744069414584320
+// RESULT: load big shift2: 281406257233920
+
+#include <stdio.h>
+
+extern int load_small_int();
+extern int load_small_int2();
+extern unsigned long long load_big_shift();
+extern unsigned long long load_big_shift2();
+
+int main() {
+  printf("load small int: %d\n", load_small_int());
+  printf("load small int2: %d\n", load_small_int2());
+  printf("load big shift: %llu\n", load_big_shift());
+  printf("load big shift2: %llu\n", load_big_shift2());
+  return 0; 
+}

@@ -1,4 +1,6 @@
-// RUN: kecc-translate %s | FileCheck %s
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+// RESULT: 11398473142196178380 
 
 // CHECK: .globl load_big_int
 // CHECK-NEXT: .align 1
@@ -23,3 +25,14 @@ block b0:
 // CHECK-NEXT: .LC0:
 // CHECK-NEXT:    .quad 11398473142196178380 
 
+
+/////////// main.c 
+
+#include <stdio.h>
+
+extern long long load_big_int();
+
+int main() {
+  printf("%llu\n", load_big_int());
+  return 0;
+}
