@@ -1,0 +1,35 @@
+// RUN: kecc-test-executor %s | FileCheck %s
+// CHECK: 1000000000
+
+fun i32 @test () {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  ret 1000000000:i32
+}
+
+
+///////////// lib.c
+
+#include <stdio.h>
+
+void printInt(int value) {
+  printf("%d\n", value);
+}
+
+
+///////////// main.c
+
+#include <stdio.h>
+
+extern int test();
+extern void printInt(int value);
+
+int main() {
+  printInt(test());
+  return 0;
+}
+
+
