@@ -9,6 +9,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/SourceMgr.h"
 
 namespace kecc {
 
@@ -180,6 +181,13 @@ ir::Function *Parser::parseFunction(ir::IR *program, Token *startToken) {
 
   // remove '@'
   llvm::StringRef name = nameToken->getSymbol().substr(1);
+  if (auto prevFunc = program->getFunction(name)) {
+    diag.report(nameToken->getRange(), llvm::SourceMgr::DK_Error,
+                "Function is already defined");
+    diag.report(prevFunc->getRange(), llvm::SourceMgr::DK_Note,
+                "Previous defined here");
+    return nullptr;
+  }
 
   if (consume<Token::Tok_lparen>())
     return nullptr;
@@ -205,7 +213,8 @@ ir::Function *Parser::parseFunction(ir::IR *program, Token *startToken) {
 
   auto funcType = ir::FunctionT::get(context, retTypes, argTypes);
 
-  ir::Function *func = new ir::Function(name, funcType, program, context);
+  ir::Function *func =
+      new ir::Function(rh.getRange(), name, funcType, program, context);
 
   auto peekToken = lexer.peekToken();
   if (peekToken->is<Token::Tok_lbrace>()) {

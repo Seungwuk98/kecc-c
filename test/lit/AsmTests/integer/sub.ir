@@ -1,0 +1,447 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s 
+
+fun i1 @sub_i1 (i1, i1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i1
+  %b0:p1:i1
+  %b0:i0:i1 = sub %b0:p0:i1 %b0:p1:i1
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl        sub_i1
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_i1, @function
+// CHECK-NEXT: sub_i1:
+
+// CHECK-LABEL: .sub_i1_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   andi  a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i8 @sub_i8 (i8, i8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i8
+  %b0:p1:i8
+  %b0:i0:i8 = sub %b0:p0:i8 %b0:p1:i8
+  ret %b0:i0:i8
+}
+
+// CHECK:   .globl        sub_i8
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_i8, @function
+// CHECK-NEXT: sub_i8:
+
+// CHECK-LABEL: .sub_i8_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   slli  a0,a0,56
+// CHECK-NEXT:   srai  a0,a0,56
+// CHECK-NEXT:   ret
+
+
+fun i16 @sub_i16 (i16, i16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i16
+  %b0:p1:i16
+  %b0:i0:i16 = sub %b0:p0:i16 %b0:p1:i16
+  ret %b0:i0:i16
+}
+
+// CHECK:   .globl        sub_i16
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_i16, @function
+// CHECK-NEXT: sub_i16:
+
+// CHECK-LABEL: .sub_i16_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   slli  a0,a0,48
+// CHECK-NEXT:   srai  a0,a0,48
+// CHECK-NEXT:   ret
+
+
+fun i32 @sub_i32 (i32, i32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:i0:i32 = sub %b0:p0:i32 %b0:p1:i32
+  ret %b0:i0:i32
+}
+
+// CHECK:   .globl        sub_i32
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_i32, @function
+// CHECK-NEXT: sub_i32:
+
+// CHECK-LABEL: .sub_i32_L0:
+// CHECK-NEXT:   subw  a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i64 @sub_i64 (i64, i64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i64
+  %b0:p1:i64
+  %b0:i0:i64 = sub %b0:p0:i64 %b0:p1:i64
+  ret %b0:i0:i64
+}
+
+// CHECK:   .globl        sub_i64
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_i64, @function
+// CHECK-NEXT: sub_i64:
+
+// CHECK-LABEL: .sub_i64_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u1 @sub_u1 (u1, u1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u1
+  %b0:p1:u1
+  %b0:i0:u1 = sub %b0:p0:u1 %b0:p1:u1
+  ret %b0:i0:u1
+}
+
+// CHECK:   .globl        sub_u1
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_u1, @function
+// CHECK-NEXT: sub_u1:
+
+// CHECK-LABEL: .sub_u1_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   andi  a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun u8 @sub_u8 (u8, u8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u8
+  %b0:p1:u8
+  %b0:i0:u8 = sub %b0:p0:u8 %b0:p1:u8
+  ret %b0:i0:u8
+}
+
+// CHECK:   .globl        sub_u8
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_u8, @function
+// CHECK-NEXT: sub_u8:
+
+// CHECK-LABEL: .sub_u8_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   andi  a0,a0,255
+// CHECK-NEXT:   ret
+
+
+fun u16 @sub_u16 (u16, u16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u16
+  %b0:p1:u16
+  %b0:i0:u16 = sub %b0:p0:u16 %b0:p1:u16
+  ret %b0:i0:u16
+}
+
+// CHECK:   .globl        sub_u16
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_u16, @function
+// CHECK-NEXT: sub_u16:
+
+// CHECK-LABEL: .sub_u16_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   slli  a0,a0,48
+// CHECK-NEXT:   srli  a0,a0,48
+// CHECK-NEXT:   ret
+
+
+fun u32 @sub_u32 (u32, u32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u32
+  %b0:p1:u32
+  %b0:i0:u32 = sub %b0:p0:u32 %b0:p1:u32
+  ret %b0:i0:u32
+}
+
+// CHECK:   .globl        sub_u32
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_u32, @function
+// CHECK-NEXT: sub_u32:
+
+// CHECK-LABEL: .sub_u32_L0:
+// CHECK-NEXT:   subw  a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u64 @sub_u64 (u64, u64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u64
+  %b0:p1:u64
+  %b0:i0:u64 = sub %b0:p0:u64 %b0:p1:u64
+  ret %b0:i0:u64
+}
+
+// CHECK:   .globl        sub_u64
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type sub_u64, @function
+// CHECK-NEXT: sub_u64:
+
+// CHECK-LABEL: .sub_u64_L0:
+// CHECK-NEXT:   sub   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+///// main.c
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+#include <stdint.h>
+
+extern _Bool   sub_i1(_Bool, _Bool);
+extern int8_t  sub_i8(int8_t, int8_t);
+extern int16_t sub_i16(int16_t, int16_t);
+extern int32_t sub_i32(int32_t, int32_t);
+extern int64_t sub_i64(int64_t, int64_t);
+
+extern _Bool    sub_u1(_Bool, _Bool);
+extern uint8_t  sub_u8(uint8_t, uint8_t);
+extern uint16_t sub_u16(uint16_t, uint16_t);
+extern uint32_t sub_u32(uint32_t, uint32_t);
+extern uint64_t sub_u64(uint64_t, uint64_t);
+
+int main(void) {
+  // ===== i1 (mod 2) =====
+  printf("%d\n", (int) sub_i1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) sub_i1(0, 1));
+  // RESULT: 1
+  printf("%d\n", (int) sub_i1(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) sub_i1(1, 1));
+  // RESULT: 0
+
+  // ===== u1 (mod 2) =====
+  printf("%d\n", (int) sub_u1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) sub_u1(0, 1));
+  // RESULT: 1
+  printf("%d\n", (int) sub_u1(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) sub_u1(1, 1));
+  // RESULT: 0
+
+  // ===== i8 =====
+  printf("%d\n", (int) sub_i8(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) sub_i8(127, 1));
+  // RESULT: 126
+  printf("%d\n", (int) sub_i8(-128, 1));
+  // RESULT: 127
+  printf("%d\n", (int) sub_i8(-128, -1));
+  // RESULT: -127
+  printf("%d\n", (int) sub_i8(-1, 1));
+  // RESULT: -2
+  printf("%d\n", (int) sub_i8(1, -1));
+  // RESULT: 2
+  printf("%d\n", (int) sub_i8(100, 127));
+  // RESULT: -27
+  printf("%d\n", (int) sub_i8(-100, 50));
+  // RESULT: 106
+  printf("%d\n", (int) sub_i8(127, 127));
+  // RESULT: 0
+  printf("%d\n", (int) sub_i8(-128, -128));
+  // RESULT: 0
+
+  // ===== u8 =====
+  printf("%u\n", (unsigned) sub_u8(0u, 0u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) sub_u8(0u, 1u));
+  // RESULT: 255
+  printf("%u\n", (unsigned) sub_u8(255u, 1u));
+  // RESULT: 254
+  printf("%u\n", (unsigned) sub_u8(255u, 255u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) sub_u8(1u, 255u));
+  // RESULT: 2
+  printf("%u\n", (unsigned) sub_u8(200u, 55u));
+  // RESULT: 145
+  printf("%u\n", (unsigned) sub_u8(55u, 200u));
+  // RESULT: 111
+  printf("%u\n", (unsigned) sub_u8(128u, 128u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) sub_u8(255u, 0u));
+  // RESULT: 255
+  printf("%u\n", (unsigned) sub_u8(1u, 0u));
+  // RESULT: 1
+
+  // ===== i16 =====
+  printf("%d\n", (int) sub_i16(32767, 1));
+  // RESULT: 32766
+  printf("%d\n", (int) sub_i16(-32768, 1));
+  // RESULT: 32767
+  printf("%d\n", (int) sub_i16(-32768, -1));
+  // RESULT: -32767
+  printf("%d\n", (int) sub_i16(30000, 10000));
+  // RESULT: 20000
+  printf("%d\n", (int) sub_i16(-30000, 10000));
+  // RESULT: 25536
+  printf("%d\n", (int) sub_i16(10000, 30000));
+  // RESULT: -20000
+  printf("%d\n", (int) sub_i16(32767, 32767));
+  // RESULT: 0
+  printf("%d\n", (int) sub_i16(-32768, -32768));
+  // RESULT: 0
+  printf("%d\n", (int) sub_i16(-1, 1));
+  // RESULT: -2
+  printf("%d\n", (int) sub_i16(12345, -12345));
+  // RESULT: 24690
+
+  // ===== u16 =====
+  printf("%u\n", (unsigned) sub_u16(0u, 1u));
+  // RESULT: 65535
+  printf("%u\n", (unsigned) sub_u16(65535u, 1u));
+  // RESULT: 65534
+  printf("%u\n", (unsigned) sub_u16(65535u, 65535u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) sub_u16(50000u, 20000u));
+  // RESULT: 30000
+  printf("%u\n", (unsigned) sub_u16(20000u, 50000u));
+  // RESULT: 35536
+  printf("%u\n", (unsigned) sub_u16(1u, 65535u));
+  // RESULT: 2
+  printf("%u\n", (unsigned) sub_u16(65535u, 0u));
+  // RESULT: 65535
+  printf("%u\n", (unsigned) sub_u16(0u, 65535u));
+  // RESULT: 1
+  printf("%u\n", (unsigned) sub_u16(32768u, 32768u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) sub_u16(12345u, 54321u));
+  // RESULT: 23560
+
+  // ===== i32 =====
+  printf("%d\n", (int) sub_i32(2147483647, 1));
+  // RESULT: 2147483646
+  printf("%d\n", (int) sub_i32(-2147483648, 1));
+  // RESULT: 2147483647
+  printf("%d\n", (int) sub_i32(-2147483648, -1));
+  // RESULT: -2147483647
+  printf("%d\n", (int) sub_i32(2000000000, 1000000000));
+  // RESULT: 1000000000
+  printf("%d\n", (int) sub_i32(-2000000000, 2000000000));
+  // RESULT: 294967296
+  printf("%d\n", (int) sub_i32(1000000000, 2000000000));
+  // RESULT: -1000000000
+  printf("%d\n", (int) sub_i32(2147483647, 2147483647));
+  // RESULT: 0
+  printf("%d\n", (int) sub_i32(-2147483648, -2147483648));
+  // RESULT: 0
+  printf("%d\n", (int) sub_i32(-1, 1));
+  // RESULT: -2
+  printf("%d\n", (int) sub_i32(0, (int32_t)0x80000000u));
+  // RESULT: -2147483648
+
+  // ===== u32 =====
+  printf("%u\n", (unsigned) sub_u32(0u, 1u));
+  // RESULT: 4294967295
+  printf("%u\n", (unsigned) sub_u32(4294967295u, 1u));
+  // RESULT: 4294967294
+  printf("%u\n", (unsigned) sub_u32(4294967295u, 4294967295u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) sub_u32(4000000000u, 1000000000u));
+  // RESULT: 3000000000
+  printf("%u\n", (unsigned) sub_u32(1000000000u, 4000000000u));
+  // RESULT: 1294967296
+  printf("%u\n", (unsigned) sub_u32(1u, 4294967295u));
+  // RESULT: 2
+  printf("%u\n", (unsigned) sub_u32(2147483648u, 2147483648u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) sub_u32(0u, 4294967295u));
+  // RESULT: 1
+  printf("%u\n", (unsigned) sub_u32(1234567890u, 3000000000u));
+  // RESULT: 2529535186
+  printf("%u\n", (unsigned) sub_u32(579u, 0u));
+  // RESULT: 579
+
+  // ===== i64 =====
+  printf("%lld\n", (long long) sub_i64(9223372036854775807ll, 1ll));
+  // RESULT: 9223372036854775806
+  printf("%lld\n", (long long) sub_i64(-9223372036854775808ll, 1ll));
+  // RESULT: 9223372036854775807
+  printf("%lld\n", (long long) sub_i64(-9223372036854775808ll, -1ll));
+  // RESULT: -9223372036854775807
+  printf("%lld\n", (long long) sub_i64(9000000000000000000ll, 1000000000000000000ll));
+  // RESULT: 8000000000000000000
+  printf("%lld\n", (long long) sub_i64(-9000000000000000000ll, 1000000000000000000ll));
+  // RESULT: 8446744073709551616
+  printf("%lld\n", (long long) sub_i64(9223372036854775807ll, 9223372036854775807ll));
+  // RESULT: 0
+  printf("%lld\n", (long long) sub_i64(-9223372036854775808ll, -9223372036854775808ll));
+  // RESULT: 0
+  printf("%lld\n", (long long) sub_i64(-1ll, 1ll));
+  // RESULT: -2
+  printf("%lld\n", (long long) sub_i64(0ll, (int64_t)0x8000000000000000ULL));
+  // RESULT: -9223372036854775808
+  printf("%lld\n", (long long) sub_i64(1234567890123456789ll, -1234567890123456789ll));
+  // RESULT: 2469135780246913578
+
+  // ===== u64 =====
+  printf("%llu\n", (unsigned long long) sub_u64(0ull, 1ull));
+  // RESULT: 18446744073709551615
+  printf("%llu\n", (unsigned long long) sub_u64(18446744073709551615ull, 1ull));
+  // RESULT: 18446744073709551614
+  printf("%llu\n", (unsigned long long) sub_u64(18446744073709551615ull, 18446744073709551615ull));
+  // RESULT: 0
+  printf("%llu\n", (unsigned long long) sub_u64(18000000000000000000ull, 10000000000000000000ull));
+  // RESULT: 8000000000000000000
+  printf("%llu\n", (unsigned long long) sub_u64(10000000000000000000ull, 18000000000000000000ull));
+  // RESULT: 10446744073709551616
+  printf("%llu\n", (unsigned long long) sub_u64(1ull, 18446744073709551615ull));
+  // RESULT: 2
+  printf("%llu\n", (unsigned long long) sub_u64(9223372036854775808ull, 9223372036854775808ull));
+  // RESULT: 0
+  printf("%llu\n", (unsigned long long) sub_u64(0ull, 18446744073709551615ull));
+  // RESULT: 1
+  printf("%llu\n", (unsigned long long) sub_u64(12345678901234567890ull, 10000000000000000000ull));
+  // RESULT: 2345678901234567890
+  printf("%llu\n", (unsigned long long) sub_u64(579ull, 0ull));
+  // RESULT: 579
+
+  return 0;
+}

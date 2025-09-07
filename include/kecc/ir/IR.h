@@ -46,6 +46,9 @@ class Function : public utils::ListObject<Function, Block *> {
 public:
   Function(llvm::StringRef name, Type functionType, IR *parentProgram,
            IRContext *context);
+
+  Function(llvm::SMRange range, llvm::StringRef name, Type functionType,
+           IR *parentProgram, IRContext *context);
   ~Function();
 
   IR *getParentIR() const { return parentProgram; }
@@ -90,7 +93,10 @@ public:
 
   bool hasDefinition() const;
 
+  llvm::SMRange getRange() const { return range; }
+
 private:
+  llvm::SMRange range;
   std::string name;
   Type functionType;
   IR *parentProgram;

@@ -1,0 +1,400 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s 
+
+fun i1 @and_i1 (i1, i1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i1
+  %b0:p1:i1
+  %b0:i0:i1 = and %b0:p0:i1 %b0:p1:i1
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl        and_i1
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_i1, @function
+// CHECK-NEXT: and_i1:
+
+// CHECK-LABEL: .and_i1_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i8 @and_i8 (i8, i8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i8
+  %b0:p1:i8
+  %b0:i0:i8 = and %b0:p0:i8 %b0:p1:i8
+  ret %b0:i0:i8
+}
+
+// CHECK:   .globl        and_i8
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_i8, @function
+// CHECK-NEXT: and_i8:
+
+// CHECK-LABEL: .and_i8_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i16 @and_i16 (i16, i16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i16
+  %b0:p1:i16
+  %b0:i0:i16 = and %b0:p0:i16 %b0:p1:i16
+  ret %b0:i0:i16
+}
+
+// CHECK:   .globl        and_i16
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_i16, @function
+// CHECK-NEXT: and_i16:
+
+// CHECK-LABEL: .and_i16_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i32 @and_i32 (i32, i32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:i0:i32 = and %b0:p0:i32 %b0:p1:i32
+  ret %b0:i0:i32
+}
+
+// CHECK:   .globl        and_i32
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_i32, @function
+// CHECK-NEXT: and_i32:
+
+// CHECK-LABEL: .and_i32_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i64 @and_i64 (i64, i64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i64
+  %b0:p1:i64
+  %b0:i0:i64 = and %b0:p0:i64 %b0:p1:i64
+  ret %b0:i0:i64
+}
+
+// CHECK:   .globl        and_i64
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_i64, @function
+// CHECK-NEXT: and_i64:
+
+// CHECK-LABEL: .and_i64_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u1 @and_u1 (u1, u1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u1
+  %b0:p1:u1
+  %b0:i0:u1 = and %b0:p0:u1 %b0:p1:u1
+  ret %b0:i0:u1
+}
+
+// CHECK:   .globl        and_u1
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_u1, @function
+// CHECK-NEXT: and_u1:
+
+// CHECK-LABEL: .and_u1_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u8 @and_u8 (u8, u8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u8
+  %b0:p1:u8
+  %b0:i0:u8 = and %b0:p0:u8 %b0:p1:u8
+  ret %b0:i0:u8
+}
+
+// CHECK:   .globl        and_u8
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_u8, @function
+// CHECK-NEXT: and_u8:
+
+// CHECK-LABEL: .and_u8_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u16 @and_u16 (u16, u16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u16
+  %b0:p1:u16
+  %b0:i0:u16 = and %b0:p0:u16 %b0:p1:u16
+  ret %b0:i0:u16
+}
+
+// CHECK:   .globl        and_u16
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_u16, @function
+// CHECK-NEXT: and_u16:
+
+// CHECK-LABEL: .and_u16_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u32 @and_u32 (u32, u32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u32
+  %b0:p1:u32
+  %b0:i0:u32 = and %b0:p0:u32 %b0:p1:u32
+  ret %b0:i0:u32
+}
+
+// CHECK:   .globl        and_u32
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_u32, @function
+// CHECK-NEXT: and_u32:
+
+// CHECK-LABEL: .and_u32_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u64 @and_u64 (u64, u64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u64
+  %b0:p1:u64
+  %b0:i0:u64 = and %b0:p0:u64 %b0:p1:u64
+  ret %b0:i0:u64
+}
+
+// CHECK:   .globl        and_u64
+// CHECK-NEXT:   .align        1
+// CHECK-NEXT:   .type and_u64, @function
+// CHECK-NEXT: and_u64:
+
+// CHECK-LABEL: .and_u64_L0:
+// CHECK-NEXT:   and   a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+/////// main.c 
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+
+#include <stdio.h>
+#include <stdint.h>
+
+extern _Bool   and_i1(_Bool, _Bool);
+extern int8_t  and_i8(int8_t, int8_t);
+extern int16_t and_i16(int16_t, int16_t);
+extern int32_t and_i32(int32_t, int32_t);
+extern int64_t and_i64(int64_t, int64_t);
+
+extern _Bool    and_u1(_Bool, _Bool);
+extern uint8_t  and_u8(uint8_t, uint8_t);
+extern uint16_t and_u16(uint16_t, uint16_t);
+extern uint32_t and_u32(uint32_t, uint32_t);
+extern uint64_t and_u64(uint64_t, uint64_t);
+
+int main(void) {
+  // ===== i1 =====
+  printf("%d\n", (int) and_i1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) and_i1(0, 1));
+  // RESULT: 0
+  printf("%d\n", (int) and_i1(1, 0));
+  // RESULT: 0
+  printf("%d\n", (int) and_i1(1, 1));
+  // RESULT: 1
+
+  // ===== u1 =====
+  printf("%d\n", (int) and_u1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) and_u1(0, 1));
+  // RESULT: 0
+  printf("%d\n", (int) and_u1(1, 0));
+  // RESULT: 0
+  printf("%d\n", (int) and_u1(1, 1));
+  // RESULT: 1
+
+  // ===== i8 =====
+  printf("%d\n", (int) and_i8(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) and_i8(-1, 0x7F));
+  // RESULT: 127
+  printf("%d\n", (int) and_i8(-1, -128));
+  // RESULT: -128
+  printf("%d\n", (int) and_i8(0x55, 0xAA));
+  // RESULT: 0
+  printf("%d\n", (int) and_i8(0x7F, 0x80));
+  // RESULT: 0
+  printf("%d\n", (int) and_i8(-100, 0x0F));
+  // RESULT: 12
+  printf("%d\n", (int) and_i8(-100, -16));
+  // RESULT: -112
+  printf("%d\n", (int) and_i8(127, -1));
+  // RESULT: 127
+  printf("%d\n", (int) and_i8(-128, -1));
+  // RESULT: -128
+  printf("%d\n", (int) and_i8(50, 5));
+  // RESULT: 0
+
+  // ===== u8 =====
+  printf("%u\n", (unsigned) and_u8(0xF0u, 0x0Fu));
+  // RESULT: 0
+  printf("%u\n", (unsigned) and_u8(0xFFu, 0x0Fu));
+  // RESULT: 15
+  printf("%u\n", (unsigned) and_u8(255u, 1u));
+  // RESULT: 1
+  printf("%u\n", (unsigned) and_u8(128u, 127u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) and_u8(200u, 55u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) and_u8(250u, 10u));
+  // RESULT: 10
+  printf("%u\n", (unsigned) and_u8(0u, 255u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) and_u8(2u, 7u));
+  // RESULT: 2
+  printf("%u\n", (unsigned) and_u8(3u, 6u));
+  // RESULT: 2
+  printf("%u\n", (unsigned) and_u8(127u, 255u));
+  // RESULT: 127
+
+  // ===== i16 =====
+  printf("%d\n", (int) and_i16(0xAAAA, 0x5555));
+  // RESULT: 0
+  printf("%d\n", (int) and_i16(-1, 12345));
+  // RESULT: 12345
+  printf("%d\n", (int) and_i16(-1, -1));
+  // RESULT: -1
+  printf("%d\n", (int) and_i16(-32768, 1));
+  // RESULT: 0
+  printf("%d\n", (int) and_i16(32767, -2));
+  // RESULT: 32766
+  printf("%d\n", (int) and_i16(30000, 10000));
+  // RESULT: 9488
+  printf("%d\n", (int) and_i16(0x7FFF, 0x8000));
+  // RESULT: 0
+  printf("%d\n", (int) and_i16(-30000, -10000));
+  // RESULT: -30512
+
+  // ===== u16 =====
+  printf("%u\n", (unsigned) and_u16(0xF0F0u, 0x0FF0u));
+  // RESULT: 240
+  printf("%u\n", (unsigned) and_u16(50000u, 20000u));
+  // RESULT: 16896
+  printf("%u\n", (unsigned) and_u16(65535u, 12345u));
+  // RESULT: 12345
+  printf("%u\n", (unsigned) and_u16(0u, 54321u));
+  // RESULT: 0
+  printf("%u\n", (unsigned) and_u16(32768u, 32768u));
+  // RESULT: 32768
+  printf("%u\n", (unsigned) and_u16(12345u, 54321u));
+  // RESULT: 4145
+
+  // ===== i32 =====
+  printf("%d\n", and_i32(-1, 0x7FFFFFFF));
+  // RESULT: 2147483647
+  printf("%d\n", and_i32(-1, -1));
+  // RESULT: -1
+  printf("%d\n", and_i32(0xAAAAAAAA, 0x55555555));
+  // RESULT: 0
+  printf("%d\n", and_i32(0xF0F0F0F0, 0x0FF0FF0F));
+  // RESULT: 15790080
+  printf("%d\n", and_i32(2000000000, 1000000000));
+  // RESULT: 856719360
+  printf("%d\n", and_i32(0, 123456789));
+  // RESULT: 0
+  printf("%d\n", and_i32(123456789, -1));
+  // RESULT: 123456789
+
+  // ===== u32 =====
+  printf("%u\n", (unsigned) and_u32(0xFFFFFFFFu, 0x00FF00FFu));
+  // RESULT: 16711935
+  printf("%u\n", (unsigned) and_u32(4000000000u, 1000000000u));
+  // RESULT: 705300480
+  printf("%u\n", (unsigned) and_u32(0xF0F0F0F0u, 0x0FF0FF0Fu));
+  // RESULT: 15790080
+  printf("%u\n", (unsigned) and_u32(0x80000000u, 0xFFFFFFFFu));
+  // RESULT: 2147483648
+  printf("%u\n", (unsigned) and_u32(0u, 0xDEADBEEFu));
+  // RESULT: 0
+  printf("%u\n", (unsigned) and_u32(1234567890u, 1000u));
+  // RESULT: 704
+
+  // ===== i64 =====
+  printf("%lld\n", (long long) and_i64(-1ll, 0x7FFFFFFFFFFFFFFFll));
+  // RESULT: 9223372036854775807
+  printf("%lld\n", (long long) and_i64(-1ll, -1ll));
+  // RESULT: -1
+  printf("%lld\n", (long long) and_i64(0xAAAAAAAAAAAAAAAAll, 0x5555555555555555ll));
+  // RESULT: 0
+  printf("%lld\n", (long long) and_i64(9000000000000000000ll, 1000000000000000000ll));
+  // RESULT: 927781177094569984
+  printf("%lld\n", (long long) and_i64(0x8000000000000000ll, -1ll));
+  // RESULT: -9223372036854775808
+  printf("%lld\n", (long long) and_i64(1234567890123456789ll, 0x00FF00FF00FF00FFll));
+  // RESULT: 9571197195452437
+
+  // ===== u64 =====
+  printf("%llu\n", (unsigned long long) and_u64(0xFFFFFFFFFFFFFFFFull, 0x0000FFFFFFFF0000ull));
+  // RESULT: 281474976645120
+  printf("%llu\n", (unsigned long long) and_u64(18000000000000000000ull, 10000000000000000000ull));
+  // RESULT: 9855001886758273024
+  printf("%llu\n", (unsigned long long) and_u64(0x8000000000000000ull, 0x7FFFFFFFFFFFFFFFull));
+  // RESULT: 0
+  printf("%llu\n", (unsigned long long) and_u64(9223372036854775808ull, 9223372036854775808ull));
+  // RESULT: 9223372036854775808
+  printf("%llu\n", (unsigned long long) and_u64(0ull, 0xDEADBEEFDEADBEEFull));
+  // RESULT: 0
+  printf("%llu\n", (unsigned long long) and_u64(12345678901234567890ull, 0x00FF00FF00FF00FFull));
+  // RESULT: 23644499341148370
+  printf("%llu\n", (unsigned long long) and_u64(0xAAAAAAAAAAAAAAAAull, 0x5555555555555555ull));
+  // RESULT: 0
+
+  return 0;
+}
+

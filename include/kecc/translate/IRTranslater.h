@@ -245,6 +245,9 @@ void loadInt64(as::AsmBuilder &builder, FunctionTranslater &translater,
 void loadInt(as::AsmBuilder &builder, FunctionTranslater &translater,
              as::Register rd, std::int64_t value, ir::IntT intT);
 
+void loadFloat(as::AsmBuilder &builder, FunctionTranslater &translater,
+               as::Register rd, llvm::APFloat value);
+
 void storeData(as::AsmBuilder &builder, FunctionTranslater &translater,
                as::Register rd, as::Register rs, as::DataSize dataSize,
                std::int32_t offset);

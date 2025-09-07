@@ -151,6 +151,16 @@ private:
 
 ConstantIntAttr ConstantIntAttr::get(IRContext *context, uint64_t value,
                                      int bitwidth, bool isSigned) {
+  if (bitwidth < 64) {
+    if (bitwidth == 1) {
+      value = value ? 1 : 0;
+    } else if (!isSigned)
+      value = value & ((1ULL << bitwidth) - 1);
+    else {
+      value = value << (64 - bitwidth);
+      value = static_cast<int64_t>(value) >> (64 - bitwidth);
+    }
+  }
   return Base::get(context, value, bitwidth, isSigned);
 }
 

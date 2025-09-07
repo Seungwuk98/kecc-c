@@ -99,6 +99,35 @@ as::Instruction *createLogicalNot(as::AsmBuilder &builder, as::Register rd) {
   return builder.create<as::itype::Xori>(rd, rd, imm);
 }
 
+void shiftDataByType(as::AsmBuilder &builder, ir::IntT intT, as::Register rd) {
+  if (intT.getBitWidth() == 1) {
+    builder.create<as::itype::Andi>(rd, rd, getImmediate(1));
+    return;
+  }
+
+  int shiftSize =
+      (int)intT.getContext()->getArchitectureBitSize() - intT.getBitWidth();
+  if (shiftSize <= 32)
+    return;
+
+  if (intT.isSigned()) {
+    builder.create<as::itype::Slli>(rd, rd, getImmediate(shiftSize),
+                                    as::DataSize::doubleWord());
+    builder.create<as::itype::Srai>(rd, rd, getImmediate(shiftSize),
+                                    as::DataSize::doubleWord());
+  } else {
+    if (intT.getBitWidth() <= 12) {
+      builder.create<as::itype::Andi>(
+          rd, rd, getImmediate((1LL << intT.getBitWidth()) - 1));
+    } else {
+      builder.create<as::itype::Slli>(rd, rd, getImmediate(shiftSize),
+                                      as::DataSize::doubleWord());
+      builder.create<as::itype::Srli>(rd, rd, getImmediate(shiftSize),
+                                      as::DataSize::doubleWord());
+    }
+  }
+}
+
 utils::LogicalResult translateIntAdd(as::AsmBuilder &builder,
                                      FunctionTranslater &translater,
                                      ir::inst::Binary inst) {
@@ -129,7 +158,6 @@ utils::LogicalResult translateIntAdd(as::AsmBuilder &builder,
     }
 
     builder.create<as::itype::Addi>(rd, lhsReg, rhsImm, dataSize);
-    return utils::LogicalResult::success();
   } else {
     // use rtype
 
@@ -137,8 +165,9 @@ utils::LogicalResult translateIntAdd(as::AsmBuilder &builder,
     auto rhsReg = translater.getOperandRegister(rhs);
 
     builder.create<as::rtype::Add>(rd, lhsReg, rhsReg, dataSize);
-    return utils::LogicalResult::success();
   }
+  shiftDataByType(builder, lhs->getType().cast<ir::IntT>(), rd);
+  return utils::LogicalResult::success();
 }
 
 utils::LogicalResult translateFloatAdd(as::AsmBuilder &builder,
@@ -177,7 +206,8 @@ utils::LogicalResult translateIntSub(as::AsmBuilder &builder,
   const auto *rhs = &inst.getRhsAsOperand();
   auto dest = inst.getResult();
   auto rd = translater.getRegister(dest);
-  auto dataSize = getDataSize(lhs->getType());
+  auto intT = lhs->getType().cast<ir::IntT>();
+  auto dataSize = getDataSize(intT);
 
   assert(!lhs->isConstant() && "Binary subtraction lhs must not be constant. "
                                "It is guaranteed by `OutlineConstant` pass.");
@@ -200,6 +230,8 @@ utils::LogicalResult translateIntSub(as::AsmBuilder &builder,
     auto rhsReg = translater.getOperandRegister(rhs);
     builder.create<as::rtype::Sub>(rd, lhsReg, rhsReg, dataSize);
   }
+
+  shiftDataByType(builder, lhs->getType().cast<ir::IntT>(), rd);
 
   return utils::LogicalResult::success();
 }
@@ -248,8 +280,10 @@ utils::LogicalResult translateMul(as::AsmBuilder &builder,
 
   if (lhs->getType().isa<ir::FloatT>())
     builder.create<as::rtype::Fmul>(rd, lhsReg, rhsReg, dataSize);
-  else
+  else {
     builder.create<as::rtype::Mul>(rd, lhsReg, rhsReg, dataSize);
+    shiftDataByType(builder, lhs->getType().cast<ir::IntT>(), rd);
+  }
   return utils::LogicalResult::success();
 }
 
@@ -274,6 +308,7 @@ utils::LogicalResult translateDiv(as::AsmBuilder &builder,
     auto intT = rhs->getType().cast<ir::IntT>();
     builder.create<as::rtype::Div>(rd, lhsReg, rhsReg, dataSize,
                                    intT.isSigned());
+    shiftDataByType(builder, lhs->getType().cast<ir::IntT>(), rd);
   }
 
   return utils::LogicalResult::success();
@@ -446,6 +481,7 @@ utils::LogicalResult translateShl(as::AsmBuilder &builder,
 
     builder.create<as::rtype::Sll>(rd, lhsReg, rhsReg, dataSize);
   }
+  shiftDataByType(builder, lhs->getType().cast<ir::IntT>(), rd);
   return utils::LogicalResult::success();
 }
 
@@ -471,13 +507,20 @@ utils::LogicalResult translateShr(as::AsmBuilder &builder,
       return utils::LogicalResult::success();
     }
 
-    builder.create<as::itype::Srai>(rd, lhsReg, rhsImm, dataSize);
+    if (lhs->getType().cast<ir::IntT>().isSigned()) {
+      builder.create<as::itype::Srai>(rd, lhsReg, rhsImm, dataSize);
+    } else {
+      builder.create<as::itype::Srli>(rd, lhsReg, rhsImm, dataSize);
+    }
   } else {
     // use rtype
     auto lhsReg = translater.getOperandRegister(lhs);
     auto rhsReg = translater.getOperandRegister(rhs);
 
-    builder.create<as::rtype::Sra>(rd, lhsReg, rhsReg, dataSize);
+    if (lhs->getType().cast<ir::IntT>().isSigned())
+      builder.create<as::rtype::Sra>(rd, lhsReg, rhsReg, dataSize);
+    else
+      builder.create<as::rtype::Srl>(rd, lhsReg, rhsReg, dataSize);
   }
 
   return utils::LogicalResult::success();
@@ -510,22 +553,23 @@ utils::LogicalResult translateEq(as::AsmBuilder &builder,
       if (lhs->isConstant())
         std::swap(lhs, rhs);
 
+      auto lhsReg = translater.getOperandRegister(lhs);
       auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
-      assert(rhsImm && rhsImm->isZero() &&
-             "Expected a constant immediate 0 for rhs operand");
-
-      auto lhsReg = translater.getOperandRegister(lhs);
-      builder.create<as::pseudo::Seqz>(rd, lhsReg);
+      assert(rhsImm);
+      if (rhsImm->isZero()) {
+        builder.create<as::pseudo::Seqz>(rd, lhsReg);
+        return utils::LogicalResult::success();
+      } else {
+        builder.create<as::itype::Xori>(rd, lhsReg, rhsImm);
+      }
     } else {
-      // use rtype
-      // sub rd, lhs, rhs
-      // seqz rd, rd
-      auto lhsReg = translater.getOperandRegister(lhs);
-      auto rhsReg = translater.getOperandRegister(rhs);
-
-      builder.create<as::rtype::Sub>(rd, lhsReg, rhsReg, dataSize);
-      builder.create<as::pseudo::Seqz>(rd, rd);
+      // xor rd, lhs, rhs
+      builder.create<as::rtype::Xor>(rd, translater.getOperandRegister(lhs),
+                                     translater.getOperandRegister(rhs));
     }
+
+    // seqz rd, rd
+    builder.create<as::pseudo::Seqz>(rd, rd);
   }
 
   return utils::LogicalResult::success();
@@ -534,11 +578,49 @@ utils::LogicalResult translateEq(as::AsmBuilder &builder,
 utils::LogicalResult translateNeq(as::AsmBuilder &builder,
                                   FunctionTranslater &translater,
                                   ir::inst::Binary inst) {
-  translateEq(builder, translater, inst);
-  auto dest = inst.getResult();
-  auto rd = translater.getRegister(dest);
-  // xori rd, rd, 1
-  createLogicalNot(builder, rd);
+  const auto *lhs = &inst.getLhsAsOperand();
+  const auto *rhs = &inst.getRhsAsOperand();
+  auto rd = translater.getRegister(inst);
+  auto type = lhs->getType();
+
+  if (type.isa<ir::FloatT>()) {
+    assert(!lhs->isConstant() && !rhs->isConstant() &&
+           "Binary float inequality operands must not be constant. "
+           "It is guaranteed by `OutlineConstant` pass.");
+    auto lhsReg = translater.getOperandRegister(lhs);
+    auto rhsReg = translater.getOperandRegister(rhs);
+    auto dataSize = getDataSize(type);
+    builder.create<as::rtype::Feq>(rd, lhsReg, rhsReg, dataSize);
+    createLogicalNot(builder, rd);
+  } else {
+    assert(!lhs->isConstant() ||
+           !rhs->isConstant() &&
+               "Binary equality must have at least one non-constant operand. "
+               "It is guaranteed by `OutlineConstant` pass.");
+
+    if (lhs->isConstant() | rhs->isConstant()) {
+      // use seqz
+      if (lhs->isConstant())
+        std::swap(lhs, rhs);
+
+      auto lhsReg = translater.getOperandRegister(lhs);
+      auto *rhsImm = getImmediate(rhs->getDefiningInst<ir::inst::Constant>());
+      assert(rhsImm);
+      if (rhsImm->isZero()) {
+        builder.create<as::pseudo::Seqz>(rd, lhsReg);
+        return utils::LogicalResult::success();
+      } else {
+        builder.create<as::itype::Xori>(rd, lhsReg, rhsImm);
+      }
+    } else {
+      // xor rd, lhs, rhs
+      builder.create<as::rtype::Xor>(rd, translater.getOperandRegister(lhs),
+                                     translater.getOperandRegister(rhs));
+    }
+
+    builder.create<as::rtype::Slt>(rd, as::Register::zero(), rd, false);
+  }
+
   return utils::LogicalResult::success();
 }
 
@@ -803,7 +885,7 @@ utils::LogicalResult translateMinus(as::AsmBuilder &builder,
     // sub rd, zero, rs
     builder.create<as::rtype::Sub>(rd, as::Register::zero(), rs, dataSize);
   }
-
+  shiftDataByType(builder, operand->getType().cast<ir::IntT>(), rd);
   return utils::LogicalResult::success();
 }
 
@@ -833,6 +915,7 @@ utils::LogicalResult translateNegate(as::AsmBuilder &builder,
 
     builder.create<as::pseudo::Not>(rd, rs);
   }
+  shiftDataByType(builder, operand->getType().cast<ir::IntT>(), rd);
   return utils::LogicalResult::success();
 }
 
@@ -1071,20 +1154,7 @@ utils::LogicalResult translateFloat(as::AsmBuilder &builder,
                                     FunctionTranslater &translater,
                                     llvm::APFloat value, ir::FloatT floatT,
                                     as::Register rd) {
-  // must use temporary integer register
-
-  TranslateContext *context = translater.getTranslateContext();
-  auto tempReg = context->getTempRegisters()[0];
-
-  // load float address to temporary register
-  auto [label, dataSize] = translater.getConstantLabel(
-      ir::ConstantFloatAttr::get(translater.getModule()->getContext(), value));
-
-  builder.create<as::pseudo::La>(tempReg, label);
-
-  // load float value from address
-  builder.create<as::itype::Load>(rd, tempReg, getImmediate(0), *dataSize,
-                                  true);
+  loadFloat(builder, translater, rd, value);
   return utils::LogicalResult::success();
 }
 

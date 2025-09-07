@@ -1,0 +1,84 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+
+// CHECK: .globl load_f32
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type load_f32, @function
+fun f32 @load_f32 () {
+// CHECK-NEXT: load_f32
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_f32_L0:
+  ret 0.001:f32
+  // lui t0,239665
+  // addiw t0,t0,623
+  // fmv.w.x fa0,t0
+  // ret
+}
+
+
+// CHECK: .globl load_f32_2
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type load_f32_2, @function
+fun f32 @load_f32_2 () {
+// CHECK-NEXT: load_f32_2
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_f32_2_L0:
+  ret 0.0:f32
+  // CHECK-NEXT:  fmv.w.x fa0,zero
+  // CHECK-NEXT:  ret
+}
+
+// CHECK: .globl load_f64
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type load_f64, @function
+fun f64 @load_f64 () {
+// CHECK-NEXT: load_f64
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_f64_L0:
+  ret 3.14159265358979:f64
+  // CHECK-NEXT: la t0,.LC0
+  // CHECK-NEXT: fld fa0,0(t0)
+  // CHECK-NEXT: ret
+}
+
+
+// CHECK-LABEL: .type .LC0, @object 
+// CHECK-NEXT:  .section .rodata
+// CHECK-NEXT:  .align 2
+// CHECK-NEXT:  .LC0:
+// CHECK-NEXT:    .quad 4614256656552045841
+
+
+//////// main.c 
+
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+// RESULT: load_f32: 0.001000
+// RESULT: load_f32_2: 0.000000
+// RESULT: load_f64: 3.14159265358979
+
+
+#include <stdio.h> 
+
+extern float load_f32();
+extern float load_f32_2();
+extern double load_f64();
+
+int main() {
+  printf("load_f32: %f\n", load_f32());
+  printf("load_f32_2: %f\n", load_f32_2());
+  printf("load_f64: %.14lf\n", load_f64()); 
+
+  return 0;
+}
+

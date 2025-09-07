@@ -1,4 +1,5 @@
 #include "kecc/ir/IR.h"
+#include "kecc/ir/Context.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/IRTypes.h"
 #include "kecc/ir/Instruction.h"
@@ -87,8 +88,11 @@ void IR::print(IRPrintContext &printContext) const {
 
 Function::Function(llvm::StringRef name, Type functionType, IR *parentProgram,
                    IRContext *context)
-    : name(name), functionType(functionType), parentProgram(parentProgram),
-      context(context) {
+    : Function({}, name, functionType, parentProgram, context) {}
+Function::Function(llvm::SMRange range, llvm::StringRef name, Type functionType,
+                   IR *parentProgram, IRContext *context)
+    : range(range), name(name), functionType(functionType),
+      parentProgram(parentProgram), context(context) {
   allocationBlock = new Block(-1);
   allocationBlock->setParentFunction(this);
   unresolvedBlock = new Block(-2);

@@ -14,6 +14,7 @@
 #include "kecc/translate/MoveSchedule.h"
 #include "kecc/translate/SpillAnalysis.h"
 #include "kecc/utils/Diag.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/SourceMgr.h"
@@ -87,11 +88,11 @@ IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
 
     std::uint64_t data;
     as::Directive *directive;
-    if (floatConst.getFloatType().getBitWidth() == 4) {
+    if (floatConst.getFloatType().getBitWidth() == 32) {
       data = bits.getZExtValue() & 0xFFFFFFFF;
       dataSize = as::DataSize::singlePrecision();
       directive = new as::WordDirective(static_cast<std::uint32_t>(data));
-    } else if (floatConst.getFloatType().getBitWidth() == 8) {
+    } else if (floatConst.getFloatType().getBitWidth() == 64) {
       data = bits.getZExtValue();
       dataSize = as::DataSize::doublePrecision();
       directive = new as::QuadDirective(data);
@@ -1209,16 +1210,6 @@ void loadInt32(as::AsmBuilder &builder, as::Register rd, std::int32_t value) {
     }
   }
 }
-void loadInt(as::AsmBuilder &builder, FunctionTranslater &translater,
-             as::Register rd, std::int64_t value, ir::IntT intT) {
-  if (intT.getBitWidth() <= 32 || (static_cast<std::int32_t>(value) == value)) {
-    // If the value can fit in a 32-bit signed integer, treat it as a small int.
-    loadInt32(builder, rd, static_cast<std::int32_t>(value));
-  } else {
-    // Otherwise, treat it as a big int.
-    loadInt64(builder, translater, rd, value);
-  }
-}
 
 void loadInt64(as::AsmBuilder &builder, FunctionTranslater &translater,
                as::Register rd, std::int64_t value) {
@@ -1244,6 +1235,75 @@ void loadInt64(as::AsmBuilder &builder, FunctionTranslater &translater,
     auto [label, dataSize] = translater.getConstantLabel(value);
     builder.create<as::pseudo::La>(rd, label);
     builder.create<as::itype::Load>(rd, rd, getImmediate(0), *dataSize, true);
+  }
+}
+
+void loadInt(as::AsmBuilder &builder, FunctionTranslater &translater,
+             as::Register rd, std::int64_t value, ir::IntT intT) {
+  if (intT.getBitWidth() <= 32 || (static_cast<std::int32_t>(value) == value)) {
+    // If the value can fit in a 32-bit signed integer, treat it as a small int.
+    loadInt32(builder, rd, static_cast<std::int32_t>(value));
+  } else {
+    // Otherwise, treat it as a big int.
+    loadInt64(builder, translater, rd, value);
+  }
+}
+
+void loadFloat(as::AsmBuilder &builder, FunctionTranslater &translater,
+               as::Register rd, llvm::APFloat value) {
+  bool isSinglePrecision =
+      (&value.getSemantics() == &llvm::APFloat::IEEEsingle());
+
+  auto tempReg = translater.getTranslateContext()->getTempRegisters()[0];
+  auto intValue = value.bitcastToAPInt().getZExtValue();
+  if (isSinglePrecision) {
+    if (intValue == 0) {
+      builder.create<as::rtype::FmvIntToFloat>(rd, as::Register::zero(),
+                                               std::nullopt,
+                                               as::DataSize::singlePrecision());
+      return;
+    }
+    loadInt32(builder, tempReg, static_cast<std::int32_t>(intValue));
+    builder.create<as::rtype::FmvIntToFloat>(rd, tempReg, std::nullopt,
+                                             as::DataSize::singlePrecision());
+  } else {
+    if (intValue == 0) {
+      builder.create<as::rtype::FmvIntToFloat>(rd, as::Register::zero(),
+                                               std::nullopt,
+                                               as::DataSize::doublePrecision());
+      return;
+    }
+    // If the low bits are zero, shift the whole value to the right, treat it as
+    // a
+    // small int and load it, then shift it back to the left.
+
+    std::int64_t shiftedValue = intValue;
+    size_t shiftRight = 0;
+    while (!(shiftedValue & 1)) {
+      shiftedValue >>= 1;
+      shiftRight++;
+    }
+
+    if (static_cast<std::int32_t>(shiftedValue) == shiftedValue) {
+      // If the value can fit in a 32-bit signed integer, treat it as a small
+      // int.
+      loadInt32(builder, tempReg, static_cast<std::int32_t>(shiftedValue));
+
+      if (shiftRight > 0) {
+        builder.create<as::itype::Slli>(tempReg, tempReg,
+                                        getImmediate(shiftRight),
+                                        as::DataSize::doubleWord());
+      }
+      builder.create<as::rtype::FmvIntToFloat>(rd, tempReg, std::nullopt,
+                                               as::DataSize::doublePrecision());
+    } else {
+      auto [label, dataSize] =
+          translater.getConstantLabel(ir::ConstantFloatAttr::get(
+              translater.getModule()->getContext(), value));
+      builder.create<as::pseudo::La>(tempReg, label);
+      builder.create<as::itype::Load>(rd, tempReg, getImmediate(0), *dataSize,
+                                      false);
+    }
   }
 }
 

@@ -1,0 +1,436 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s 
+fun i1 @shr_i1 (i1, i1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i1
+  %b0:p1:i1
+  %b0:i0:i1 = shr %b0:p0:i1 %b0:p1:i1
+  ret %b0:i0:i1
+}
+
+// CHECK:  .globl	shr_i1
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_i1, @function
+// CHECK-NEXT: shr_i1:
+//
+// CHECK-LABEL: .shr_i1_L0:
+// CHECK-NEXT:   sra	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i8 @shr_i8 (i8, i8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i8
+  %b0:p1:i8
+  %b0:i0:i8 = shr %b0:p0:i8 %b0:p1:i8
+  ret %b0:i0:i8
+}
+
+// CHECK:  .globl	shr_i8
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_i8, @function
+// CHECK-NEXT: shr_i8:
+//
+// CHECK-LABEL: .shr_i8_L0:
+// CHECK-NEXT:   sra	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i16 @shr_i16 (i16, i16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i16
+  %b0:p1:i16
+  %b0:i0:i16 = shr %b0:p0:i16 %b0:p1:i16
+  ret %b0:i0:i16
+}
+
+// CHECK:  .globl	shr_i16
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_i16, @function
+// CHECK-NEXT: shr_i16:
+//
+// CHECK-LABEL: .shr_i16_L0:
+// CHECK-NEXT:   sra	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i32 @shr_i32 (i32, i32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:i0:i32 = shr %b0:p0:i32 %b0:p1:i32
+  ret %b0:i0:i32
+}
+
+// CHECK:  .globl	shr_i32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_i32, @function
+// CHECK-NEXT: shr_i32:
+//
+// CHECK-LABEL: .shr_i32_L0:
+// CHECK-NEXT:   sraw	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun i64 @shr_i64 (i64, i64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i64
+  %b0:p1:i64
+  %b0:i0:i64 = shr %b0:p0:i64 %b0:p1:i64
+  ret %b0:i0:i64
+}
+
+// CHECK:  .globl	shr_i64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_i64, @function
+// CHECK-NEXT: shr_i64:
+//
+// CHECK-LABEL: .shr_i64_L0:
+// CHECK-NEXT:   sra	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u1 @shr_u1 (u1, u1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u1
+  %b0:p1:u1
+  %b0:i0:u1 = shr %b0:p0:u1 %b0:p1:u1
+  ret %b0:i0:u1
+}
+
+// CHECK:  .globl	shr_u1
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_u1, @function
+// CHECK-NEXT: shr_u1:
+//
+// CHECK-LABEL: .shr_u1_L0:
+// CHECK-NEXT:   srl	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u8 @shr_u8 (u8, u8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u8
+  %b0:p1:u8
+  %b0:i0:u8 = shr %b0:p0:u8 %b0:p1:u8
+  ret %b0:i0:u8
+}
+
+// CHECK:  .globl	shr_u8
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_u8, @function
+// CHECK-NEXT: shr_u8:
+//
+// CHECK-LABEL: .shr_u8_L0:
+// CHECK-NEXT:   srl	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u16 @shr_u16 (u16, u16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u16
+  %b0:p1:u16
+  %b0:i0:u16 = shr %b0:p0:u16 %b0:p1:u16
+  ret %b0:i0:u16
+}
+
+// CHECK:  .globl	shr_u16
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_u16, @function
+// CHECK-NEXT: shr_u16:
+//
+// CHECK-LABEL: .shr_u16_L0:
+// CHECK-NEXT:   srl	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u32 @shr_u32 (u32, u32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u32
+  %b0:p1:u32
+  %b0:i0:u32 = shr %b0:p0:u32 %b0:p1:u32
+  ret %b0:i0:u32
+}
+
+// CHECK:  .globl	shr_u32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_u32, @function
+// CHECK-NEXT: shr_u32:
+//
+// CHECK-LABEL: .shr_u32_L0:
+// CHECK-NEXT:   srlw	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+fun u64 @shr_u64 (u64, u64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u64
+  %b0:p1:u64
+  %b0:i0:u64 = shr %b0:p0:u64 %b0:p1:u64
+  ret %b0:i0:u64
+}
+
+// CHECK:  .globl	shr_u64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shr_u64, @function
+// CHECK-NEXT: shr_u64:
+//
+// CHECK-LABEL: .shr_u64_L0:
+// CHECK-NEXT:   srl	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+///// main.c 
+
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+#include <stdint.h>
+
+extern _Bool   shr_i1(_Bool, _Bool);
+extern int8_t  shr_i8(int8_t, int8_t);
+extern int16_t shr_i16(int16_t, int16_t);
+extern int32_t shr_i32(int32_t, int32_t);
+extern int64_t shr_i64(int64_t, int64_t);
+
+extern _Bool    shr_u1(_Bool, _Bool);
+extern uint8_t  shr_u8(uint8_t, uint8_t);
+extern uint16_t shr_u16(uint16_t, uint16_t);
+extern uint32_t shr_u32(uint32_t, uint32_t);
+extern uint64_t shr_u64(uint64_t, uint64_t);
+
+int main(void) {
+  // ===== i1 =====
+  printf("%d\n", (int) shr_i1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) shr_i1(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shr_i1(1, 1));
+  // RESULT: 0
+  printf("%d\n", (int) shr_i1(0, 1));
+  // RESULT: 0
+
+  // ===== u1 =====
+  printf("%d\n", (int) shr_u1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) shr_u1(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shr_u1(1, 1));
+  // RESULT: 0
+  printf("%d\n", (int) shr_u1(0, 1));
+  // RESULT: 0
+
+  // ===== i8 =====
+  printf("%d\n", (int) shr_i8(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shr_i8(1, 1));
+  // RESULT: 0
+  printf("%d\n", (int) shr_i8(-1, 1));
+  // RESULT: -1
+  printf("%d\n", (int) shr_i8(-128, 1));
+  // RESULT: -64 
+  printf("%d\n", (int) shr_i8(0x7F, 1));
+  // RESULT: 63
+  printf("%d\n", (int) shr_i8(-128, 7));
+  // RESULT: -1
+  printf("%d\n", (int) shr_i8(-1, 7));
+  // RESULT: -1
+  printf("%d\n", (int) shr_i8(50, 5));
+  // RESULT: 1
+  printf("%d\n", (int) shr_i8(0x12, 3));
+  // RESULT: 2
+  printf("%d\n", (int) shr_i8(0, 7));
+  // RESULT: 0
+
+  // ===== u8 =====
+  printf("%u\n", (unsigned) shr_u8(1u, 0));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u8(1u, 1));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shr_u8(255u, 1));
+  // RESULT: 127
+  printf("%u\n", (unsigned) shr_u8(255u, 7));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u8(128u, 1));
+  // RESULT: 64
+  printf("%u\n", (unsigned) shr_u8(128u, 7));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u8(2u, 1));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u8(3u, 1));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u8(200u, 3));
+  // RESULT: 25
+  printf("%u\n", (unsigned) shr_u8(0u, 7));
+  // RESULT: 0
+
+  // ===== i16 =====
+  printf("%d\n", (int) shr_i16(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shr_i16(1, 15));
+  // RESULT: 0
+  printf("%d\n", (int) shr_i16(-1, 1));
+  // RESULT: -1 
+  printf("%d\n", (int) shr_i16(-32768, 1));
+  // RESULT: -16384
+  printf("%d\n", (int) shr_i16(0x7FFF, 1));
+  // RESULT: 16383
+  printf("%d\n", (int) shr_i16(0x8000, 15));
+  // RESULT: 1
+  printf("%d\n", (int) shr_i16(0xAAAA, 1));
+  // RESULT: -10923 
+  printf("%d\n", (int) shr_i16(12345, 3));
+  // RESULT: 1543
+  printf("%d\n", (int) shr_i16(0, 15));
+  // RESULT: 0
+  printf("%d\n", (int) shr_i16(-30000, 3));
+  // RESULT: -3750 
+
+  // ===== u16 =====
+  printf("%u\n", (unsigned) shr_u16(1u, 0));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u16(1u, 15));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shr_u16(65535u, 1));
+  // RESULT: 32767
+  printf("%u\n", (unsigned) shr_u16(65535u, 15));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u16(0x8000u, 1));
+  // RESULT: 16384
+  printf("%u\n", (unsigned) shr_u16(0x8000u, 15));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u16(2u, 1));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u16(3u, 1));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u16(50000u, 3));
+  // RESULT: 6250
+  printf("%u\n", (unsigned) shr_u16(0u, 15));
+  // RESULT: 0
+
+  // ===== i32 =====
+  printf("%d\n", shr_i32(1, 0));
+  // RESULT: 1
+  printf("%d\n", shr_i32(1, 31));
+  // RESULT: 0
+  printf("%d\n", shr_i32(-1, 1));
+  // RESULT: -1 
+  printf("%d\n", shr_i32(-2147483648, 1));
+  // RESULT: -1073741824
+  printf("%d\n", shr_i32(0x7FFFFFFF, 1));
+  // RESULT: 1073741823
+  printf("%d\n", shr_i32(0x80000000, 31));
+  // RESULT: 1
+  printf("%d\n", shr_i32(0x40000000, 1));
+  // RESULT: 536870912
+  printf("%d\n", shr_i32(123456789, 7));
+  // RESULT: 964506
+  printf("%d\n", shr_i32(0, 31));
+  // RESULT: 0
+  printf("%d\n", shr_i32(0xAAAAAAAA, 1));
+  // RESULT: -715827883
+
+  // ===== u32 =====
+  printf("%u\n", (unsigned) shr_u32(1u, 0));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u32(1u, 31));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shr_u32(0xFFFFFFFFu, 1));
+  // RESULT: 2147483647
+  printf("%u\n", (unsigned) shr_u32(0xFFFFFFFFu, 31));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u32(0x80000000u, 1));
+  // RESULT: 1073741824
+  printf("%u\n", (unsigned) shr_u32(4000000000u, 3));
+  // RESULT: 500000000
+  printf("%u\n", (unsigned) shr_u32(3000000000u, 31));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shr_u32(0u, 31));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shr_u32(0xAAAAAAAAu, 1));
+  // RESULT: 1431655765
+  printf("%u\n", (unsigned) shr_u32(2147483648u, 1));
+  // RESULT: 1073741824
+
+  // ===== i64 =====
+  printf("%lld\n", (long long) shr_i64(1ll, 0));
+  // RESULT: 1
+  printf("%lld\n", (long long) shr_i64(1ll, 63));
+  // RESULT: 0
+  printf("%lld\n", (long long) shr_i64(-1ll, 1));
+  // RESULT: -1 
+  printf("%lld\n", (long long) shr_i64(-9223372036854775808ll, 1));
+  // RESULT: -4611686018427387904
+  printf("%lld\n", (long long) shr_i64(0x7FFFFFFFFFFFFFFFll, 1));
+  // RESULT: 4611686018427387903
+  printf("%lld\n", (long long) shr_i64(0x8000000000000000ll, 63));
+  // RESULT: 1
+  printf("%lld\n", (long long) shr_i64(0x4000000000000000ll, 1));
+  // RESULT: 2305843009213693952
+  printf("%lld\n", (long long) shr_i64(1234567890123456789ll, 13));
+  // RESULT: 150704088149836
+  printf("%lld\n", (long long) shr_i64(0ll, 63));
+  // RESULT: 0
+
+  // ===== u64 =====
+  printf("%llu\n", (unsigned long long) shr_u64(1ull, 0));
+  // RESULT: 1
+  printf("%llu\n", (unsigned long long) shr_u64(1ull, 63));
+  // RESULT: 0
+  printf("%llu\n", (unsigned long long) shr_u64(0xFFFFFFFFFFFFFFFFull, 1));
+  // RESULT: 9223372036854775807
+  printf("%llu\n", (unsigned long long) shr_u64(0xFFFFFFFFFFFFFFFFull, 63));
+  // RESULT: 1
+  printf("%llu\n", (unsigned long long) shr_u64(0x8000000000000000ull, 1));
+  // RESULT: 4611686018427387904
+  printf("%llu\n", (unsigned long long) shr_u64(18000000000000000000ull, 3));
+  // RESULT: 2250000000000000000
+  printf("%llu\n", (unsigned long long) shr_u64(9223372036854775808ull, 1));
+  // RESULT: 4611686018427387904
+  printf("%llu\n", (unsigned long long) shr_u64(2ull, 1));
+  // RESULT: 1
+  printf("%llu\n", (unsigned long long) shr_u64(3ull, 1));
+  // RESULT: 1
+  printf("%llu\n", (unsigned long long) shr_u64(0ull, 63));
+  // RESULT: 0
+
+  return 0;
+}

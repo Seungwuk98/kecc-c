@@ -1,0 +1,413 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s 
+
+fun i1 @shl_i1 (i1, i1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i1
+  %b0:p1:i1
+  %b0:i0:i1 = shl %b0:p0:i1 %b0:p1:i1
+  ret %b0:i0:i1
+}
+
+// CHECK:  .globl	shl_i1
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_i1, @function
+// CHECK-NEXT: shl_i1:
+
+// CHECK-LABEL: .shl_i1_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   andi	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+
+fun i8 @shl_i8 (i8, i8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i8
+  %b0:p1:i8
+  %b0:i0:i8 = shl %b0:p0:i8 %b0:p1:i8
+  ret %b0:i0:i8
+}
+
+// CHECK:  .globl	shl_i8
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_i8, @function
+// CHECK-NEXT: shl_i8:
+
+// CHECK-LABEL: .shl_i8_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   slli	a0,a0,56
+// CHECK-NEXT:   srai	a0,a0,56
+// CHECK-NEXT:   ret
+
+
+
+fun i16 @shl_i16 (i16, i16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i16
+  %b0:p1:i16
+  %b0:i0:i16 = shl %b0:p0:i16 %b0:p1:i16
+  ret %b0:i0:i16
+}
+
+// CHECK:  .globl	shl_i16
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_i16, @function
+// CHECK-NEXT: shl_i16:
+
+// CHECK-LABEL: .shl_i16_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   slli	a0,a0,48
+// CHECK-NEXT:   srai	a0,a0,48
+// CHECK-NEXT:   ret
+
+
+
+fun i32 @shl_i32 (i32, i32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:i0:i32 = shl %b0:p0:i32 %b0:p1:i32
+  ret %b0:i0:i32
+}
+
+// CHECK:  .globl	shl_i32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_i32, @function
+// CHECK-NEXT: shl_i32:
+
+// CHECK-LABEL: .shl_i32_L0:
+// CHECK-NEXT:   sllw	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+
+fun i64 @shl_i64 (i64, i64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i64
+  %b0:p1:i64
+  %b0:i0:i64 = shl %b0:p0:i64 %b0:p1:i64
+  ret %b0:i0:i64
+}
+
+// CHECK:  .globl	shl_i64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_i64, @function
+// CHECK-NEXT: shl_i64:
+
+// CHECK-LABEL: .shl_i64_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+
+fun u1 @shl_u1 (u1, u1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u1
+  %b0:p1:u1
+  %b0:i0:u1 = shl %b0:p0:u1 %b0:p1:u1
+  ret %b0:i0:u1
+}
+
+// CHECK:  .globl	shl_u1
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_u1, @function
+// CHECK-NEXT: shl_u1:
+
+// CHECK-LABEL: .shl_u1_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   andi	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+
+fun u8 @shl_u8 (u8, u8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u8
+  %b0:p1:u8
+  %b0:i0:u8 = shl %b0:p0:u8 %b0:p1:u8
+  ret %b0:i0:u8
+}
+
+// CHECK:  .globl	shl_u8
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_u8, @function
+// CHECK-NEXT: shl_u8:
+
+// CHECK-LABEL: .shl_u8_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   andi	a0,a0,255
+// CHECK-NEXT:   ret
+
+
+
+// === IR ===
+fun u16 @shl_u16 (u16, u16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u16
+  %b0:p1:u16
+  %b0:i0:u16 = shl %b0:p0:u16 %b0:p1:u16
+  ret %b0:i0:u16
+}
+
+// CHECK:  .globl	shl_u16
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_u16, @function
+// CHECK-NEXT: shl_u16:
+
+// CHECK-LABEL: .shl_u16_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   slli	a0,a0,48
+// CHECK-NEXT:   srli	a0,a0,48
+// CHECK-NEXT:   ret
+
+
+
+fun u32 @shl_u32 (u32, u32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u32
+  %b0:p1:u32
+  %b0:i0:u32 = shl %b0:p0:u32 %b0:p1:u32
+  ret %b0:i0:u32
+}
+
+// CHECK:  .globl	shl_u32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_u32, @function
+// CHECK-NEXT: shl_u32:
+
+// CHECK-LABEL: .shl_u32_L0:
+// CHECK-NEXT:   sllw	a0,a0,a1
+// CHECK-NEXT:   ret
+
+
+
+fun u64 @shl_u64 (u64, u64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u64
+  %b0:p1:u64
+  %b0:i0:u64 = shl %b0:p0:u64 %b0:p1:u64
+  ret %b0:i0:u64
+}
+
+// CHECK:  .globl	shl_u64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	shl_u64, @function
+// CHECK-NEXT: shl_u64:
+
+// CHECK-LABEL: .shl_u64_L0:
+// CHECK-NEXT:   sll	a0,a0,a1
+// CHECK-NEXT:   ret
+
+///// main.c
+
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+#include <stdint.h>
+
+extern _Bool   shl_i1(_Bool, _Bool);
+extern int8_t  shl_i8(int8_t, int8_t);
+extern int16_t shl_i16(int16_t, int16_t);
+extern int32_t shl_i32(int32_t, int32_t);
+extern int64_t shl_i64(int64_t, int64_t);
+
+extern _Bool    shl_u1(_Bool, _Bool);
+extern uint8_t  shl_u8(uint8_t, uint8_t);
+extern uint16_t shl_u16(uint16_t, uint16_t);
+extern uint32_t shl_u32(uint32_t, uint32_t);
+extern uint64_t shl_u64(uint64_t, uint64_t);
+
+int main(void) {
+  // ===== i1 =====
+  printf("%d\n", (int) shl_i1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) shl_i1(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shl_i1(1, 1));
+  // RESULT: 0
+  printf("%d\n", (int) shl_i1(0, 1));
+  // RESULT: 0
+
+  // ===== u1 =====
+  printf("%d\n", (int) shl_u1(0, 0));
+  // RESULT: 0
+  printf("%d\n", (int) shl_u1(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shl_u1(1, 1));
+  // RESULT: 0
+  printf("%d\n", (int) shl_u1(0, 1));
+  // RESULT: 0
+
+  // ===== i8 =====
+  printf("%d\n", (int) shl_i8(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shl_i8(1, 1));
+  // RESULT: 2
+  printf("%d\n", (int) shl_i8(1, 7));
+  // RESULT: -128
+  printf("%d\n", (int) shl_i8(-1, 1));
+  // RESULT: -2
+  printf("%d\n", (int) shl_i8(-1, 7));
+  // RESULT: -128
+  printf("%d\n", (int) shl_i8(-128, 1));
+  // RESULT: 0
+  printf("%d\n", (int) shl_i8(0x7F, 1));
+  // RESULT: -2
+  printf("%d\n", (int) shl_i8(0x40, 1));
+  // RESULT: -128
+  printf("%d\n", (int) shl_i8(0x12, 3));
+  // RESULT: -112
+  printf("%d\n", (int) shl_i8(-100, 3));
+  // RESULT: -32
+  printf("%d\n", (int) shl_i8(50, 5));
+  // RESULT: 64
+
+  // ===== u8 =====
+  printf("%u\n", (unsigned) shl_u8(1u, 0));
+  // RESULT: 1
+  printf("%u\n", (unsigned) shl_u8(1u, 7));
+  // RESULT: 128
+  printf("%u\n", (unsigned) shl_u8(0x80u, 1));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shl_u8(0xFFu, 1));
+  // RESULT: 254
+  printf("%u\n", (unsigned) shl_u8(0xFFu, 7));
+  // RESULT: 128
+  printf("%u\n", (unsigned) shl_u8(0xA5u, 3));
+  // RESULT: 40
+  printf("%u\n", (unsigned) shl_u8(0u, 7));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shl_u8(2u, 7));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shl_u8(3u, 6));
+  // RESULT: 192
+  printf("%u\n", (unsigned) shl_u8(127u, 1));
+  // RESULT: 254
+
+  // ===== i16 =====
+  printf("%d\n", (int) shl_i16(1, 0));
+  // RESULT: 1
+  printf("%d\n", (int) shl_i16(1, 15));
+  // RESULT: -32768
+  printf("%d\n", (int) shl_i16(0x7FFF, 1));
+  // RESULT: -2
+  printf("%d\n", (int) shl_i16(-1, 1));
+  // RESULT: -2
+  printf("%d\n", (int) shl_i16(-32768, 1));
+  // RESULT: 0
+  printf("%d\n", (int) shl_i16(0x4000, 1));
+  // RESULT: -32768
+  printf("%d\n", (int) shl_i16(12345, 3));
+  // RESULT: -32312
+
+  // ===== u16 =====
+  printf("%u\n", (unsigned) shl_u16(1u, 15));
+  // RESULT: 32768
+  printf("%u\n", (unsigned) shl_u16(2u, 15));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shl_u16(3u, 14));
+  // RESULT: 49152
+  printf("%u\n", (unsigned) shl_u16(0x8000u, 1));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shl_u16(0xFFFFu, 1));
+  // RESULT: 65534
+  printf("%u\n", (unsigned) shl_u16(50000u, 3));
+  // RESULT: 6784
+
+  // ===== i32 =====
+  printf("%d\n", shl_i32(1, 31));
+  // RESULT: -2147483648
+  printf("%d\n", shl_i32(0x40000000, 1));
+  // RESULT: -2147483648
+  printf("%d\n", shl_i32(-1, 1));
+  // RESULT: -2
+  printf("%d\n", shl_i32(2147483647, 1));
+  // RESULT: -2
+  printf("%d\n", shl_i32(-2147483648, 1));
+  // RESULT: 0
+  printf("%d\n", shl_i32(123456789, 7));
+  // RESULT: -1377400192
+
+  // ===== u32 =====
+  printf("%u\n", (unsigned) shl_u32(1u, 31));
+  // RESULT: 2147483648
+  printf("%u\n", (unsigned) shl_u32(2u, 31));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shl_u32(3u, 30));
+  // RESULT: 3221225472
+  printf("%u\n", (unsigned) shl_u32(0x80000000u, 1));
+  // RESULT: 0
+  printf("%u\n", (unsigned) shl_u32(0xFFFFFFFFu, 1));
+  // RESULT: 4294967294
+  printf("%u\n", (unsigned) shl_u32(4000000000u, 3));
+  // RESULT: 1935228928
+
+  // ===== i64 =====
+  printf("%lld\n", (long long) shl_i64(1ll, 63));
+  // RESULT: -9223372036854775808
+  printf("%lld\n", (long long) shl_i64(0x4000000000000000ll, 1));
+  // RESULT: -9223372036854775808
+  printf("%lld\n", (long long) shl_i64(-1ll, 1));
+  // RESULT: -2
+  printf("%lld\n", (long long) shl_i64(9223372036854775807ll, 1));
+  // RESULT: -2
+  printf("%lld\n", (long long) shl_i64(-9223372036854775808ll, 1));
+  // RESULT: 0
+  printf("%lld\n", (long long) shl_i64(1234567890123456789ll, 13));
+  // RESULT: 4764403498523729920
+
+  // ===== u64 =====
+  printf("%llu\n", (unsigned long long) shl_u64(1ull, 63));
+  // RESULT: 9223372036854775808
+  printf("%llu\n", (unsigned long long) shl_u64(2ull, 63));
+  // RESULT: 0
+  printf("%llu\n", (unsigned long long) shl_u64(3ull, 62));
+  // RESULT: 13835058055282163712
+  printf("%llu\n", (unsigned long long) shl_u64(0x8000000000000000ull, 1));
+  // RESULT: 0
+  printf("%llu\n", (unsigned long long) shl_u64(0xFFFFFFFFFFFFFFFFull, 1));
+  // RESULT: 18446744073709551614
+  printf("%llu\n", (unsigned long long) shl_u64(18000000000000000000ull, 3));
+  // RESULT: 14872791484033138688
+
+  return 0;
+}

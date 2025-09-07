@@ -1,0 +1,449 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s 
+
+fun i1 @ge_i1 (i1, i1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i1
+  %b0:p1:i1
+  %b0:i0:i1 = cmp ge %b0:p0:i1 %b0:p1:i1
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_i1
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_i1, @function
+// CHECK-NEXT: ge_i1:
+
+// CHECK-LABEL: .ge_i1_L0:
+// CHECK-NEXT:   slt	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_i8 (i8, i8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i8
+  %b0:p1:i8
+  %b0:i0:i1 = cmp ge %b0:p0:i8 %b0:p1:i8
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_i8
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_i8, @function
+// CHECK-NEXT: ge_i8:
+
+// CHECK-LABEL: .ge_i8_L0:
+// CHECK-NEXT:   slt	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_i16 (i16, i16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i16
+  %b0:p1:i16
+  %b0:i0:i1 = cmp ge %b0:p0:i16 %b0:p1:i16
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_i16
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_i16, @function
+// CHECK-NEXT: ge_i16:
+
+// CHECK-LABEL: .ge_i16_L0:
+// CHECK-NEXT:   slt	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_i32 (i32, i32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:i0:i1 = cmp ge %b0:p0:i32 %b0:p1:i32
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_i32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_i32, @function
+// CHECK-NEXT: ge_i32:
+
+// CHECK-LABEL: .ge_i32_L0:
+// CHECK-NEXT:   slt	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_i64 (i64, i64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i64
+  %b0:p1:i64
+  %b0:i0:i1 = cmp ge %b0:p0:i64 %b0:p1:i64
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_i64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_i64, @function
+// CHECK-NEXT: ge_i64:
+
+// CHECK-LABEL: .ge_i64_L0:
+// CHECK-NEXT:   slt	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_u1 (u1, u1) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u1
+  %b0:p1:u1
+  %b0:i0:i1 = cmp ge %b0:p0:u1 %b0:p1:u1
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_u1
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_u1, @function
+// CHECK-NEXT: ge_u1:
+
+// CHECK-LABEL: .ge_u1_L0:
+// CHECK-NEXT:   sltu	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_u8 (u8, u8) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u8
+  %b0:p1:u8
+  %b0:i0:i1 = cmp ge %b0:p0:u8 %b0:p1:u8
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_u8
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_u8, @function
+// CHECK-NEXT: ge_u8:
+
+// CHECK-LABEL: .ge_u8_L0:
+// CHECK-NEXT:   sltu	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_u16 (u16, u16) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u16
+  %b0:p1:u16
+  %b0:i0:i1 = cmp ge %b0:p0:u16 %b0:p1:u16
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_u16
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_u16, @function
+// CHECK-NEXT: ge_u16:
+
+// CHECK-LABEL: .ge_u16_L0:
+// CHECK-NEXT:   sltu	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_u32 (u32, u32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u32
+  %b0:p1:u32
+  %b0:i0:i1 = cmp ge %b0:p0:u32 %b0:p1:u32
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_u32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_u32, @function
+// CHECK-NEXT: ge_u32:
+
+// CHECK-LABEL: .ge_u32_L0:
+// CHECK-NEXT:   sltu	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+fun i1 @ge_u64 (u64, u64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:u64
+  %b0:p1:u64
+  %b0:i0:i1 = cmp ge %b0:p0:u64 %b0:p1:u64
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	ge_u64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	ge_u64, @function
+// CHECK-NEXT: ge_u64:
+
+// CHECK-LABEL: .ge_u64_L0:
+// CHECK-NEXT:   sltu	a0,a0,a1
+// CHECK-NEXT:   xori	a0,a0,1
+// CHECK-NEXT:   ret
+
+
+////// main.c 
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+#include <stdint.h>
+
+extern int ge_i1 (_Bool, _Bool);
+extern int ge_i8 (int8_t, int8_t);
+extern int ge_i16(int16_t, int16_t);
+extern int ge_i32(int32_t, int32_t);
+extern int ge_i64(int64_t, int64_t);
+
+extern int ge_u1 (_Bool, _Bool);
+extern int ge_u8 (uint8_t, uint8_t);
+extern int ge_u16(uint16_t, uint16_t);
+extern int ge_u32(uint32_t, uint32_t);
+extern int ge_u64(uint64_t, uint64_t);
+
+int main(void) {
+  // ===== i1 =====
+  printf("%d\n", ge_i1(0, 0));
+  // RESULT: 1
+  printf("%d\n", ge_i1(0, 1));
+  // RESULT: 0
+  printf("%d\n", ge_i1(1, 0));
+  // RESULT: 1
+  printf("%d\n", ge_i1(1, 1));
+  // RESULT: 1
+
+  // ===== u1 =====
+  printf("%d\n", ge_u1(0, 0));
+  // RESULT: 1
+  printf("%d\n", ge_u1(0, 1));
+  // RESULT: 0
+  printf("%d\n", ge_u1(1, 0));
+  // RESULT: 1
+  printf("%d\n", ge_u1(1, 1));
+  // RESULT: 1
+
+  // ===== i8 =====
+  printf("%d\n", ge_i8(-128, -127));
+  // RESULT: 0
+  printf("%d\n", ge_i8(-128, 0));
+  // RESULT: 0
+  printf("%d\n", ge_i8(-1, 0));
+  // RESULT: 0
+  printf("%d\n", ge_i8(0, -1));
+  // RESULT: 1
+  printf("%d\n", ge_i8(127, -128));
+  // RESULT: 1
+  printf("%d\n", ge_i8(100, 100));
+  // RESULT: 1
+  printf("%d\n", ge_i8(-1, -1));
+  // RESULT: 1
+  printf("%d\n", ge_i8(120, 10));
+  // RESULT: 1
+  printf("%d\n", ge_i8(-60, -50));
+  // RESULT: 0
+  printf("%d\n", ge_i8(-128, 127));
+  // RESULT: 0
+
+  // ===== u8 =====
+  printf("%d\n", ge_u8(0u, 255u));
+  // RESULT: 0
+  printf("%d\n", ge_u8(255u, 0u));
+  // RESULT: 1
+  printf("%d\n", ge_u8(128u, 127u));
+  // RESULT: 1
+  printf("%d\n", ge_u8(127u, 128u));
+  // RESULT: 0
+  printf("%d\n", ge_u8(200u, 55u));
+  // RESULT: 1
+  printf("%d\n", ge_u8(55u, 200u));
+  // RESULT: 0
+  printf("%d\n", ge_u8(0u, 0u));
+  // RESULT: 1
+  printf("%d\n", ge_u8(1u, 1u));
+  // RESULT: 1
+  printf("%d\n", ge_u8(250u, 250u));
+  // RESULT: 1
+  printf("%d\n", ge_u8(2u, 255u));
+  // RESULT: 0
+
+  // ===== i16 =====
+  printf("%d\n", ge_i16(-32768, -32767));
+  // RESULT: 0
+  printf("%d\n", ge_i16(-32768, 0));
+  // RESULT: 0
+  printf("%d\n", ge_i16(32767, -32768));
+  // RESULT: 1
+  printf("%d\n", ge_i16(30000, 10000));
+  // RESULT: 1
+  printf("%d\n", ge_i16(10000, 30000));
+  // RESULT: 0
+  printf("%d\n", ge_i16(-30000, -10000));
+  // RESULT: 0
+  printf("%d\n", ge_i16(-10000, -30000));
+  // RESULT: 1
+  printf("%d\n", ge_i16(32767, 32767));
+  // RESULT: 1
+  printf("%d\n", ge_i16(-32768, -32768));
+  // RESULT: 1
+  printf("%d\n", ge_i16(0, -1));
+  // RESULT: 1
+
+  // ===== u16 =====
+  printf("%d\n", ge_u16(0u, 65535u));
+  // RESULT: 0
+  printf("%d\n", ge_u16(65535u, 0u));
+  // RESULT: 1
+  printf("%d\n", ge_u16(32768u, 32767u));
+  // RESULT: 1
+  printf("%d\n", ge_u16(32767u, 32768u));
+  // RESULT: 0
+  printf("%d\n", ge_u16(50000u, 20000u));
+  // RESULT: 1
+  printf("%d\n", ge_u16(20000u, 50000u));
+  // RESULT: 0
+  printf("%d\n", ge_u16(65535u, 65535u));
+  // RESULT: 1
+  printf("%d\n", ge_u16(0u, 0u));
+  // RESULT: 1
+  printf("%d\n", ge_u16(1u, 65535u));
+  // RESULT: 0
+  printf("%d\n", ge_u16(65535u, 1u));
+  // RESULT: 1
+
+  // ===== i32 =====
+  printf("%d\n", ge_i32(-2147483648, -2147483647));
+  // RESULT: 0
+  printf("%d\n", ge_i32(-2147483648, 0));
+  // RESULT: 0
+  printf("%d\n", ge_i32(2147483647, -2147483648));
+  // RESULT: 1
+  printf("%d\n", ge_i32(2000000000, 1000000000));
+  // RESULT: 1
+  printf("%d\n", ge_i32(-2000000000, -1000000000));
+  // RESULT: 0
+  printf("%d\n", ge_i32(1000000000, 1000000000));
+  // RESULT: 1
+  printf("%d\n", ge_i32(-1, -1));
+  // RESULT: 1
+  printf("%d\n", ge_i32(0, -1));
+  // RESULT: 1
+  printf("%d\n", ge_i32(-1, 0));
+  // RESULT: 0
+  printf("%d\n", ge_i32(123456789, -123456789));
+  // RESULT: 1
+
+  // ===== u32 =====
+  printf("%d\n", ge_u32(0u, 4294967295u));
+  // RESULT: 0
+  printf("%d\n", ge_u32(4294967295u, 0u));
+  // RESULT: 1
+  printf("%d\n", ge_u32(2147483648u, 2147483647u));
+  // RESULT: 1
+  printf("%d\n", ge_u32(2147483647u, 2147483648u));
+  // RESULT: 0
+  printf("%d\n", ge_u32(4000000000u, 1000000000u));
+  // RESULT: 1
+  printf("%d\n", ge_u32(1000000000u, 4000000000u));
+  // RESULT: 0
+  printf("%d\n", ge_u32(4294967295u, 4294967295u));
+  // RESULT: 1
+  printf("%d\n", ge_u32(0u, 0u));
+  // RESULT: 1
+  printf("%d\n", ge_u32(1u, 4294967295u));
+  // RESULT: 0
+  printf("%d\n", ge_u32(4294967295u, 1u));
+  // RESULT: 1
+
+  // ===== i64 =====
+  printf("%d\n", ge_i64(-9223372036854775807ll - 1, -9223372036854775807ll));
+  // RESULT: 0
+  printf("%d\n", ge_i64(-9223372036854775807ll - 1, 0ll));
+  // RESULT: 0
+  printf("%d\n", ge_i64(9223372036854775807ll, -9223372036854775807ll - 1));
+  // RESULT: 1
+  printf("%d\n", ge_i64(9000000000000000000ll, 1000000000000000000ll));
+  // RESULT: 1
+  printf("%d\n", ge_i64(-9000000000000000000ll, -1000000000000000000ll));
+  // RESULT: 0
+  printf("%d\n", ge_i64(-1ll, 0ll));
+  // RESULT: 0
+  printf("%d\n", ge_i64(0ll, -1ll));
+  // RESULT: 1
+  printf("%d\n", ge_i64(0ll, 0ll));
+  // RESULT: 1
+  printf("%d\n", ge_i64(9223372036854775807ll, 9223372036854775807ll));
+  // RESULT: 1
+  printf("%d\n", ge_i64(-9223372036854775807ll - 1, -9223372036854775807ll - 1));
+  // RESULT: 1
+
+  // ===== u64 =====
+  printf("%d\n", ge_u64(0ull, 18446744073709551615ull));
+  // RESULT: 0
+  printf("%d\n", ge_u64(18446744073709551615ull, 0ull));
+  // RESULT: 1
+  printf("%d\n", ge_u64(9223372036854775808ull, 4611686018427387904ull));
+  // RESULT: 1
+  printf("%d\n", ge_u64(4611686018427387904ull, 9223372036854775808ull));
+  // RESULT: 0
+  printf("%d\n", ge_u64(18000000000000000000ull, 10000000000000000000ull));
+  // RESULT: 1
+  printf("%d\n", ge_u64(10000000000000000000ull, 18000000000000000000ull));
+  // RESULT: 0
+  printf("%d\n", ge_u64(18446744073709551615ull, 18446744073709551615ull));
+  // RESULT: 1
+  printf("%d\n", ge_u64(0ull, 0ull));
+  // RESULT: 1
+  printf("%d\n", ge_u64(1ull, 18446744073709551615ull));
+  // RESULT: 0
+  printf("%d\n", ge_u64(18446744073709551615ull, 1ull));
+  // RESULT: 1
+
+  return 0;
+}
+

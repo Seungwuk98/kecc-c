@@ -239,7 +239,9 @@ int keccTestExecutorMain() {
       {asmPath.data(), asmPath.size()},
       "--target=riscv64-unknown-linux-gnu",
       "-fuse-ld=lld",
-  };
+      "-w",
+      "-I",
+      INCLUDE_DIR};
 
   for (size_t i = 1; i < sources.size(); ++i) {
     auto &tempFileName = tempFileNames[i];
