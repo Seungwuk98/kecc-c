@@ -763,23 +763,23 @@ ConstantIntAttr ASTInteger::interpret() const {
   // Convert the string value to an integer based on the base and suffix.
 
   std::uint64_t value;
-  bool succeed = false;
+  bool failed = false;
   switch (getBase()) {
   case ASTInteger::Decimal:
-    succeed = getValue().getAsInteger(10, value);
+    failed = getValue().getAsInteger(10, value);
     break;
   case ASTInteger::Hexadecimal:
-    succeed = getValue().getAsInteger(16, value);
+    failed = getValue().getAsInteger(16, value);
     break;
   case ASTInteger::Binary:
-    succeed = getValue().getAsInteger(2, value);
+    failed = getValue().getAsInteger(2, value);
     break;
   case ASTInteger::Octal:
-    succeed = getValue().getAsInteger(8, value);
+    failed = getValue().getAsInteger(8, value);
     break;
   };
 
-  if (!succeed)
+  if (failed)
     return nullptr;
 
   // Determine the bit width and signedness based on the suffix.

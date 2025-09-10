@@ -11,7 +11,6 @@
 #include "llvm/ADT/SmallVectorExtras.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
-#include <numeric>
 #include <ranges>
 
 namespace kecc::ir {
@@ -205,7 +204,6 @@ public:
                               Value int64_2Ptr);
 
   Value createIntConstant(std::uint64_t value);
-  Value createMemCpy();
   Type getVoidPointerT() const {
     return PointerT::get(module->getContext(),
                          UnitT::get(module->getContext()));
@@ -271,13 +269,13 @@ CanonicalizeStruct::CanonicalizeStruct() {}
 CanonicalizeStruct::~CanonicalizeStruct() = default;
 
 void CanonicalizeStruct::init(Module *module) {
-  StructSizeAnalysis *structSizeAnalysis =
-      module->getAnalysis<StructSizeAnalysis>();
-  if (!structSizeAnalysis) {
-    auto newAnalysis = StructSizeAnalysis::create(module);
-    structSizeAnalysis = newAnalysis.get();
-    module->insertAnalysis(std::move(newAnalysis));
+  if (!module->getContext()->isRegisteredInst<inst::MemCpy>()) {
+    module->getContext()->registerInst<inst::MemCpy>();
   }
+
+  StructSizeAnalysis *structSizeAnalysis =
+      module->getOrCreateAnalysis<StructSizeAnalysis>(module);
+
   const auto &structSizeMap = structSizeAnalysis->getStructSizeMap();
   const auto &structFieldsMap = structSizeAnalysis->getStructFieldsMap();
 
@@ -387,22 +385,6 @@ Value CanonicalizeStructImpl::createIntConstant(std::uint64_t value) {
   builder.setInsertionPoint(module->getIR()->getConstantBlock());
   return builder.create<inst::Constant>(
       {}, ConstantIntAttr::get(module->getContext(), value, 64, true));
-}
-
-Value CanonicalizeStructImpl::createMemCpy() {
-  IRBuilder builder(module->getContext());
-  builder.setInsertionPoint(module->getIR()->getConstantBlock());
-
-  auto voidPtrT = getVoidPointerT();
-  auto int64T = IntT::get(module->getContext(), 64, true);
-  auto funcType =
-      FunctionT::get(module->getContext(), {UnitT::get(module->getContext())},
-                     {voidPtrT, voidPtrT, int64T});
-  auto funcPtrT = PointerT::get(module->getContext(), funcType);
-
-  auto func = builder.create<inst::Constant>(
-      {}, ConstantVariableAttr::get(module->getContext(), "memcpy", funcPtrT));
-  return func;
 }
 
 Type CanonicalizeStructImpl::convertFuncT(FunctionT funcT) const {
@@ -600,18 +582,9 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
       }
       newValues.emplace_back(newLoad);
     } else if (size <= 8) {
-      auto memcpy = createMemCpy();
       auto constMemSize = createIntConstant(size);
-      auto voidPtrT = getVoidPointerT();
-      auto voidInt64Ptr =
-          builder.create<inst::TypeCast>(load.getRange(), int64Ptr, voidPtrT);
-      if (pointer.getType() != voidPtrT)
-        pointer =
-            builder.create<inst::TypeCast>(load.getRange(), pointer, voidPtrT);
-
-      builder.create<inst::Call>(
-          load.getRange(), memcpy,
-          llvm::SmallVector<Value>{voidInt64Ptr, pointer, constMemSize});
+      builder.create<inst::MemCpy>(load.getRange(), int64Ptr, pointer,
+                                   constMemSize);
 
       auto newLoad = builder.create<inst::Load>(load.getRange(), int64Ptr);
       newValues.emplace_back(newLoad);
@@ -629,18 +602,9 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
       auto newLoad1 = builder.create<inst::Load>(load.getRange(), ptr1);
       newValues.emplace_back(newLoad1);
     } else {
-      auto memcpy = createMemCpy();
       auto constMemSize = createIntConstant(size);
-      auto voidPtrT = getVoidPointerT();
-      auto voidInt64_2Ptr =
-          builder.create<inst::TypeCast>(load.getRange(), int64_2Ptr, voidPtrT);
-
-      pointer =
-          builder.create<inst::TypeCast>(load.getRange(), pointer, voidPtrT);
-
-      builder.create<inst::Call>(
-          load.getRange(), memcpy,
-          llvm::SmallVector<Value>{voidInt64_2Ptr, pointer, constMemSize});
+      builder.create<inst::MemCpy>(load.getRange(), int64_2Ptr, pointer,
+                                   constMemSize);
 
       auto ptr0 = builder.create<inst::TypeCast>(
           load->getRange(), int64_2Ptr,
@@ -855,19 +819,8 @@ void CanonicalizeStructImpl::storeValuesIntoPointer(
       auto value0 = values[0];
       auto store0 = builder.create<inst::Store>(range, value0, int64Ptr);
 
-      auto memcpy = createMemCpy();
       auto constMemSize = createIntConstant(memorySize);
-      auto voidPtrT = getVoidPointerT();
-
-      if (pointer.getType() != voidPtrT)
-        pointer = builder.create<inst::TypeCast>(range, pointer, voidPtrT);
-
-      auto voidInt64Ptr =
-          builder.create<inst::TypeCast>(range, int64Ptr, voidPtrT);
-
-      builder.create<inst::Call>(
-          range, memcpy,
-          llvm::SmallVector<Value>{pointer, voidInt64Ptr, constMemSize});
+      builder.create<inst::MemCpy>(range, pointer, int64Ptr, constMemSize);
     } else {
       auto value0 = values[0];
       auto value1 = values[1];
@@ -885,17 +838,9 @@ void CanonicalizeStructImpl::storeValuesIntoPointer(
 
       auto store1 = builder.create<inst::Store>(range, value1, pointer1);
 
-      auto memcpy = createMemCpy();
       auto constMemSize = createIntConstant(memorySize);
-      auto voidPtrT = getVoidPointerT();
-      if (pointer.getType() != voidPtrT)
-        pointer = builder.create<inst::TypeCast>(range, pointer, voidPtrT);
-      auto voidInt64_2Ptr =
-          builder.create<inst::TypeCast>(range, int64_2Ptr, voidPtrT);
 
-      builder.create<inst::Call>(
-          range, memcpy,
-          llvm::SmallVector<Value>{pointer, voidInt64_2Ptr, constMemSize});
+      builder.create<inst::MemCpy>(range, pointer, int64_2Ptr, constMemSize);
     }
   } else
     llvm_unreachable("Unexpected total value size for struct manipulation."
@@ -1008,21 +953,13 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
         {}, PointerT::get(builder.getContext(), value.getType()));
 
     builder.setInsertionPointBeforeInst(inst);
-    auto memcpy = createMemCpy();
     auto constMemSize =
         createIntConstant(structT.getSizeAndAlign(sizeMap).first);
 
-    auto voidPtrT = getVoidPointerT();
     auto pointer = load.getPointer();
-    auto voidStructPtr = builder.create<inst::TypeCast>(
-        load.getRange(), structValuePtr, voidPtrT);
-    if (pointer.getType() != voidPtrT)
-      pointer =
-          builder.create<inst::TypeCast>(load.getRange(), pointer, voidPtrT);
 
-    builder.create<inst::Call>(
-        load.getRange(), memcpy,
-        llvm::SmallVector<Value>{voidStructPtr, pointer, constMemSize});
+    builder.create<inst::MemCpy>(load.getRange(), structValuePtr, pointer,
+                                 constMemSize);
     storedPointer = structValuePtr;
   } else if (auto outlineConstant =
                  inst->getDefiningInst<inst::OutlineConstant>()) {
@@ -1049,21 +986,11 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
       IRBuilder builder(module->getContext());
       builder.setInsertionPointAfterInst(store.getStorage());
       auto pointer = store.getPointer();
-
-      auto voidPtrT = getVoidPointerT();
-      if (pointer.getType() != voidPtrT)
-        pointer =
-            builder.create<inst::TypeCast>(store.getRange(), pointer, voidPtrT);
-
       auto constMemSize =
           createIntConstant(structT.getSizeAndAlign(sizeMap).first);
 
-      auto voidStoredPointer = builder.create<inst::TypeCast>(
-          store.getRange(), storedPointer, voidPtrT);
-      auto memcpy = createMemCpy();
-      builder.create<inst::Call>(
-          store.getRange(), memcpy,
-          llvm::SmallVector<Value>{pointer, voidStoredPointer, constMemSize});
+      builder.create<inst::MemCpy>(store.getRange(), pointer, storedPointer,
+                                   constMemSize);
 
       module->removeInst(user);
     } else if (auto call = user->getDefiningInst<inst::Call>()) {
@@ -1125,18 +1052,11 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
       IRBuilder builder(module->getContext());
       builder.setInsertionPointBeforeInst(user);
 
-      auto memcpy = createMemCpy();
       auto constMemSize =
           createIntConstant(structT.getSizeAndAlign(sizeMap).first);
-      auto voidPtrT = getVoidPointerT();
-      auto voidDestPtr =
-          builder.create<inst::TypeCast>(ret.getRange(), destPtr, voidPtrT);
-      auto voidSrcPtr = builder.create<inst::TypeCast>(ret.getRange(),
-                                                       storedPointer, voidPtrT);
 
-      builder.create<inst::Call>(
-          ret.getRange(), memcpy,
-          llvm::SmallVector<Value>{voidDestPtr, voidSrcPtr, constMemSize});
+      builder.create<inst::MemCpy>(ret.getRange(), destPtr, storedPointer,
+                                   constMemSize);
 
       llvm::SmallVector<Value> newRetValues;
       newRetValues.reserve(ret.getValues().size() - 1);

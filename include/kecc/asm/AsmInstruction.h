@@ -177,6 +177,9 @@ public:
   }
   Kind getKind() const { return kind; }
 
+  bool operator==(const DataSize &other) const { return kind == other.kind; }
+  bool operator!=(const DataSize &other) const { return kind != other.kind; }
+
 private:
   Kind kind;
 };
@@ -477,6 +480,19 @@ public:
 private:
   friend class ::kecc::as::AsmBuilder;
   Flt(Register rd, Register rs1, std::optional<Register> rs2,
+      DataSize dataSize);
+  DataSize dataSize;
+};
+
+class Fle final : public InstructionTemplate<Fle, RType> {
+public:
+  DataSize getDataSize() const { return dataSize; }
+
+  std::string toString() const override;
+
+private:
+  friend class ::kecc::as::AsmBuilder;
+  Fle(Register rd, Register rs1, std::optional<Register> rs2,
       DataSize dataSize);
   DataSize dataSize;
 };

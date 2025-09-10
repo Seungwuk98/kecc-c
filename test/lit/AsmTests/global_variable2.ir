@@ -1,0 +1,18 @@
+// RUN: kecc-test-executor %s | FileCheck %s
+var i32 @extern_i32 = 0
+
+/////// main.c 
+
+#include <stdio.h>
+
+extern int extern_i32;
+
+int main() {
+  printf("extern_i32: %d\n", extern_i32);
+  // CHECK: 0
+  extern_i32++;
+  printf("extern_i32 after add 1: %d\n", extern_i32);
+  // CHECK: 1
+
+  return 0;
+}

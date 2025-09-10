@@ -1,0 +1,150 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+
+struct X : {a: i64, b: i64, c: i64}
+
+// CHECK: .globl addX
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type addX, @function
+fun struct X @addX(struct X* /* l */, struct X* /* r */) {
+// CHECK-NEXT: addX:
+init:
+  bid: b0
+  allocations:
+    %l0:struct X:result
+    // %l1:struc X:inserted
+
+    // CHECK-NEXT: addi sp,sp,-72
+    // CHECK-NEXT: sd ra,64(sp)
+
+    // CHECK-NEXT: addi [[L0_REG:[a-z][0-9]+]],sp,0
+    // CHECK-NEXT: addi [[L1_REG:[a-z][0-9]+]],sp,24
+
+block b0:
+// CHECK-LABEL: .addX_L0:
+  %b0:p0:struct X*:l
+  %b0:p1:struct X*:r
+
+  // load l.a
+  %b0:i0:i64* = getelementptr %b0:p0:struct X* offset 0:i64
+  %b0:i1:i64 = load %b0:i0:i64*
+  // CHECK-NEXT: ld [[L_A:[a-z][0-9]+]],0(a1) 
+
+  // load r.a
+  %b0:i2:i64* = getelementptr %b0:p1:struct X* offset 0:i64
+  %b0:i3:i64 = load %b0:i2:i64*
+  // CHECK-NEXT: ld [[L_B:[a-z][0-9]+]],0(a2)
+
+  // l.a + r.a
+  %b0:i4:i64 = add %b0:i1:i64 %b0:i3:i64
+  // CHECK-NEXT: add [[ADD_A:[a-z][0-9]+]],[[L_A]],[[L_B]]
+
+  // load l.b
+  %b0:i5:i64* = getelementptr %b0:p0:struct X* offset 8:i64
+  // CHECK-NEXT: addi [[L_B_M:[a-z][0-9]+]],a1,8
+  %b0:i6:i64 = load %b0:i5:i64*
+  // CHECK-NEXT: ld [[L_B:[a-z][0-9]+]],0([[L_B_M]])
+
+  // load r.b 
+  %b0:i7:i64* = getelementptr %b0:p1:struct X* offset 8:i64
+  // CHECK-NEXT: addi [[R_B_M:[a-z][0-9]+]],a2,8
+  %b0:i8:i64 = load %b0:i7:i64*
+  // CHECK-NEXT: ld [[R_B:[a-z][0-9]+]],0([[R_B_M]])
+
+  // l.b + r.b
+  %b0:i9:i64 = add %b0:i6:i64 %b0:i8:i64
+  // CHECK-NEXT: add [[ADD_B:[a-z][0-9]+]],[[L_B]],[[R_B]]
+  
+  // load l.c 
+  %b0:i10:i64* = getelementptr %b0:p0:struct X* offset 16:i64
+  // CHECK-NEXT: addi [[L_C_M:[a-z][0-9]+]],a1,16
+  %b0:i11:i64 = load %b0:i10:i64*
+  // CHECK-NEXT: ld [[L_C:[a-z][0-9]+]],0([[L_C_M]])
+
+  // load r.c 
+  %b0:i12:i64* = getelementptr %b0:p1:struct X* offset 16:i64
+  // CHECK-NEXT: addi [[R_C_M:[a-z][0-9]+]],a2,16
+  %b0:i13:i64 = load %b0:i12:i64*
+  // CHECK-NEXT: ld [[R_C:[a-z][0-9]+]],0([[R_C_M]])
+
+
+  // l.c + r.c
+  %b0:i14:i64 = add %b0:i11:i64 %b0:i13:i64
+  // CHECK-NEXT: add [[ADD_C:[a-z][0-9]+]],[[L_C]],[[R_C]]
+
+  // store into result 
+  %b0:i15:i64* = getelementptr %l0:struct X* offset 0:i64
+  %b0:i16:unit = store %b0:i4:i64 %b0:i15:i64*
+  // CHECK-NEXT: sd [[ADD_A]],0([[L0_REG]])
+
+  %b0:i17:i64* = getelementptr %l0:struct X* offset 8:i64
+  // CHECK-NEXT: addi [[RESULT_B_M:[a-z][0-9]+]],[[L0_REG]],8
+  %b0:i18:unit = store %b0:i9:i64 %b0:i17:i64*
+  // CHECK-NEXT: sd [[ADD_B]],0([[RESULT_B_M]])
+
+  %b0:i19:i64* = getelementptr %l0:struct X* offset 16:i64
+  // CHECK-NEXT: addi [[RESULT_C_M:[a-z][0-9]+]],[[L0_REG]],16
+  %b0:i20:unit = store %b0:i14:i64 %b0:i19:i64*
+  // CHECK-NEXT: sd [[ADD_C]],0([[RESULT_C_M]])
+
+  // return 
+  %b0:i21:struct X = load %l0:struct X*
+
+  // load size 
+  // CHECK-NEXT: addiw [[SIZE_X:[a-z][0-9]+]],zero,24
+
+  // call memcpy
+  // available register : return memory ptr(a0), inserted memory(L1_REG) 
+  
+  // CHECK: sd a0,48(sp)
+  // CHECK-NEXT: sd [[L1_REG]],56(sp)
+
+  // CHECK: mv a0,[[L1_REG]]
+  // CHECK-NEXT: mv a2,[[SIZE_X]]
+  // CHECK-NEXT: mv a1,[[L0_REG]]
+
+  // CHECK-NEXT: call memcpy
+
+  // CHECK: ld a0,48(sp)
+  // CHECK-NEXT: ld [[L1_REG]],56(sp)
+
+
+  // CHECK: addiw [[SIZE_X2:[a-z][0-9]+]],zero,24
+  // CHECK-NEXT: mv a1,[[L1_REG]]
+  // CHECK-NEXT: mv a2,[[SIZE_X2]]
+  // CHECK-NEXT: call memcpy
+
+  // CHECK-NEXT: ld ra,64(sp) 
+  // CHECK-NEXT: addi sp,sp,72
+  ret %b0:i21:struct X
+}
+
+//////// main.c
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+
+#include <stdio.h>
+
+struct X {
+  long long a;
+  long long b;
+  long long c;
+};
+
+extern struct X addX(struct X l, struct X r);
+
+int main() {
+  struct X left = {
+      .a = 1,
+      .b = 500,
+      .c = 10101010,
+  };
+  struct X right = {
+      .a = 2,
+      .b = 1000,
+      .c = 1010101,
+  };
+
+  struct X add = addX(left, right);
+  printf("a:%lld, b:%lld, c:%lld\n", add.a, add.b, add.c);
+  // RESULT: a:3, b:1500, c:11111111
+  return 0;
+}

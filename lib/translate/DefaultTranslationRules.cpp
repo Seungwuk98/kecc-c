@@ -16,9 +16,9 @@ namespace {
 static utils::LogicalResult translateAdd(as::AsmBuilder &builder,
                                          FunctionTranslater &translater,
                                          ir::inst::Binary inst);
-static utils::LogicalResult translateIntSub(as::AsmBuilder &builder,
-                                            FunctionTranslater &translater,
-                                            ir::inst::Binary inst);
+static utils::LogicalResult translateSub(as::AsmBuilder &builder,
+                                         FunctionTranslater &translater,
+                                         ir::inst::Binary inst);
 static utils::LogicalResult translateMul(as::AsmBuilder &builder,
                                          FunctionTranslater &translater,
                                          ir::inst::Binary inst);
@@ -63,11 +63,11 @@ static utils::LogicalResult translateGe(as::AsmBuilder &builder,
                                         ir::inst::Binary inst);
 
 static utils::LogicalResult (*binaryTranslationFunctions[])(
-    as::AsmBuilder &, FunctionTranslater &, ir::inst::Binary) = {
-    translateAdd, translateIntSub, translateMul, translateDiv,
-    translateMod, translateAnd,    translateOr,  translateXor,
-    translateShl, translateShr,    translateEq,  translateNeq,
-    translateLt,  translateLe,     translateGt,  translateGe};
+    as::AsmBuilder &, FunctionTranslater &,
+    ir::inst::Binary) = {translateAdd, translateSub, translateMul, translateDiv,
+                         translateMod, translateAnd, translateOr,  translateXor,
+                         translateShl, translateShr, translateEq,  translateNeq,
+                         translateLt,  translateLe,  translateGt,  translateGe};
 
 } // namespace
 
@@ -681,7 +681,8 @@ utils::LogicalResult translateLe(as::AsmBuilder &builder,
            "It is guaranteed by `OutlineConstant` pass.");
     auto lhsReg = translater.getOperandRegister(lhs);
     auto rhsReg = translater.getOperandRegister(rhs);
-    builder.create<as::rtype::Flt>(rd, rhsReg, lhsReg, dataSize);
+    builder.create<as::rtype::Fle>(rd, lhsReg, rhsReg, dataSize);
+    return utils::LogicalResult::success();
   } else {
     assert(!rhs->isConstant() &&
            "Binary less than or equal rhs must not be constant. ");
@@ -768,7 +769,8 @@ utils::LogicalResult translateGe(as::AsmBuilder &builder,
            "It is guaranteed by `OutlineConstant` pass.");
     auto lhsReg = translater.getOperandRegister(lhs);
     auto rhsReg = translater.getOperandRegister(rhs);
-    builder.create<as::rtype::Flt>(rd, lhsReg, rhsReg, dataSize);
+    builder.create<as::rtype::Fle>(rd, rhsReg, lhsReg, dataSize);
+    return utils::LogicalResult::success();
   } else {
     assert(!lhs->isConstant() && "Binary less than lhs must not be constant. "
                                  "It is guaranteed by `OutlineConstant` pass.");
@@ -930,14 +932,14 @@ namespace {
 static void callPreparation(as::AsmBuilder &builder,
                             FunctionTranslater &translater,
                             llvm::ArrayRef<ir::Operand> operands) {
-  llvm::SmallVector<as::Register, 8> operandIntRegs;
-  llvm::SmallVector<as::Register, 8> operandFloatRegs;
+  llvm::SmallVector<DataSpace, 8> operandIntRegs;
+  llvm::SmallVector<DataSpace, 8> operandFloatRegs;
 
   for (const auto &operand : operands) {
     assert(!operand.isConstant() &&
            "Constant operands should be handled separately");
-    auto reg = translater.getRegister(operand);
-    if (auto spillMem = translater.getSpillMemory(operand))
+    auto reg = DataSpace::value(translater.getRegister(operand));
+    if (auto spillMem = translater.getSpillData(operand))
       reg = *spillMem;
 
     if (operand.getType().isa<ir::FloatT>())
@@ -946,8 +948,8 @@ static void callPreparation(as::AsmBuilder &builder,
       operandIntRegs.emplace_back(reg);
   }
 
-  llvm::SmallVector<as::Register, 8> intArgRegs;
-  llvm::SmallVector<as::Register, 8> floatArgRegs;
+  llvm::SmallVector<DataSpace, 8> intArgRegs;
+  llvm::SmallVector<DataSpace, 8> floatArgRegs;
 
   size_t argMemorySize = 0;
   FunctionStack *stack = translater.getStack();
@@ -961,10 +963,10 @@ static void callPreparation(as::AsmBuilder &builder,
         auto anonReg =
             translater.createAnonRegister(as::RegisterType::FloatingPoint, sp,
                                           as::DataSize::doubleWord(), false);
-        floatArgRegs.emplace_back(anonReg);
+        floatArgRegs.emplace_back(DataSpace::memory(anonReg));
       } else {
-        floatArgRegs.emplace_back(
-            translater.getFloatArgRegisters()[floatArgRegs.size()]);
+        floatArgRegs.emplace_back(DataSpace::value(
+            translater.getFloatArgRegisters()[floatArgRegs.size()]));
       }
 
     } else {
@@ -975,10 +977,10 @@ static void callPreparation(as::AsmBuilder &builder,
             translater.getModule()->getContext()->getArchitectureBitSize();
         auto anonReg = translater.createAnonRegister(
             as::RegisterType::Integer, sp, as::DataSize::doubleWord(), false);
-        intArgRegs.emplace_back(anonReg);
+        intArgRegs.emplace_back(DataSpace::memory(anonReg));
       } else {
-        intArgRegs.emplace_back(
-            translater.getIntArgRegisters()[intArgRegs.size()]);
+        intArgRegs.emplace_back(DataSpace::value(
+            translater.getIntArgRegisters()[intArgRegs.size()]));
       }
     }
   }
@@ -999,26 +1001,26 @@ static void finalizeCall(as::AsmBuilder &builder,
   static llvm::SmallVector<as::Register> floatRetRegs = {as::Register::fa0(),
                                                          as::Register::fa1()};
 
-  llvm::SmallVector<as::Register, 8> intFromCallee;
-  llvm::SmallVector<as::Register, 8> floatFromCallee;
+  llvm::SmallVector<DataSpace, 8> intFromCallee;
+  llvm::SmallVector<DataSpace, 8> floatFromCallee;
 
   for (auto idx = 0u, intIdx = 0u, floatIdx = 0u; idx < retTypes.size();
        ++idx) {
     if (retTypes[idx].isa<ir::FloatT>())
-      floatFromCallee.emplace_back(floatRetRegs[floatIdx++]);
+      floatFromCallee.emplace_back(DataSpace::value(floatRetRegs[floatIdx++]));
     else
-      intFromCallee.emplace_back(intRetRegs[intIdx++]);
+      intFromCallee.emplace_back(DataSpace::value(intRetRegs[intIdx++]));
   }
 
-  llvm::SmallVector<as::Register, 8> intResultRegs;
-  llvm::SmallVector<as::Register, 8> floatResultRegs;
+  llvm::SmallVector<DataSpace, 8> intResultRegs;
+  llvm::SmallVector<DataSpace, 8> floatResultRegs;
 
   for (auto idx = 0u, intIdx = 0u, floatIdx = 0u; idx < resultRegs.size();
        ++idx) {
     if (resultRegs[idx].isFloatingPoint())
-      floatResultRegs.emplace_back(resultRegs[idx]);
+      floatResultRegs.emplace_back(DataSpace::value(resultRegs[idx]));
     else
-      intResultRegs.emplace_back(resultRegs[idx]);
+      intResultRegs.emplace_back(DataSpace::value(resultRegs[idx]));
   }
 
   translater.moveRegisters(builder, intFromCallee, intResultRegs);
@@ -1040,9 +1042,12 @@ public:
                                  FunctionTranslater &translater,
                                  ir::inst::Call inst) override {
     const auto *callee = &inst.getFunctionAsOperand();
+    assert(!callee->isConstant() &&
+           "Call callee must not be constant. It is guaranteed by "
+           "`InlineCall` pass.");
 
     as::Register reg = [&]() {
-      if (translater.getSpillMemory(*callee))
+      if (translater.getSpillData(*callee))
         return translater.restoreOperand(builder, callee);
       else
         return translater.getRegister(*callee);
@@ -1050,6 +1055,12 @@ public:
     callPreparation(builder, translater, inst.getArguments());
 
     builder.create<as::pseudo::Jalr>(reg);
+
+    if (inst->getResultSize() == 1 &&
+        inst->getResult(0).getType().isa<ir::UnitT>()) {
+      // void function
+      return utils::LogicalResult::success();
+    }
 
     llvm::SmallVector<as::Register, 4> retRegs;
     for (ir::Value value : inst->getResults()) {
@@ -1085,12 +1096,35 @@ public:
     callPreparation(builder, translater, inst.getArguments());
     builder.create<as::pseudo::Call>(callee);
 
+    if (inst->getResultSize() == 1 &&
+        inst->getResult(0).getType().isa<ir::UnitT>()) {
+      // void function
+      return utils::LogicalResult::success();
+    }
+
     llvm::SmallVector<as::Register, 4> retRegs;
     for (ir::Value value : inst->getResults()) {
       retRegs.emplace_back(translater.getRegister(value));
     }
 
     finalizeCall(builder, translater, funcT.getReturnTypes(), retRegs);
+    return utils::LogicalResult::success();
+  }
+};
+
+class MemcpyTranslationRule
+    : public InstructionTranslationRule<ir::inst::MemCpy> {
+public:
+  MemcpyTranslationRule() {}
+
+  bool restoreActively() const override { return true; }
+  bool callFunction() const override { return true; }
+
+  utils::LogicalResult translate(as::AsmBuilder &builder,
+                                 FunctionTranslater &translater,
+                                 ir::inst::MemCpy memCpy) override {
+    callPreparation(builder, translater, memCpy->getOperands());
+    builder.create<as::pseudo::Call>("memcpy");
     return utils::LogicalResult::success();
   }
 };
@@ -1257,18 +1291,18 @@ public:
                                  FunctionTranslater &translater,
                                  ir::inst::Return inst) override {
 
-    static llvm::SmallVector<as::Register> intReturnRegisters{
-        as::Register::a0(),
-        as::Register::a1(),
+    static llvm::SmallVector<DataSpace> intReturnRegisters{
+        DataSpace::value(as::Register::a0()),
+        DataSpace::value(as::Register::a1()),
     };
 
-    static llvm::SmallVector<as::Register> floatReturnRegisters = {
-        as::Register::fa0(),
-        as::Register::fa1(),
+    static llvm::SmallVector<DataSpace> floatReturnRegisters = {
+        DataSpace::value(as::Register::fa0()),
+        DataSpace::value(as::Register::fa1()),
     };
 
-    llvm::SmallVector<as::Register> intValueRegisters;
-    llvm::SmallVector<as::Register> floatValueRegisters;
+    llvm::SmallVector<DataSpace> intValueRegisters;
+    llvm::SmallVector<DataSpace> floatValueRegisters;
     intValueRegisters.reserve(intReturnRegisters.size());
     floatValueRegisters.reserve(floatReturnRegisters.size());
 
@@ -1276,9 +1310,9 @@ public:
       const auto *value = &inst.getValueAsOperand(idx);
       as::Register valueReg = translater.getOperandRegister(value);
       if (value->getType().isa<ir::FloatT>())
-        floatValueRegisters.emplace_back(valueReg);
+        floatValueRegisters.emplace_back(DataSpace::value(valueReg));
       else
-        intValueRegisters.emplace_back(valueReg);
+        intValueRegisters.emplace_back(DataSpace::value(valueReg));
     }
 
     assert(intValueRegisters.size() <= intReturnRegisters.size() &&
@@ -1288,15 +1322,14 @@ public:
 
     if (!intValueRegisters.empty()) {
       translater.moveRegisters(builder, intValueRegisters,
-                               llvm::ArrayRef<as::Register>(intReturnRegisters)
+                               llvm::ArrayRef<DataSpace>(intReturnRegisters)
                                    .take_front(intValueRegisters.size()));
     }
 
     if (!floatValueRegisters.empty()) {
-      translater.moveRegisters(
-          builder, floatValueRegisters,
-          llvm::ArrayRef<as::Register>(floatReturnRegisters)
-              .take_front(floatValueRegisters.size()));
+      translater.moveRegisters(builder, floatValueRegisters,
+                               llvm::ArrayRef<DataSpace>(floatReturnRegisters)
+                                   .take_front(floatValueRegisters.size()));
     }
 
     translater.writeFunctionEnd(builder);
@@ -1468,9 +1501,11 @@ public:
                          srcType.getContext(),
                          srcType.getContext()->getArchitectureBitSize(), false),
                      dstType.cast<ir::IntT>());
+        return utils::LogicalResult::success();
       } else if (dstType.isa<ir::PointerT>()) {
         // Pointer to Pointer cast, just move the register
         builder.create<as::pseudo::Mv>(rd, srcReg);
+        return utils::LogicalResult::success();
       }
 
       llvm_unreachable("Unsupported pointer cast type");
@@ -1481,6 +1516,7 @@ public:
             ir::IntT::get(srcType.getContext(),
                           srcType.getContext()->getArchitectureBitSize(),
                           false));
+        return utils::LogicalResult::success();
       } else if (auto dstIntT = dstType.dyn_cast<ir::IntT>()) {
         castIntToInt(builder, rd, srcReg, srcIntT, dstIntT);
       } else if (auto dstFloatT = dstType.dyn_cast<ir::FloatT>()) {
@@ -1488,6 +1524,7 @@ public:
         builder.create<as::rtype::FcvtIntToFloat>(rd, srcReg, std::nullopt,
                                                   fromDataSize, toDataSize,
                                                   srcIntT.isSigned());
+        return utils::LogicalResult::success();
       } else {
         llvm_unreachable("Unsupported int cast type");
       }
@@ -1497,10 +1534,12 @@ public:
         builder.create<as::rtype::FcvtFloatToInt>(rd, srcReg, std::nullopt,
                                                   fromDataSize, toDataSize,
                                                   dstIntT.isSigned());
+        return utils::LogicalResult::success();
       } else if (dstType.isa<ir::FloatT>()) {
         // FcvFloatToFloat
         builder.create<as::rtype::FcvtFloatToFloat>(rd, srcReg, std::nullopt,
                                                     fromDataSize, toDataSize);
+        return utils::LogicalResult::success();
       } else {
         llvm_unreachable("Unsupported float cast type");
       }
@@ -1525,6 +1564,23 @@ public:
   }
 };
 
+class CopyTranslationRule : public InstructionTranslationRule<ir::inst::Copy> {
+public:
+  CopyTranslationRule() {}
+
+  utils::LogicalResult translate(as::AsmBuilder &builder,
+                                 FunctionTranslater &translater,
+                                 ir::inst::Copy copy) override {
+    auto src = translater.getOperandRegister(&copy.getValueAsOperand());
+    auto dst = translater.getRegister(copy);
+
+    if (src != dst) {
+      builder.create<as::pseudo::Mv>(dst, src);
+    }
+    return utils::LogicalResult::success();
+  }
+};
+
 void registerDefaultTranslationRules(TranslateContext *context) {
   registerTranslationRule<BinaryTranslationRule>(context);
   registerTranslationRule<UnaryTranslationRule>(context);
@@ -1540,7 +1596,9 @@ void registerDefaultTranslationRules(TranslateContext *context) {
   registerTranslationRule<TypeCastTranslationRule>(context);
   registerTranslationRule<CallTranslationRule>(context);
   registerTranslationRule<InlineCallTranslationRule>(context);
+  registerTranslationRule<MemcpyTranslationRule>(context);
   registerTranslationRule<FunctionArgTranslationRule>(context);
+  registerTranslationRule<CopyTranslationRule>(context);
 }
 
 } // namespace kecc

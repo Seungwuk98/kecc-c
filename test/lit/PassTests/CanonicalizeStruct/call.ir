@@ -31,20 +31,14 @@ block b0:
 
 // CHECK-LABEL: block b0:
 // CHECK-NEXT:    %b0:p0:struct B*:ret_ptr_1
-// CHECK-NEXT:    %b0:i0:unit* = typecast %l2:[2 x i64]* to unit*
-// CHECK-NEXT:    %b0:i1:unit* = typecast %l0:struct S* to unit*
-// CHECK-NEXT:    %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 12:i64)
-// CHECK-NEXT:    %b0:i3:i64* = typecast %l2:[2 x i64]* to i64*
-// CHECK-NEXT:    %b0:i4:i64 = load %b0:i3:i64*
-// CHECK-NEXT:    %b0:i5:i64* = getelementptr %l2:[2 x i64]* offset 8:i64
-// CHECK-NEXT:    %b0:i6:i64 = load %b0:i5:i64*
-// CHECK-NEXT:    %b0:i7:unit* = typecast %l3:struct B* to unit*
-// CHECK-NEXT:    %b0:i8:unit* = typecast %l1:struct B* to unit*
-// CHECK-NEXT:    %b0:i9:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i7:unit*, %b0:i8:unit*, 24:i64)
-// CHECK-NEXT:    %b0:i10:unit* = typecast %b0:p0:struct B* to unit*
-// CHECK-NEXT:    %b0:i11:unit* = typecast %l3:struct B* to unit*
-// CHECK-NEXT:    %b0:i12:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i10:unit*, %b0:i11:unit*, 24:i64)
-// CHECK-NEXT:    ret %b0:i4:i64, %b0:i6:i64
+// CHECK-NEXT:    memcpy dst:%l2:[2 x i64]*, src:%l0:struct S*, size:12:i64
+// CHECK-NEXT:    %b0:i0:i64* = typecast %l2:[2 x i64]* to i64*
+// CHECK-NEXT:    %b0:i1:i64 = load %b0:i0:i64*
+// CHECK-NEXT:    %b0:i2:i64* = getelementptr %l2:[2 x i64]* offset 8:i64
+// CHECK-NEXT:    %b0:i3:i64 = load %b0:i2:i64*
+// CHECK-NEXT:    memcpy dst:%l3:struct B*, src:%l1:struct B*, size:24:i64
+// CHECK-NEXT:    memcpy dst:%b0:p0:struct B*, src:%l3:struct B*, size:24:i64
+// CHECK-NEXT:    ret %b0:i1:i64, %b0:i3:i64
 }
 
 fun unit @callee_func1 (struct S, struct B) {
@@ -75,12 +69,8 @@ block b0:
 // CHECK-NEXT:    %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
 // CHECK-NEXT:    %b0:i2:i64* = getelementptr %l2:[2 x i64]* offset 8:i64
 // CHECK-NEXT:    %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
-// CHECK-NEXT:    %b0:i4:unit* = typecast %l0:struct S* to unit*
-// CHECK-NEXT:    %b0:i5:unit* = typecast %l2:[2 x i64]* to unit*
-// CHECK-NEXT:    %b0:i6:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i4:unit*, %b0:i5:unit*, 12:i64)
-// CHECK-NEXT:    %b0:i7:unit* = typecast %l1:struct B* to unit*
-// CHECK-NEXT:    %b0:i8:unit* = typecast %b0:p2:struct B* to unit*
-// CHECK-NEXT:    %b0:i9:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i7:unit*, %b0:i8:unit*, 24:i64)
+// CHECK-NEXT:    memcpy dst:%l0:struct S*, src:%l2:[2 x i64]*, size:12:i64
+// CHECK-NEXT:    memcpy dst:%l1:struct B*, src:%b0:p2:struct B*, size:24:i64
 // CHECK-NEXT:    ret
 
 }
@@ -121,44 +111,39 @@ block b0:
   // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
 
   /// memcpy l2 to l0
-  // CHECK-NEXT: %b0:i4:unit* = typecast %l0:struct S* to unit*
-  // CHECK-NEXT: %b0:i5:unit* = typecast %l2:[2 x i64]* to unit*
-  // CHECK-NEXT: %b0:i6:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i4:unit*, %b0:i5:unit*, 12:i64)
+  // CHECK-NEXT: memcpy dst:%l0:struct S*, src:%l2:[2 x i64]*, size:12:i64
 
   //===--------------------------------------------------------------------===//
   /// store big 
   //===--------------------------------------------------------------------===//
   %b0:i1:unit = store %b0:p1:struct B %l1:struct B*
   /// memcy p1 to l1
-  // CHECK-NEXT: %b0:i7:unit* = typecast %l1:struct B* to unit*
-  // CHECK-NEXT: %b0:i8:unit* = typecast %b0:p2:struct B* to unit*
-  // CHECK-NEXT: %b0:i9:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i7:unit*, %b0:i8:unit*, 24:i64)
-
+  // CHECK-NEXT: memcpy dst:%l1:struct B*, src:%b0:p2:struct B*, size:24:i64
  
   //===--------------------------------------------------------------------===//
   /// call 
   //===--------------------------------------------------------------------===//
   %b0:i2:struct S, %b0:i3:struct B = call @callee_func0:[ret: struct S, struct B params:()]*()
   /// cast1 (in process struct S)
-  // CHECK-NEXT: %b0:i10:[ret:i64, i64 params:(struct B*)]* = typecast @callee_func0:[ret:i64, i64 params:(struct B*)]* to [ret:i64, i64 params:(struct B*)]*
+  // CHECK-NEXT: %b0:i4:[ret:i64, i64 params:(struct B*)]* = typecast @callee_func0:[ret:i64, i64 params:(struct B*)]* to [ret:i64, i64 params:(struct B*)]*
 
   /// cast2 (in process struct B)
-  // CHECK-NEXT: %b0:i11:[ret:i64, i64 params:(struct B*)]* = typecast %b0:i10:[ret:i64, i64 params:(struct B*)]* to [ret:i64, i64 params:(struct B*)]*
+  // CHECK-NEXT: %b0:i5:[ret:i64, i64 params:(struct B*)]* = typecast %b0:i4:[ret:i64, i64 params:(struct B*)]* to [ret:i64, i64 params:(struct B*)]*
 
   /// alloca new value l3 for calling function 
-  // CHECK-NEXT: %b0:i12:i64, %b0:i13:i64 = call %b0:i11:[ret:i64, i64 params:(struct B*)]*(%l3:struct B*)
+  // CHECK-NEXT: %b0:i6:i64, %b0:i7:i64 = call %b0:i5:[ret:i64, i64 params:(struct B*)]*(%l3:struct B*)
 
   //===--------------------------------------------------------------------===//
   /// call 
   //===--------------------------------------------------------------------===//
   %b0:i4:unit = call @callee_func1:[ret:unit params:(struct S, struct B)]*(%b0:i2:struct S, %b0:i3:struct B)
   /// cast1
-  // CHECK-NEXT: %b0:i14:[ret:unit params:(i64, i64, struct B*)]* = typecast @callee_func1:[ret:unit params:(i64, i64, struct B*)]* to [ret:unit params:(i64, i64, struct B*)]* 
+  // CHECK-NEXT: %b0:i8:[ret:unit params:(i64, i64, struct B*)]* = typecast @callee_func1:[ret:unit params:(i64, i64, struct B*)]* to [ret:unit params:(i64, i64, struct B*)]* 
 
   /// cast2
-  // CHECK-NEXT: %b0:i15:[ret:unit params:(i64, i64, struct B*)]* = typecast %b0:i14:[ret:unit params:(i64, i64, struct B*)]* to [ret:unit params:(i64, i64, struct B*)]*
+  // CHECK-NEXT: %b0:i9:[ret:unit params:(i64, i64, struct B*)]* = typecast %b0:i8:[ret:unit params:(i64, i64, struct B*)]* to [ret:unit params:(i64, i64, struct B*)]*
 
-  // CHECK-NEXT: %b0:i16:unit = call %b0:i15:[ret:unit params:(i64, i64, struct B*)]*(%b0:i12:i64, %b0:i13:i64, %l3:struct B*)
+  // CHECK-NEXT: %b0:i10:unit = call %b0:i9:[ret:unit params:(i64, i64, struct B*)]*(%b0:i6:i64, %b0:i7:i64, %l3:struct B*)
   ret
   // CHECK-NEXT: ret
 }

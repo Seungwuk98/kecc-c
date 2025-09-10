@@ -80,9 +80,25 @@ void InterferenceGraphBuilder::build() {
       }
 
       for (LiveRange lr : liveRanges) {
-        for (LiveRange otherLR : liveNow)
-          if (otherLR != lr)
-            insert(lr, otherLR);
+        if (auto copy = inst->getDefiningInst<ir::inst::Copy>()) {
+          LiveRange target;
+          if (spillAnalysis && spillAnalysis->getSpillInfo().restore.contains(
+                                   &copy.getValueAsOperand())) {
+            target = spillAnalysis->getSpillInfo().restore.at(
+                &copy.getValueAsOperand());
+          } else {
+            target = liveRangeAnalysis->getLiveRange(copy.getValue());
+          }
+
+          for (LiveRange otherLR : liveNow) {
+            if (otherLR != lr && otherLR != target)
+              insert(lr, otherLR);
+          }
+        } else {
+          for (LiveRange otherLR : liveNow)
+            if (otherLR != lr)
+              insert(lr, otherLR);
+        }
         liveNow.erase(lr);
       }
 

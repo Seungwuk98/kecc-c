@@ -701,22 +701,23 @@ Attribute GlobalVariableDefinition::getInitializer() const {
   if (this->getStorage()->getAttributes().size() < 3) {
     return nullptr;
   }
-  return this->getStorage()->getAttribute(2).cast<InitializerAttr>();
+  return this->getStorage()->getAttribute(2);
 }
 
 void GlobalVariableDefinition::interpretInitializer() {
   if (auto initializer = this->getInitializer()) {
-    if (auto astInitializer = initializer.dyn_cast<ASTInitializerList>()) {
-      auto interpreted = astInitializer.interpret();
-      if (!interpreted) {
-        getContext()->diag().report(
-            getRange(), llvm::SourceMgr::DK_Error,
-            "Interpret failed for initializer of global variable @" +
-                this->getName().str());
-      }
-
-      getStorage()->setAttribute(2, interpreted);
+    if (!initializer.isa<InitializerAttr>()) {
+      return; // Already interpreted
     }
+
+    Attribute interpreted = initializer.cast<InitializerAttr>().interpret();
+    if (!interpreted) {
+      getContext()->diag().report(
+          getRange(), llvm::SourceMgr::DK_Error,
+          "Interpret failed for initializer of global variable @" +
+              this->getName().str());
+    }
+    getStorage()->setAttribute(2, interpreted);
   }
 }
 
@@ -845,6 +846,65 @@ void FunctionArgument::printer(FunctionArgument op, IRPrintContext &context) {
   op.printAsOperand(context);
   context.getOS() << " = function argument";
 }
+
+//============================================================================//
+/// MemCpy
+//============================================================================//
+
+void MemCpy::build(IRBuilder &builder, InstructionState &state, Value dest,
+                   Value src, Value size) {
+  state.pushOperand(dest);
+  state.pushOperand(src);
+  state.pushOperand(size);
+}
+
+void MemCpy::printer(MemCpy op, IRPrintContext &context) {
+  context.getOS() << "memcpy dst:";
+
+  op.getDest().printAsOperand(context);
+  context.getOS() << ", src:";
+  op.getSrc().printAsOperand(context);
+  context.getOS() << ", size:";
+  op.getSize().printAsOperand(context);
+}
+Value MemCpy::getDest() const { return getDestAsOperand(); }
+const Operand &MemCpy::getDestAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
+Value MemCpy::getSrc() const { return getSrcAsOperand(); }
+const Operand &MemCpy::getSrcAsOperand() const {
+  return this->getStorage()->getOperand(1);
+}
+Value MemCpy::getSize() const { return getSizeAsOperand(); }
+const Operand &MemCpy::getSizeAsOperand() const {
+  return this->getStorage()->getOperand(2);
+}
+Value MemCpy::Adaptor::getDest() const { return operands[0]; }
+Value MemCpy::Adaptor::getSrc() const { return operands[1]; }
+Value MemCpy::Adaptor::getSize() const { return operands[2]; }
+
+//============================================================================//
+/// Copy
+//============================================================================//
+
+void Copy::build(IRBuilder &builder, InstructionState &state, Value value,
+                 Type type) {
+  state.pushType(type);
+  state.pushOperand(value);
+}
+
+void Copy::printer(Copy op, IRPrintContext &context) {
+  op.printAsOperand(context, true);
+  context.getOS() << " = copy ";
+  op.getValue().printAsOperand(context);
+}
+
+Value Copy::getValue() const { return getValueAsOperand(); }
+const Operand &Copy::getValueAsOperand() const {
+  return this->getStorage()->getOperand(0);
+}
+
+Value Copy::Adaptor::getValue() const { return operands[0]; }
 
 void registerBuiltinInstructions(IRContext *context) {
   context->registerInst<Phi>();

@@ -6,6 +6,7 @@
 #include "kecc/translate/InterferenceGraph.h"
 #include "llvm/ADT/SmallVectorExtras.h"
 #include <cmath>
+#include <limits>
 
 namespace kecc {
 
@@ -39,7 +40,7 @@ void SpillCost::estimateSpillCost() {
         spillAnalysis->getSpillInfo().spilled.contains(liveRange)) {
       spillCostMap[liveRange] = std::numeric_limits<long double>::max();
     } else {
-      spillCostMap[liveRange] = 1;
+      spillCostMap[liveRange] = std::numeric_limits<long double>::min();
     }
   }
 

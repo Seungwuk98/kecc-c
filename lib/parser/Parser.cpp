@@ -129,7 +129,7 @@ ir::inst::StructDefinition Parser::parseStructDefinition(ir::IR *program,
 
 ir::inst::GlobalVariableDefinition
 Parser::parseGlobalVariableDefinition(ir::IR *program, Token *startToken) {
-  // 'var' type global_variable '=' initializer
+  // 'var' type global_variable ('=' initializer)?
 
   RangeHelper rh(*this, startToken);
   ir::IRBuilder::InsertionGuard guard(builder, program->getGlobalBlock());
@@ -145,15 +145,17 @@ Parser::parseGlobalVariableDefinition(ir::IR *program, Token *startToken) {
   // remove '@'
   llvm::StringRef name = nameToken->getSymbol().substr(1);
 
-  if (consume<Token::Tok_equal>())
-    return nullptr;
+  if (consumeIf<Token::Tok_equal>()) {
+    auto initializer = parseInitializerAttr(program);
+    if (diag.hasError())
+      return nullptr;
 
-  auto initializer = parseInitializerAttr(program);
-  if (diag.hasError())
-    return nullptr;
+    return builder.create<ir::inst::GlobalVariableDefinition>(
+        rh.getRange(), type, name, initializer);
+  }
 
   return builder.create<ir::inst::GlobalVariableDefinition>(rh.getRange(), type,
-                                                            name, initializer);
+                                                            name);
 }
 
 ir::Function *Parser::parseFunction(ir::IR *program, Token *startToken) {

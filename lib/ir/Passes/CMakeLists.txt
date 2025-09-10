@@ -12,6 +12,7 @@ add_library(KeccIRPasses
   OutlineMultipleResults.cpp
   InlineCall.cpp
   CreateFunctionArgument.cpp
+  ConversionToCopy.cpp
 )
 
 target_link_libraries(KeccIRPasses

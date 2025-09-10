@@ -69,6 +69,18 @@ IRTranslater::~IRTranslater() {
   }
 }
 
+void IRTranslater::init() {
+  for (ir::InstructionStorage *inst : *module->getIR()->getGlobalBlock()) {
+    auto globalVar =
+        inst->getDefiningInst<ir::inst::GlobalVariableDefinition>();
+    assert(globalVar && "Expected global variable");
+    auto [_, inserted] =
+        globalVarMap.try_emplace(globalVar.getName(), globalVar.getType());
+    assert(inserted && "Duplicate global variable name");
+    (void)inserted;
+  }
+}
+
 std::pair<llvm::StringRef, std::optional<as::DataSize>>
 IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
   if (auto it = constantToLabelMap.find(constant);
@@ -101,6 +113,16 @@ IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
     }
 
     newVariable = new as::Variable(label, {directive});
+  } else if (auto varConst = constant.dyn_cast<ir::ConstantVariableAttr>()) {
+    auto globalVarIt = globalVarMap.find(varConst.getName());
+    assert(globalVarIt != globalVarMap.end() && "Global variable not found");
+    auto type = globalVarIt->getSecond();
+
+    std::optional<as::DataSize> dataSize;
+    if (!type.isa<ir::NameStruct, ir::ArrayT>())
+      dataSize = getDataSize(type);
+
+    return {varConst.getName(), dataSize};
   } else {
     llvm_unreachable("Unsupported constant type");
   }
@@ -283,6 +305,7 @@ void IRTranslater::translateGlobalVariableImpl(
           llvm_unreachable("Unsupported integer data size");
         }
 
+        directives.emplace_back(intDirective);
         currSize += dataSize.getByteSize();
       })
 
@@ -482,12 +505,29 @@ void FunctionTranslater::init() {
            "LocalVariable instruction must be defined in the allocation block");
 
     auto type = localVar.getType().cast<ir::PointerT>().getPointeeType();
-    auto dataSize = getDataSize(type);
+
+    std::optional<as::DataSize> dataSize;
+    if (!type.isa<ir::NameStruct, ir::ArrayT>())
+      dataSize = getDataSize(type);
+
+    auto [size, align] = type.getSizeAndAlign(
+        module->getOrCreateAnalysis<ir::StructSizeAnalysis>(module)
+            ->getStructSizeMap());
+    if (size < align)
+      size = align;
     auto sp = stack.localVariable(totalLocalVarSize);
-    totalLocalVarSize += dataSize.getByteSize();
+    totalLocalVarSize += size;
     auto anon = createAnonRegister(as::RegisterType::Integer, sp, dataSize,
                                    type.isSignedInt());
     localVariablesInfo.emplace_back(anon);
+
+    // initialize localvariable spill
+    // It does't need another spill space because local variable memory can be
+    // inferred as offset of stack pointer
+    auto liveRange = liveRangeAnalysis->getLiveRange(function, localVar);
+    if (isSpilled(liveRange)) {
+      spillMemories.try_emplace(liveRange, DataSpace::value(anon));
+    }
   }
   stack.setLocalVariablesSize(totalLocalVarSize);
 
@@ -512,7 +552,7 @@ void FunctionTranslater::init() {
         auto anon =
             createAnonRegister(as::RegisterType::Integer, sp, dataSize, false);
         if (isSpilled(liveRange)) {
-          spillMemories.try_emplace(liveRange, anon);
+          spillMemories.try_emplace(liveRange, DataSpace::memory(anon));
         }
 
         functionFloatArgMemories.emplace_back(anon);
@@ -526,7 +566,7 @@ void FunctionTranslater::init() {
                                        arg.getType().isSignedInt());
 
         if (isSpilled(liveRange)) {
-          spillMemories.try_emplace(liveRange, anon);
+          spillMemories.try_emplace(liveRange, DataSpace::memory(anon));
         }
 
         functionIntArgMemories.emplace_back(anon);
@@ -550,7 +590,7 @@ void FunctionTranslater::init() {
     totalSpillSize += dataSize.getByteSize();
     auto anon = createAnonRegister(as::RegisterType::Integer, sp, dataSize,
                                    type.isSignedInt());
-    spillMemories.try_emplace(liveRange, anon);
+    spillMemories.try_emplace(liveRange, DataSpace::memory(anon));
   }
 
   stack.setSpilledRegistersSize(totalCalleeSavedSize);
@@ -591,6 +631,9 @@ llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
     totalSize += dataSize.getByteSize();
   }
 
+  stack.setCallerSavedRegistersSize(
+      std::max(stack.getCallerSavedRegistersSize(), totalSize));
+
   llvm::SmallVector<as::Register> anonRegs;
   anonRegs.reserve(datas.size());
   for (const auto &[sp, dataSize, isSigned] : stackPoint) {
@@ -600,7 +643,7 @@ llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
   }
 
   if (!datas.empty())
-    builder.create<as::CommentLine>("Save caller-saved registers");
+    builder.create<as::CommentLine>("Start of saving caller-saved registers");
   for (size_t i = 0; i < datas.size(); ++i) {
     const auto &[reg, type] = datas[i];
     const auto &anonStackReg = anonRegs[i];
@@ -608,6 +651,9 @@ llvm::SmallVector<as::Register> FunctionTranslater::saveCallerSavedRegisters(
 
     storeData(builder, *this, anonStackReg, reg, dataSize, 0);
   }
+
+  if (!datas.empty())
+    builder.create<as::CommentLine>("End of saving caller-saved registers");
 
   return anonRegs;
 }
@@ -619,7 +665,7 @@ void FunctionTranslater::loadCallerSavedRegisters(
          "Stack pointers and data sizes must match in size");
 
   if (!datas.empty())
-    builder.create<as::CommentLine>("Restore caller-saved registers");
+    builder.create<as::CommentLine>("Start of restore caller-saved registers");
   for (size_t i = 0; i < stackpointers.size(); ++i) {
     const auto &sp = stackpointers[i];
     const auto &[reg, type] = datas[i];
@@ -627,6 +673,8 @@ void FunctionTranslater::loadCallerSavedRegisters(
 
     loadData(builder, *this, reg, sp, dataSize, 0, type.isSignedInt());
   }
+  if (!datas.empty())
+    builder.create<as::CommentLine>("End of restore caller-saved registers");
 }
 
 std::string FunctionTranslater::getBlockName(ir::Block *block) {
@@ -756,9 +804,6 @@ as::Function *FunctionTranslater::translate() {
   blocks.emplace_back(funcEntryBlock);
 
   as::AsmBuilder builder;
-  builder.setInsertionPointStart(funcEntryBlock);
-  writeFunctionStart(builder);
-
   for (ir::Block *block : *function) {
     auto asBlock = translateBlock(builder, *this, block);
     if (!asBlock) {
@@ -768,6 +813,9 @@ as::Function *FunctionTranslater::translate() {
     }
     blocks.emplace_back(asBlock);
   }
+
+  builder.setInsertionPointStart(funcEntryBlock);
+  writeFunctionStart(builder);
 
   if (multipleReturn) {
     auto endBlock = new as::Block(functionEndLabel());
@@ -785,9 +833,9 @@ as::Function *FunctionTranslater::translate() {
 void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
   auto tempReg = getTranslateContext()->getTempRegisters()[0];
 
-  if (stack.getTotalSize() > 0) {
-    auto *imm = getImmOrLoad(builder, tempReg,
-                             -static_cast<std::int32_t>(stack.getTotalSize()));
+  if (auto totalSize = stack.getTotalSize()) {
+    auto *imm =
+        getImmOrLoad(builder, tempReg, -static_cast<std::int32_t>(totalSize));
     if (imm) {
       builder.create<as::itype::Addi>(as::Register::sp(), as::Register::sp(),
                                       imm, as::DataSize::doubleWord());
@@ -917,26 +965,29 @@ std::string FunctionTranslater::functionEndLabel() const {
 }
 
 void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
-                                       llvm::ArrayRef<as::Register> srcs,
-                                       llvm::ArrayRef<as::Register> dsts) {
+                                       llvm::ArrayRef<DataSpace> srcs,
+                                       llvm::ArrayRef<DataSpace> dsts) {
   assert(srcs.size() == dsts.size() &&
          "Source and destination sizes must match");
   auto tempReg0 = getTranslateContext()->getTempRegisters()[0];
-  auto scheduler = MoveManagement<as::Register>(dsts, srcs, tempReg0);
+  auto scheduler =
+      MoveManagement<DataSpace>(dsts, srcs, DataSpace::value(tempReg0));
   auto moveSchedule = scheduler.getMoveSchedule();
 
-  for (auto [movement, dst, src] : moveSchedule) {
+  for (auto [movement, dstData, srcData] : moveSchedule) {
+    auto dst = dstData.getRegister();
+    auto src = srcData.getRegister();
     auto dataSize = src.isFloatingPoint() ? as::DataSize::doublePrecision()
                                           : as::DataSize::doubleWord();
 
     switch (movement) {
     case Movement::Move: {
-      if (dst.isAnonymous() && !src.isAnonymous()) {
+      if (dstData.isMemory() && !srcData.isMemory()) {
         // store to dst
         builder.create<as::stype::Store>(dst, src, getImmediate(0), dataSize);
-      } else if (src.isAnonymous()) {
+      } else if (srcData.isMemory()) {
         // load from src
-        if (dst.isAnonymous()) {
+        if (dstData.isMemory()) {
           // load from src to temp, then store to dst
           builder.create<as::itype::Load>(tempReg0, src, getImmediate(0),
                                           as::DataSize::doubleWord(), false);
@@ -954,7 +1005,7 @@ void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
       break;
     }
     case Movement::Swap: {
-      if (!dst.isAnonymous() && !src.isAnonymous()) {
+      if (!dstData.isMemory() && !srcData.isMemory()) {
         // swap(a, b) ->
         //    a = a ^ b;
         //    b = a ^ b;
@@ -962,8 +1013,8 @@ void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
         builder.create<as::rtype::Xor>(dst, dst, src);
         builder.create<as::rtype::Xor>(src, dst, src);
         builder.create<as::rtype::Xor>(dst, dst, src);
-      } else if (dst.isAnonymous() != src.isAnonymous()) {
-        if (dst.isAnonymous())
+      } else if (dstData.isMemory() != srcData.isMemory()) {
+        if (dstData.isMemory())
           std::swap(dst, src);
         // dst is register, src is memory
         dataSize = dst.isFloatingPoint() ? as::DataSize::doublePrecision()
@@ -1011,14 +1062,17 @@ void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
 void FunctionTranslater::spillRegister(as::AsmBuilder &builder,
                                        LiveRange liveRange) {
   auto memory = spillMemories.at(liveRange);
-  auto type = liveRange.getType();
-  auto dataSize = getDataSize(type);
-  auto reg =
-      irTranslater->getRegisterAllocation().getRegister(function, liveRange);
 
-  auto store =
-      builder.create<as::stype::Store>(memory, reg, getImmediate(0), dataSize);
-  store->setComment(std::format("{}bytes spill", dataSize.getByteSize()));
+  if (memory.isMemory()) {
+    auto type = liveRange.getType();
+    auto dataSize = getDataSize(type);
+    auto reg =
+        irTranslater->getRegisterAllocation().getRegister(function, liveRange);
+
+    auto store = builder.create<as::stype::Store>(memory.getRegister(), reg,
+                                                  getImmediate(0), dataSize);
+    store->setComment(std::format("{}bytes spill", dataSize.getByteSize()));
+  }
 }
 
 bool FunctionTranslater::isSpilled(LiveRange liveRange) const {
@@ -1031,19 +1085,25 @@ as::Register FunctionTranslater::restoreOperand(as::AsmBuilder &builder,
   auto spilledLiveRange = liveRangeAnalysis->getLiveRange(function, *operand);
   assert(!isSpilled(restoredLiveRange) && "Restored value must not be spilled");
 
-  auto spilledMemory = spillMemories.at(spilledLiveRange);
-  auto type = operand->getType();
-  auto dataSize = getDataSize(type);
-  bool isSigned = false;
-  if (auto intT = type.dyn_cast<ir::IntT>())
-    isSigned = intT.isSigned();
-
   auto rd = irTranslater->getRegisterAllocation().getRegister(
       function, restoredLiveRange);
 
-  auto load = builder.create<as::itype::Load>(
-      rd, spilledMemory, getImmediate(0), dataSize, isSigned);
-  load->setComment(std::format("{}bytes restore", dataSize.getByteSize()));
+  auto spilledMemory = spillMemories.at(spilledLiveRange);
+  if (spilledMemory.isMemory()) {
+    auto type = operand->getType();
+    auto dataSize = getDataSize(type);
+    bool isSigned = false;
+    if (auto intT = type.dyn_cast<ir::IntT>())
+      isSigned = intT.isSigned();
+
+    auto load = builder.create<as::itype::Load>(
+        rd, spilledMemory.getRegister(), getImmediate(0), dataSize, isSigned);
+    load->setComment(std::format("{}bytes restore", dataSize.getByteSize()));
+  } else {
+    auto sp = spilledMemory.getRegister();
+    auto mv = builder.create<as::pseudo::Mv>(rd, sp);
+    mv->setComment("local variable");
+  }
   return rd;
 }
 
@@ -1063,10 +1123,9 @@ void FunctionTranslater::loadCalleeSavedRegisters(as::AsmBuilder &builder) {
   }
 }
 
-as::Register FunctionTranslater::createAnonRegister(as::RegisterType regType,
-                                                    const StackPoint &sp,
-                                                    as::DataSize dataSize,
-                                                    bool isSigned) {
+as::Register FunctionTranslater::createAnonRegister(
+    as::RegisterType regType, const StackPoint &sp,
+    std::optional<as::DataSize> dataSize, bool isSigned) {
   auto anon = as::Register::createAnonymousRegister(
       getTranslateContext()->getAnonymousRegStorage(), regType,
       as::CallingConvension::None, getAnonRegLabel());
@@ -1119,39 +1178,42 @@ void FunctionTranslater::substitueAnonymousRegisters(as::Function *function) {
       }
     } else if (auto *load = inst->dyn_cast<as::itype::Load>()) {
       auto [sp, dataSize, isSigned] = anonymousRegisterToSp.at(load->getBase());
+      assert(dataSize.has_value() && "Data size must be known");
       auto offset = sp.fromBottom();
 
       auto imm = getImmOrLoad(builder, tempReg, offset);
       if (imm) {
         builder
             .create<as::itype::Load>(load->getDst(), as::Register::sp(), imm,
-                                     dataSize, isSigned)
+                                     *dataSize, isSigned)
             ->setComment(comment);
       } else {
         builder.create<as::rtype::Add>(tempReg, as::Register::sp(), tempReg,
                                        as::DataSize::doubleWord());
         builder
             .create<as::itype::Load>(load->getDst(), tempReg, getImmediate(0),
-                                     dataSize, isSigned)
+                                     *dataSize, isSigned)
             ->setComment(comment);
       }
     } else /* store */ {
       auto *store = inst->cast<as::stype::Store>();
       auto [sp, dataSize, isSigned] =
           anonymousRegisterToSp.at(store->getBase());
+
+      assert(dataSize.has_value() && "Data size must be known");
       auto offset = sp.fromBottom();
       auto imm = getImmOrLoad(builder, tempReg, offset);
       if (imm) {
         builder
             .create<as::stype::Store>(as::Register::sp(), store->getSrc(), imm,
-                                      dataSize)
+                                      *dataSize)
             ->setComment(comment);
       } else {
         builder.create<as::rtype::Add>(tempReg, as::Register::sp(), tempReg,
                                        as::DataSize::doubleWord());
         builder
             .create<as::stype::Store>(tempReg, store->getSrc(), getImmediate(0),
-                                      dataSize)
+                                      *dataSize)
             ->setComment(comment);
       }
     }

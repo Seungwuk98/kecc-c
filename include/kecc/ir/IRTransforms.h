@@ -174,6 +174,18 @@ public:
   }
 };
 
+class ConversionToCopyPass : public Pass {
+public:
+  void init(Module *module) override;
+  PassResult run(Module *module) override;
+
+  static llvm::StringRef getPassName() { return "conversion-to-copy"; }
+  llvm::StringRef getPassArgument() const override { return getPassName(); }
+  llvm::StringRef getDescription() const override {
+    return "Conversion operations to copy operations, if possible";
+  }
+};
+
 } // namespace kecc::ir
 
 #endif // KECC_IR_TRANSFORMATIONS_H

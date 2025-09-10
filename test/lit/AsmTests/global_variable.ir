@@ -1,0 +1,68 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+
+var i32 @global_var = 100
+
+// CHECK: .globl load_global_var 
+// CHECK-NEXT: .align 1 
+// CHECK-NEXT: .type load_global_var, @function
+fun i32 @load_global_var() {
+// CHECK-NEXT: load_global_var:
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .load_global_var_L0:
+  %b0:i0:i32 = load @global_var:i32*
+  // CHECK-NEXT: la a0,global_var 
+  // CHECK-NEXT: lw a0,0(a0)
+  ret %b0:i0:i32
+  // CHECK-NEXT: ret
+}
+
+// CHECK: .globl add_global_var_one 
+// CHECK-NEXT: .align 1 
+// CHECK-NEXT: .type add_global_var_one, @function
+fun unit @add_global_var_one() {
+// CHECK-NEXT: add_global_var_one:
+init:
+  bid: b0
+  allocations:
+
+block b0:
+// CHECK-LABEL: .add_global_var_one_L0:
+  %b0:i0:i32 = load @global_var:i32*
+  // CHECK-NEXT: la a0,global_var
+  // CHECK-NEXT: lw a0,0(a0)
+  %b0:i1:i32 = add %b0:i0:i32 1:i32
+  // CHECK-NEXT: addiw a0,a0,1
+  %b0:i2:unit = store %b0:i1:i32 @global_var:i32*
+  // CHECK-NEXT: la a1,global_var 
+  // CHECK-NEXT: sw a0,0(a1)
+  ret
+  // CHECK-NEXT: ret
+}
+
+
+// CHECK:   .type global_var, @object
+// CHECK-NEXT:   .section .data
+// CHECK-NEXT:   .globl global_var
+// CHECK-NEXT:   .align 2
+// CHECK-NEXT: global_var:
+// CHECK-NEXT:   .word 100
+
+//////// main.c 
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+
+extern int load_global_var();
+extern void add_global_var_one();
+
+int main() {
+  printf("before add: %d\n", load_global_var());
+  // RESULT: 100
+  add_global_var_one();
+  printf("after add: %d\n", load_global_var());
+  // RESULT: 101
+  return 0;
+}

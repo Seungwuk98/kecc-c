@@ -1,0 +1,153 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+
+struct X : {a: i8, b: i16, c: i32}
+
+
+// CHECK: .globl addX
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type addX, @function
+fun struct X @addX(i64 /* l */, i64 /* r */) {
+// CHECK-NEXT: addX:
+    // CHECK-NEXT: addi sp,sp,-24
+init:
+  bid: b0
+  allocations:
+    %l0:struct X
+    // CHECK-NEXT: addi [[L0_REG:[a-z][0-9]+]],sp,0
+    %l1:struct X
+    // CHECK-NEXT: addi [[L1_REG:[a-z][0-9]+]],sp,8
+    %l2:struct X
+    // CHECK-NEXT: addi [[L2_REG:[a-z][0-9]+]],sp,16
+
+block b0:
+// CHECK-LABEL: .addX_L0:
+  %b0:p0:i64 
+  %b0:p1:i64
+  /// store into first struct
+  %b0:i0:i64* = typecast %l0:struct X* to i64*
+  %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64* 
+  // CHECK-NEXT: sd a0,0([[L0_REG]])
+
+  /// store into second struct 
+  %b0:i2:i64* = typecast %l1:struct X* to i64*
+  %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+  // CHECK-NEXT: sd a1,0([[L1_REG]])
+
+  /// add .a
+  
+  // load l.a
+  %b0:i4:i8* = getelementptr %l0:struct X* offset 0:i64
+  %b0:i5:i8 = load %b0:i4:i8* 
+  // CHECK-NEXT: lb [[LEFT_A:[a-z][0-9]+]],0([[L0_REG]])
+
+  // load r.a
+  %b0:i6:i8* = getelementptr %l1:struct X* offset 0:i64
+  %b0:i7:i8 = load %b0:i6:i8*
+  // CHECK-NEXT: lb [[RIGHT_A:[a-z][0-9]+]],0([[L1_REG]])
+
+  // l.a + r.a
+  %b0:i8:i8 = add %b0:i5:i8 %b0:i7:i8
+  // CHECK-NEXT: add [[ADD_A:[a-z][0-9]+]],[[LEFT_A]],[[RIGHT_A]]
+  // CHECK-NEXT: slli [[ADD_A]],[[ADD_A]],56
+  // CHECK-NEXT: srai [[ADD_A]],[[ADD_A]],56
+
+  // store into result
+  %b0:i9:i8* = getelementptr %l2:struct X* offset 0:i64
+  %b0:i10:unit = store %b0:i8:i8 %b0:i9:i8*
+  // CHECK-NEXT: sb [[ADD_A]],0([[L2_REG]])
+
+
+  /// add .b
+
+  // load l.b
+  %b0:i11:i16* = getelementptr %l0:struct X* offset 2:i64
+  // CHECK-NEXT: addi [[LEFT_B_M:[a-z][0-9]+]],[[L0_REG]],2
+  %b0:i12:i16 = load %b0:i11:i16*
+  // CHECK-NEXT: lh [[LEFT_B:[a-z][0-9]+]],0([[LEFT_B_M]])
+
+  // load r.b
+  %b0:i13:i16* = getelementptr %l1:struct X* offset 2:i64
+  // CHECK-NEXT: addi [[RIGHT_B_M:[a-z][0-9]+]],[[L1_REG]],2
+  %b0:i14:i16 = load %b0:i13:i16*
+  // CHECK-NEXT: lh [[RIGHT_B:[a-z][0-9]+]],0([[RIGHT_B_M]])
+
+  // l.b + r.b 
+  %b0:i15:i16 = add %b0:i12:i16 %b0:i14:i16
+  // CHECK-NEXT: add [[ADD_B:[a-z][0-9]+]],[[LEFT_B]],[[RIGHT_B]]
+  // CHECK-NEXT: slli [[ADD_B]],[[ADD_B]],48
+  // CHECK-NEXT: srai [[ADD_B]],[[ADD_B]],48
+
+  // store into result 
+  %b0:i16:i16* = getelementptr %l2:struct X* offset 2:i64
+  // CHECK-NEXT: addi [[ADD_B_M:[a-z][0-9]+]],[[L2_REG]],2
+  %b0:i17:unit = store %b0:i15:i16 %b0:i16:i16*
+  // CHECK-NEXT: sh [[ADD_B]],0([[ADD_B_M]])
+ 
+
+  /// add .c
+  
+  // load l.c 
+  %b0:i18:i32* = getelementptr %l0:struct X* offset 4:i64
+  // CHECK-NEXT: addi [[LEFT_C_M:[a-z][0-9]+]],[[L0_REG]],4
+  %b0:i19:i32 = load %b0:i18:i32*
+  // CHECK-NEXT: lw [[LEFT_C:[a-z][0-9]+]],0([[LEFT_C_M]])
+
+  // load r.c
+  %b0:i20:i32* = getelementptr %l1:struct X* offset 4:i64
+  // CHECK-NEXT: addi [[RIGHT_C_M:[a-z][0-9]+]],[[L1_REG]],4
+  %b0:i21:i32 = load %b0:i20:i32*
+  // CHECK-NEXT: lw [[RIGHT_C:[a-z][0-9]+]],0([[RIGHT_C_M]])
+
+  // l.c + r.c
+  %b0:i22:i32 = add %b0:i19:i32 %b0:i21:i32
+  // CHECK-NEXT: addw [[ADD_C:[a-z][0-9]+]],[[LEFT_C]],[[RIGHT_C]]
+
+  // store into result 
+  %b0:i23:i32* = getelementptr %l2:struct X* offset 4:i64
+  // CHECK-NEXT: addi [[ADD_C_M:[a-z][0-9]+]],[[L2_REG]],4
+  %b0:i24:unit = store %b0:i22:i32 %b0:i23:i32*
+  // CHECK-NEXT: sw [[ADD_C]],0([[ADD_C_M]])
+
+
+  /// return 
+  // CHECK-NEXT: mv [[RET_M:[a-z][0-9]+]],[[L2_REG]]
+  %b0:i25:struct X = load %l2:struct X*
+  // CHECK-NEXT: ld [[RET:[a-z][0-9]+]],0([[RET_M]])
+  ret %b0:i25:struct X
+  // CHECK-NEXT: mv a0,[[RET]]
+  // CHECK-NEXT: addi sp,sp,24
+  // CHECK-NEXT: ret
+}
+
+
+
+////////// main.c
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+
+struct X {
+  char a;
+  short b;
+  int c;
+};
+
+
+extern struct X addX(struct X l, struct X r);
+
+int main() {
+  struct X left = {
+    .a = 1,
+    .b = 500,
+    .c = 10101010, 
+  };
+  struct X right = {
+    .a = 2,
+    .b = 1000,
+    .c = 1010101,
+  };
+
+  struct X add = addX(left, right);
+  printf("a:%d, b:%d, c:%d\n", (int)add.a, (int)add.b, add.c);
+  // RESULT: a:3, b:1500, c:11111111
+  return 0;
+}

@@ -31,9 +31,7 @@ block b0:
   // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
 
   /// memcpy l1 to l0
-  // CHECK-NEXT: %b0:i4:unit* = typecast %l0:struct S* to unit*
-  // CHECK-NEXT: %b0:i5:unit* = typecast %l1:[2 x i64]* to unit*
-  // CHECK-NEXT: %b0:i6:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i4:unit*, %b0:i5:unit*, 12:i64)
+  // CHECK-NEXT: memcpy dst:%l0:struct S*, src:%l1:[2 x i64]*, size:12:i64 
   
   %b0:i0:unit = store %b0:p0:struct S %l0:struct S*
   ret 0:i32
@@ -122,14 +120,8 @@ block b0:
   /// store p0 to l1
   // CHECK-NEXT: %b0:i0:unit = store %b0:p0:i64 %l1:i64*
 
-  /// cast l0 to unit*
-  // CHECK-NEXT: %b0:i1:unit* = typecast %l0:struct SS2* to unit*
-  
-  /// cast l1 to unit*
-  // CHECK-NEXT: %b0:i2:unit* = typecast %l1:i64* to unit*
-
   /// memcpy sizeof(struct SS2)=3 bytes of l1 data to l0 
-  // CHECK-NEXT: %b0:i3:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i1:unit*, %b0:i2:unit*, 3:i64)
+  // CHECK-NEXT: memcpy dst:%l0:struct SS2*, src:%l1:i64*, size:3:i64
 
   %b0:i0:unit = store %b0:p0:struct SS2 %l0:struct SS2*
   ret 0:i32

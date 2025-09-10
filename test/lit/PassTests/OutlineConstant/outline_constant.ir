@@ -1,5 +1,11 @@
 // RUN: kecc-opt %s --canonicalize-constant --outline-constant | FileCheck %s
 
+var i32 @global_var = 0
+// CHECK: var i32 @global_var = 0
+var [20000 x i32] @global_array
+// CHECK: var [20000 x i32] @global_array
+
+
 fun i32 @outline0 () {
 // CHECK: fun i32 @outline0 ()
 init:
@@ -52,4 +58,32 @@ block b3:
   // CHECK-NEXT: %b3:p0:i32
   ret %b3:p0:i32
   // CHECK-NEXT: ret %b3:p0:i32
+}
+
+fun i32 @outline_gep () {
+// CHECK: fun i32 @outline_gep ()
+init:
+  bid: b0
+  allocations:
+    %l0:i32
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i32
+
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:i8* = getelementptr %l0:i32* offset 0:i64
+  // CHECK-NEXT: %b0:i0:i8* = getelementptr %l0:i32* offset 0:i64
+  %b0:i1:i8* = getelementptr @global_var:i32* offset 0:i64
+  // CHECK-NEXT: %b0:i1:i32* = outline @global_var:i32*
+  // CHECK-NEXT: %b0:i2:i8* = getelementptr %b0:i1:i32* offset 0:i64
+  %b0:i2:i32* = getelementptr @global_array:[20000 x i32]* offset 320000:i64
+  // CHECK-NEXT: %b0:i3:[20000 x i32]* = outline @global_array:[20000 x i32]* 
+  // CHECK-NEXT: %b0:i4:i64 = outline 320000:i64
+  // CHECK-NEXT: %b0:i5:i32* = getelementptr %b0:i3:[20000 x i32]* offset %b0:i4:i64 
+  ret 0:i32
+  // CHECK-NEXT: %b0:i6:i32 = outline 0:i32
+  // CHECK-NEXT: ret %b0:i6:i32 
 }

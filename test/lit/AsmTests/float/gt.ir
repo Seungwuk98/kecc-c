@@ -1,0 +1,160 @@
+// RUN: kecc-test-executor %s -dump-source=0 | kecc-translate | FileCheck %s
+
+
+fun i1 @gt_f32 (f32, f32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:f32
+  %b0:p1:f32
+  %b0:i0:i1 = cmp gt %b0:p0:f32 %b0:p1:f32
+  ret %b0:i0:i1
+}
+
+// CHECK:   .globl	gt_f32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	gt_f32, @function
+// CHECK-NEXT: gt_f32:
+
+// CHECK-LABEL: .gt_f32_L0:
+// CHECK-NEXT:   flt.s	a0,fa1,fa0
+// CHECK-NEXT:   ret
+
+
+fun i1 @gt_f64 (f64, f64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:f64
+  %b0:p1:f64
+  %b0:i0:i1 = cmp gt %b0:p0:f64 %b0:p1:f64
+  ret %b0:i0:i1
+}
+
+
+// CHECK:   .globl	gt_f64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	gt_f64, @function
+// CHECK-NEXT: gt_f64:
+
+// CHECK-LABEL: .gt_f64_L0:
+// CHECK-NEXT:   flt.d	a0,fa1,fa0
+// CHECK-NEXT:   ret
+
+
+///////// main.c
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+
+#include <stdio.h>
+#include <stdint.h>
+#include <math.h>
+
+extern int gt_f32(float, float);
+extern int gt_f64(double, double);
+
+int main(void) {
+  // ===== f32 (float) =====
+  printf("%d\n", gt_f32(0.0f, 0.0f));
+  // RESULT: 0
+  printf("%d\n", gt_f32(-0.0f, 0.0f));
+  // RESULT: 0
+  printf("%d\n", gt_f32(0.0f, -0.0f));
+  // RESULT: 0
+  printf("%d\n", gt_f32(0x1p-149f, 0.0f));           // min subnormal > +0
+  // RESULT: 1
+  printf("%d\n", gt_f32(0.0f, 0x1p-149f));           // +0 > min subnormal
+  // RESULT: 0
+  printf("%d\n", gt_f32(0.0f, -0x1p-149f));          // +0 > negative subnormal
+  // RESULT: 1
+  printf("%d\n", gt_f32(-0x1p-149f, 0.0f));          // negative subnormal > +0
+  // RESULT: 0
+
+  printf("%d\n", gt_f32(1.0f, 1.0f));
+  // RESULT: 0
+  printf("%d\n", gt_f32(1.0f, 0x1.000002p+0f));      // 1 > 1 + ulp?
+  // RESULT: 0
+  printf("%d\n", gt_f32(0x1.000002p+0f, 1.0f));      // (1 + ulp) > 1
+  // RESULT: 1
+  printf("%d\n", gt_f32(-1.0f, 1.0f));
+  // RESULT: 0
+  printf("%d\n", gt_f32(1.0f, -1.0f));
+  // RESULT: 1
+
+  printf("%d\n", gt_f32(0x1.fffffep+127f, INFINITY)); // FLT_MAX > inf?
+  // RESULT: 0
+  printf("%d\n", gt_f32(INFINITY, INFINITY));         // inf > inf
+  // RESULT: 0
+  printf("%d\n", gt_f32(-INFINITY, -INFINITY));       // -inf > -inf
+  // RESULT: 0
+  printf("%d\n", gt_f32(-INFINITY, 0.0f));            // -inf > finite
+  // RESULT: 0
+  printf("%d\n", gt_f32(0.0f, -INFINITY));            // finite > -inf
+  // RESULT: 1
+  printf("%d\n", gt_f32(INFINITY, 1.0f));             // inf > finite
+  // RESULT: 1
+  printf("%d\n", gt_f32(1.0f, INFINITY));             // finite > inf
+  // RESULT: 0
+
+  printf("%d\n", gt_f32(NAN, 0.0f));                  // NaN compares false
+  // RESULT: 0
+  printf("%d\n", gt_f32(0.0f, NAN));
+  // RESULT: 0
+  printf("%d\n", gt_f32(-0x1.fffffep+127f, 0x1.fffffep+127f)); // -FLT_MAX > FLT_MAX?
+  // RESULT: 0
+
+  // ===== f64 (double) =====
+  printf("%d\n", gt_f64(0.0, 0.0));
+  // RESULT: 0
+  printf("%d\n", gt_f64(-0.0, 0.0));
+  // RESULT: 0
+  printf("%d\n", gt_f64(0.0, -0.0));
+  // RESULT: 0
+  printf("%d\n", gt_f64(0x1p-1074, 0.0));            // min subnormal > +0
+  // RESULT: 1
+  printf("%d\n", gt_f64(0.0, 0x1p-1074));            // +0 > min subnormal
+  // RESULT: 0
+  printf("%d\n", gt_f64(0.0, -0x1p-1074));           // +0 > negative subnormal
+  // RESULT: 1
+  printf("%d\n", gt_f64(-0x1p-1074, 0.0));           // negative subnormal > +0
+  // RESULT: 0
+
+  printf("%d\n", gt_f64(1.0, 1.0));
+  // RESULT: 0
+  printf("%d\n", gt_f64(1.0, 0x1.0000000000001p+0)); // 1 > 1 + ulp?
+  // RESULT: 0
+  printf("%d\n", gt_f64(0x1.0000000000001p+0, 1.0)); // (1 + ulp) > 1
+  // RESULT: 1
+  printf("%d\n", gt_f64(-1.0, 1.0));
+  // RESULT: 0
+  printf("%d\n", gt_f64(1.0, -1.0));
+  // RESULT: 1
+
+  printf("%d\n", gt_f64(0x1.fffffffffffffp+1023, INFINITY)); // DBL_MAX > inf?
+  // RESULT: 0
+  printf("%d\n", gt_f64(INFINITY, INFINITY));        // inf > inf
+  // RESULT: 0
+  printf("%d\n", gt_f64(-INFINITY, -INFINITY));      // -inf > -inf
+  // RESULT: 0
+  printf("%d\n", gt_f64(-INFINITY, 0.0));            // -inf > finite
+  // RESULT: 0
+  printf("%d\n", gt_f64(0.0, -INFINITY));            // finite > -inf
+  // RESULT: 1
+  printf("%d\n", gt_f64(INFINITY, 1.0));             // inf > finite
+  // RESULT: 1
+  printf("%d\n", gt_f64(1.0, INFINITY));             // finite > inf
+  // RESULT: 0
+
+  printf("%d\n", gt_f64(NAN, 0.0));                  // NaN compares false
+  // RESULT: 0
+  printf("%d\n", gt_f64(0.0, NAN));
+  // RESULT: 0
+  printf("%d\n", gt_f64(-0x1.fffffffffffffp+1023, 0x1.fffffffffffffp+1023)); // -DBL_MAX > DBL_MAX?
+  // RESULT: 0
+
+  return 0;
+}
+

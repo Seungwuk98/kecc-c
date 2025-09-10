@@ -10,7 +10,6 @@ namespace kecc::ir {
 
 namespace {
 
-#define U_UPPER_IMM12 ((1 << 12) - 1)
 #define I_UPPER_IMM12 ((1 << 11) - 1)
 #define I_LOWER_IMM12 (-(1 << 11))
 
@@ -44,16 +43,9 @@ static InlineConstantState getInlineConstantState(Value value) {
     auto canbeInline = llvm::TypeSwitch<ConstantAttr, bool>(constAttr)
                            .Case([&](ConstantIntAttr intAttr) -> bool {
                              auto value = intAttr.getValue();
-                             auto bitWidth = intAttr.getIntType().getBitWidth();
-                             value = value & ((1ULL << bitWidth) - 1);
-
-                             if (intAttr.getIntType().isSigned()) {
-                               std::int64_t signedValue = value;
-                               return signedValue >= I_LOWER_IMM12 &&
-                                      signedValue <= I_UPPER_IMM12;
-                             } else {
-                               return value <= U_UPPER_IMM12;
-                             }
+                             std::int64_t signedValue = value;
+                             return signedValue >= I_LOWER_IMM12 &&
+                                    signedValue <= I_UPPER_IMM12;
                            })
                            .Default([&](ConstantAttr) { return false; });
     return canbeInline ? InlineConstantState::canbeInline()
@@ -149,6 +141,37 @@ public:
   }
 };
 
+class ConvertGep : public InstPattern<inst::Gep> {
+public:
+  ConvertGep() : InstPattern() {}
+
+  utils::LogicalResult matchAndRewrite(IRRewriter &rewriter,
+                                       inst::Gep gep) override {
+    bool matched = false;
+    auto baseCS = getInlineConstantState(gep.getBasePointer());
+    if (!baseCS.isNonConstant()) {
+      rewriter.notifyStartUpdate(gep.getStorage());
+      createOutline(
+          rewriter, gep.getStorage(), gep.getBasePointer(),
+          [&](Value newValue) { gep.getStorage()->setOperand(0, newValue); });
+      matched = true;
+    }
+
+    auto offsetCS = getInlineConstantState(gep.getOffset());
+    if (offsetCS.isOutline()) {
+      if (!matched)
+        rewriter.notifyStartUpdate(gep.getStorage());
+      createOutline(
+          rewriter, gep.getStorage(), gep.getOffset(),
+          [&](Value newValue) { gep.getStorage()->setOperand(1, newValue); });
+      matched = true;
+    }
+
+    return matched ? utils::LogicalResult::success()
+                   : utils::LogicalResult::failure(); // match fail
+  }
+};
+
 class ConvertInstructions : public Pattern {
 public:
   ConvertInstructions() : Pattern(1, PatternId::getGeneral()) {}
@@ -156,6 +179,7 @@ public:
   utils::LogicalResult matchAndRewrite(IRRewriter &rewriter,
                                        InstructionStorage *inst) override {
     if (inst->getDefiningInst<inst::Binary>() ||
+        inst->getDefiningInst<inst::Gep>() ||
         inst->getDefiningInst<inst::OutlineConstant>())
       return utils::LogicalResult::failure();
 
@@ -240,9 +264,10 @@ void OutlineConstantPass::init(Module *module) {
 
 PassResult OutlineConstantPass::run(Module *module) {
   PatternSet patterns;
-  patterns.addPatterns<ConvertBinary, ConvertInstructions>();
+  patterns.addPatterns<ConvertBinary, ConvertGep, ConvertInstructions>();
 
   applyPatternConversion(module, patterns);
+
   return PassResult::success();
 }
 

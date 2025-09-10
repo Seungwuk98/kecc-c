@@ -480,6 +480,54 @@ public:
   };
 };
 
+class MemCpy : public InstructionTemplate<MemCpy, Instruction, ZeroResult,
+                                          SideEffect, CallLike> {
+public:
+  using Base::Base;
+  static void build(IRBuilder &builder, InstructionState &state, Value dest,
+                    Value src, Value size);
+
+  Value getDest() const;
+  const Operand &getDestAsOperand() const;
+  Value getSrc() const;
+  const Operand &getSrcAsOperand() const;
+  Value getSize() const;
+  const Operand &getSizeAsOperand() const;
+  static void printer(MemCpy op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getDest() const;
+    Value getSrc() const;
+    Value getSize() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
+};
+
+class Copy : public InstructionTemplate<Copy, Instruction, OneResult, Pure> {
+public:
+  using Base::Base;
+  static void build(IRBuilder &builder, InstructionState &state, Value value,
+                    Type type);
+
+  Value getValue() const;
+  const Operand &getValueAsOperand() const;
+
+  static void printer(Copy op, IRPrintContext &context);
+
+  struct Adaptor {
+    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
+        : operands(operands) {}
+
+    Value getValue() const;
+
+    llvm::ArrayRef<Value> operands;
+  };
+};
+
 void registerBuiltinInstructions(IRContext *context);
 
 } // namespace kecc::ir::inst

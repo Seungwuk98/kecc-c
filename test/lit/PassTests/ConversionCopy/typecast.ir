@@ -1,0 +1,21 @@
+// RUN: kecc-opt %s --conversion-to-copy | FileCheck %s
+
+fun unit @test () {
+// CHECK: fun unit @test ()
+init:
+  bid: b0
+  allocations:
+    %l0:i32
+// CHECK-NEXT: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+// CHECK-NEXT:     %l0:i32
+
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:i8* = typecast %l0:i32* to i8* 
+  // CHECK-NEXT: %b0:i0:i8* = copy %l0:i32*
+  ret
+  // CHECK-NEXT: ret 
+}

@@ -88,11 +88,14 @@ std::unique_ptr<ir::Module> parseAndBuildModule(ir::IRContext &context) {
 ir::PassResult runPasses(ir::Module *module) {
   ir::PassManager pm;
 
-  pm.addPass<ir::InlineCallPass>();
-  pm.addPass<ir::OutlineConstantPass>();
   pm.addPass<ir::CanonicalizeStruct>();
+  pm.addPass<ir::InlineCallPass>();
+  pm.addPass<ir::ConversionToCopyPass>();
+  pm.addPass<ir::OutlineConstantPass>();
+
   pm.addPass<ir::OutlineMultipleResults>();
   pm.addPass<ir::CreateFunctionArgument>();
+
   pm.addPass<ir::CanonicalizeConstant>();
 
   return pm.run(module);
@@ -222,6 +225,7 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::CanonicalizeStruct>();
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
   kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
+  kecc::ir::registerPass<kecc::ir::ConversionToCopyPass>();
 
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "Kecc IR Translation Compiler\n");

@@ -216,6 +216,7 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
   kecc::ir::registerPass<kecc::ir::InlineCallPass>();
   kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
+  kecc::ir::registerPass<kecc::ir::ConversionToCopyPass>();
   kecc::ir::registerSimplifyCFGPass();
   kecc::ir::registerCanonicalizeStructPasses();
   kecc::cl::registerPMOption();

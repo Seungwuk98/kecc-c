@@ -33,6 +33,7 @@ public:
   void print(IRPrintContext &printContext) const;
 
   IRContext *getContext() const { return context; }
+  bool hasFunctionDefinitions() const;
 
 private:
   Block *structBlock;

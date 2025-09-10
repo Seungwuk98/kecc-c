@@ -149,6 +149,8 @@ utils::LogicalResult SourceSpliter::lexBlockComment() {
       advance(); // consume '/'
       return utils::LogicalResult::success();
     }
+
+    c = peek();
   }
 
   llvm::errs() << "Error: EOF reached before closing block comment";

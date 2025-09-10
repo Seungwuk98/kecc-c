@@ -74,7 +74,7 @@ block b0:
   // CHECK-NEXT: call add1
 
   ret %b0:i1:i32
-  // CHECK-NEXT: ldu   ra,0(sp)
+  // CHECK-NEXT: ld   ra,0(sp)
   // CHECK-NEXT: addi  sp,sp,8
   // CHECK-NEXT: ret
 }

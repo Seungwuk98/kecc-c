@@ -86,6 +86,14 @@ void IR::print(IRPrintContext &printContext) const {
     printContext.printIndent();
 }
 
+bool IR::hasFunctionDefinitions() const {
+  for (const auto func : *this) {
+    if (func->hasDefinition())
+      return true;
+  }
+  return false;
+}
+
 Function::Function(llvm::StringRef name, Type functionType, IR *parentProgram,
                    IRContext *context)
     : Function({}, name, functionType, parentProgram, context) {}

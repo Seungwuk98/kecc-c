@@ -1,0 +1,36 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+struct X : {a: i8, b: i16, c: i32}
+
+var struct X @global_x = {120, 32000, 10011000}
+
+// CHECK:   .type global_x, @object
+// CHECK-NEXT:   .section      .data
+// CHECK-NEXT:   .globl        global_x
+// CHECK-NEXT:   .align        2
+// CHECK-NEXT: global_x:
+// CHECK-NEXT:   .byte 120
+// CHECK-NEXT:   .zero 1
+// CHECK-NEXT:   .half 32000
+// CHECK-NEXT:   .word 10011000
+
+
+////// main.c 
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+
+struct X {
+  char a;
+  short b;
+  int c;
+};
+
+extern struct X global_x;
+
+
+int main() {
+  printf("global_x: a(%d), b(%d), c(%d)\n", (int)global_x.a, (int)global_x.b, global_x.c);
+  // RESULT: global_x: a(120), b(32000), c(10011000)
+  return 0;
+}
+
+

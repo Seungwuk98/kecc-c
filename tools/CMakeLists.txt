@@ -49,9 +49,3 @@ target_link_libraries(
   KeccTranslate
 )
 
-add_executable(test test.cc)
-target_link_libraries(
-  test
-  PRIVATE
-  ${llvm_libs}
-)

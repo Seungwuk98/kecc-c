@@ -246,6 +246,14 @@ std::string Flt::toString() const {
   return std::format("flt.{}", dataSize.toString());
 }
 
+Fle::Fle(Register rd, Register rs1, std::optional<Register> rs2,
+         DataSize dataSize)
+    : Base(TypeID::get<Fle>(), rd, rs1, rs2), dataSize(dataSize) {}
+
+std::string Fle::toString() const {
+  return std::format("fle.{}", dataSize.toString());
+}
+
 FmvIntToFloat::FmvIntToFloat(Register rd, Register rs1,
                              std::optional<Register> rs2,
                              DataSize floatDataSize)
@@ -337,7 +345,8 @@ Load::Load(Register rd, Register rs1, Immediate *imm, DataSize dataSize,
 
 std::string Load::toString() const {
   if (dataSize.isInt())
-    return std::format("l{}{}", dataSize.toString(), isSigned() ? "" : "u");
+    return std::format("l{}{}", dataSize.toString(),
+                       (isSigned() || dataSize.isDouble()) ? "" : "u");
   return std::format("fl{}", dataSize.isSinglePrecision() ? "w" : "d");
 }
 

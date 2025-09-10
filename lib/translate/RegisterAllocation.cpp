@@ -17,10 +17,13 @@ RegisterAllocation::RegisterAllocation(ir::Module *module,
     : module(module), translateContext(translateContext) {
   spillAnalysis = module->getAnalysis<SpillAnalysis>();
   liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  assert(spillAnalysis && liveRangeAnalysis &&
-         "SpillAnalysis and LiveRangeAnalysis must be available");
 
-  allocateRegisters();
+  if (module->getIR()->hasFunctionDefinitions()) {
+    assert(spillAnalysis && liveRangeAnalysis &&
+           "SpillAnalysis and LiveRangeAnalysis must be available");
+
+    allocateRegisters();
+  }
 }
 
 as::Register RegisterAllocation::getRegister(ir::Value value) {

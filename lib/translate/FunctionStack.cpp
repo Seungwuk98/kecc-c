@@ -17,6 +17,12 @@ size_t FunctionStack::fromBottom(const StackPoint &point) const {
   } else
     offset += callArgumentsSize;
 
+  if (point.area == StackPoint::Area::LocalVariables) {
+    offset += point.offset;
+    return offset;
+  } else
+    offset += localVariablesSize;
+
   if (point.area == StackPoint::Area::CallerSavedRegisters) {
     offset += point.offset;
     return offset;

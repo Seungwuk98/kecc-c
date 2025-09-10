@@ -41,9 +41,7 @@ block b0:
   // CHECK-NEXT: %b0:p0:struct B*:ret_ptr_0
   %b0:p0:struct B 
   // CHECK-NEXT: %b0:p1:struct B*
-  // CHECK-NEXT: %b0:i0:unit* = typecast %b0:p0:struct B* to unit*
-  // CHECK-NEXT: %b0:i1:unit* = typecast %b0:p1:struct B* to unit*
-  // CHECK-NEXT: %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 24:i64) 
+  // CHECK-NEXT: memcpy dst:%b0:p0:struct B*, src:%b0:p1:struct B*, size:24:i64
   
   ret %b0:p0:struct B
   // CHECK-NEXT: ret
@@ -85,14 +83,11 @@ block b0:
   // CHECK-NEXT: %b0:p3:struct BB*
 
   /// store return idx 0 
-  // CHECK-NEXT: %b0:i0:unit* = typecast %b0:p1:struct B* to unit*
-  // CHECK-NEXT: %b0:i1:unit* = typecast %b0:p2:struct B* to unit*
-  // CHECK-NEXT: %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 24:i64)
+  // CHECK-NEXT: memcpy dst:%b0:p1:struct B*, src:%b0:p2:struct B*, size:24:i64
 
   /// store return idx 1
-  // CHECK-NEXT: %b0:i3:unit* = typecast %b0:p0:struct BB* to unit*
-  // CHECK-NEXT: %b0:i4:unit* = typecast %b0:p3:struct BB* to unit*
-  // CHECK-NEXT: %b0:i5:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i3:unit*, %b0:i4:unit*, 800:i64)
+  // CHECK-NEXT: memcpy dst:%b0:p0:struct BB*, src:%b0:p3:struct BB*, size:800:i64
+
   ret %b0:p0:struct B, %b0:p1:struct BB
   // CHECK-NEXT: ret
 }
@@ -119,14 +114,10 @@ block b0:
   // CHECK-NEXT: %b0:p5:struct BB*:z
 
   /// store return idx 0
-  // CHECK-NEXT: %b0:i0:unit* = typecast %b0:p1:struct B* to unit*
-  // CHECK-NEXT: %b0:i1:unit* = typecast %b0:p2:struct B* to unit*
-  // CHECK-NEXT: %b0:i2:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i0:unit*, %b0:i1:unit*, 24:i64)
+  // CHECK-NEXT: memcpy dst:%b0:p1:struct B*, src:%b0:p2:struct B*, size:24:i64
 
   /// store return idx 2
-  // CHECK-NEXT: %b0:i3:unit* = typecast %b0:p0:struct BB* to unit
-  // CHECK-NEXT: %b0:i4:unit* = typecast %b0:p5:struct BB* to unit
-  // CHECK-NEXT: %b0:i5:unit = call @memcpy:[ret:unit params:(unit*, unit*, i64)]*(%b0:i3:unit*, %b0:i4:unit*, 800:i64)
+  // CHECK-NEXT: memcpy dst:%b0:p0:struct BB*, src:%b0:p5:struct BB*, size:800:i64 
 
   ret %b0:p0:struct B, %b0:p1:struct S, %b0:p2:struct BB
   // CHECK-NEXT: ret %b0:p3:i64, %b0:p4:i64

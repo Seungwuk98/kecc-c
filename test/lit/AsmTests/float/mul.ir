@@ -1,0 +1,147 @@
+// RUN: kecc-test-executor %s -dump-source=0 | kecc-translate | FileCheck %s
+
+
+fun f32 @mul_f32 (f32, f32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:f32
+  %b0:p1:f32
+  %b0:i0:f32 = mul %b0:p0:f32 %b0:p1:f32
+  ret %b0:i0:f32
+}
+
+// CHECK:   .globl	mul_f32
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	mul_f32, @function
+// CHECK-NEXT: mul_f32:
+
+// CHECK-LABEL: .mul_f32_L0:
+// CHECK-NEXT:   fmul.s	fa0,fa0,fa1
+// CHECK-NEXT:   ret
+
+
+fun f64 @mul_f64 (f64, f64) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:f64
+  %b0:p1:f64
+  %b0:i0:f64 = mul %b0:p0:f64 %b0:p1:f64
+  ret %b0:i0:f64
+}
+
+
+// CHECK:   .globl	mul_f64
+// CHECK-NEXT:   .align	1
+// CHECK-NEXT:   .type	mul_f64, @function
+// CHECK-NEXT: mul_f64:
+
+// CHECK-LABEL: .mul_f64_L0:
+// CHECK-NEXT:   fmul.d	fa0,fa0,fa1
+// CHECK-NEXT:   ret
+
+
+///////// main.c
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+#include <stdint.h>
+#include <math.h>
+
+extern float  mul_f32(float, float);
+extern double mul_f64(double, double);
+
+int main(void) {
+  // ===== f32 (float) =====
+  printf("%a\n", (double) mul_f32(0.0f, 0.0f));
+  // RESULT: 0x0p+0
+  printf("%a\n", (double) mul_f32(-0.0f, 0.0f));
+  // RESULT: -0x0p+0
+  printf("%a\n", (double) mul_f32(0.0f, -3.0f));
+  // RESULT: -0x0p+0
+  printf("%a\n", (double) mul_f32(-0.0f, -3.0f));
+  // RESULT: 0x0p+0
+
+  printf("%a\n", (double) mul_f32(1.5f, 2.0f));
+  // RESULT: 0x1.8p+1
+  printf("%a\n", (double) mul_f32(-2.5f, 4.0f));
+  // RESULT: -0x1.4p+3
+  printf("%a\n", (double) mul_f32(0x1p-149f, 0x1p+100f));  // tiny * big -> normal
+  // RESULT: 0x1p-49
+  printf("%a\n", (double) mul_f32(0x1p-149f, 0.5f));       // underflow to +0
+  // RESULT: 0x0p+0
+  printf("%a\n", (double) mul_f32(0x1p-126f, 0x1p-23f));   // min normal * 2^-23 = min subnormal
+  // RESULT: 0x1p-149
+
+  printf("%a\n", (double) mul_f32(0x1.fffffep+127f, 1.0f)); // FLT_MAX * 1
+  // RESULT: 0x1.fffffep+127
+  printf("%a\n", (double) mul_f32(0x1.fffffep+127f, 2.0f)); // overflow
+  // RESULT: inf
+  printf("%a\n", (double) mul_f32(-0x1.fffffep+127f, 2.0f)); // overflow to -inf
+  // RESULT: -inf
+
+  printf("%a\n", (double) mul_f32(INFINITY, 0.0f));        // inf * 0 = NaN
+  // RESULT: nan
+  printf("%a\n", (double) mul_f32(INFINITY, -3.0f));
+  // RESULT: -inf
+  printf("%a\n", (double) mul_f32(-INFINITY, -3.0f));
+  // RESULT: inf
+  printf("%a\n", (double) mul_f32(NAN, 1.0f));
+  // RESULT: nan
+
+  // Sign of zero with finite * zero
+  printf("%a\n", (double) mul_f32(3.0f, -0.0f));
+  // RESULT: -0x0p+0
+  printf("%a\n", (double) mul_f32(-3.0f, -0.0f));
+  // RESULT: 0x0p+0
+
+  // ===== f64 (double) =====
+  printf("%a\n", mul_f64(0.0, 0.0));
+  // RESULT: 0x0p+0
+  printf("%a\n", mul_f64(-0.0, 0.0));
+  // RESULT: -0x0p+0
+  printf("%a\n", mul_f64(0.0, -3.0));
+  // RESULT: -0x0p+0
+  printf("%a\n", mul_f64(-0.0, -3.0));
+  // RESULT: 0x0p+0
+
+  printf("%a\n", mul_f64(1.5, 2.0));
+  // RESULT: 0x1.8p+1
+  printf("%a\n", mul_f64(-2.5, 4.0));
+  // RESULT: -0x1.4p+3
+  printf("%a\n", mul_f64(0x1p-1074, 0x1p+1000));           // tiny * big -> normal
+  // RESULT: 0x1p-74
+  printf("%a\n", mul_f64(0x1p-1074, 0.5));                 // underflow to +0
+  // RESULT: 0x0p+0
+  printf("%a\n", mul_f64(0x1p-1022, 0x1p-52));             // min normal * 2^-52 = min subnormal
+  // RESULT: 0x0.0000000000001p-1022
+
+  printf("%a\n", mul_f64(0x1.fffffffffffffp+1023, 1.0));   // DBL_MAX * 1
+  // RESULT: 0x1.fffffffffffffp+1023
+  printf("%a\n", mul_f64(0x1.fffffffffffffp+1023, 2.0));   // overflow
+  // RESULT: inf
+  printf("%a\n", mul_f64(-0x1.fffffffffffffp+1023, 2.0));  // overflow to -inf
+  // RESULT: -inf
+
+  printf("%a\n", mul_f64(INFINITY, 0.0));                  // inf * 0 = NaN
+  // RESULT: nan
+  printf("%a\n", mul_f64(INFINITY, -3.0));
+  // RESULT: -inf
+  printf("%a\n", mul_f64(-INFINITY, -3.0));
+  // RESULT: inf
+  printf("%a\n", mul_f64(NAN, 1.0));
+  // RESULT: nan
+
+  // Sign of zero with finite * zero
+  printf("%a\n", mul_f64(3.0, -0.0));
+  // RESULT: -0x0p+0
+  printf("%a\n", mul_f64(-3.0, -0.0));
+  // RESULT: 0x0p+0
+
+  return 0;
+}
+

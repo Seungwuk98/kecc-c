@@ -17,6 +17,60 @@
 #include <format>
 
 namespace kecc {
+struct DataSpace {
+  enum Kind { Value, Memory };
+
+  static DataSpace value(as::Register reg) { return DataSpace(Value, reg); }
+  static DataSpace memory(as::Register reg) {
+    assert(reg.isAnonymous() && "Spill memory must be anonymous register");
+    return DataSpace(Memory, reg);
+  }
+
+  bool isValue() const { return kind == Value; }
+  bool isMemory() const { return kind == Memory; }
+  as::Register getRegister() const { return reg; }
+
+  friend llvm::hash_code hash_value(const DataSpace &data) {
+    return llvm::hash_combine(
+        static_cast<unsigned>(data.isValue()),
+        llvm::DenseMapInfo<as::Register>::getHashValue(data.reg));
+  }
+
+private:
+  friend struct llvm::DenseMapInfo<DataSpace>;
+  DataSpace(Kind kind, as::Register data) : kind(kind), reg(std::move(data)) {}
+  Kind kind;
+  as::Register reg;
+};
+} // namespace kecc
+
+namespace llvm {
+
+template <> struct DenseMapInfo<kecc::DataSpace> {
+  static inline kecc::DataSpace getEmptyKey() {
+    return kecc::DataSpace(static_cast<kecc::DataSpace::Kind>(-1),
+                           DenseMapInfo<kecc::as::Register>::getEmptyKey());
+  }
+
+  static inline kecc::DataSpace getTombstoneKey() {
+    return kecc::DataSpace(static_cast<kecc::DataSpace::Kind>(-1),
+                           DenseMapInfo<kecc::as::Register>::getTombstoneKey());
+  }
+
+  static unsigned getHashValue(const kecc::DataSpace &data) {
+    return hash_combine(
+        static_cast<unsigned>(data.isValue()),
+        DenseMapInfo<kecc::as::Register>::getHashValue(data.getRegister()));
+  }
+
+  static bool isEqual(const kecc::DataSpace &lhs, const kecc::DataSpace &rhs) {
+    return lhs.isValue() == rhs.isValue() &&
+           lhs.getRegister() == rhs.getRegister();
+  }
+};
+} // namespace llvm
+
+namespace kecc {
 
 class TranslationRule;
 
@@ -25,7 +79,9 @@ void defaultRegisterSetup(TranslateContext *context);
 class IRTranslater {
 public:
   IRTranslater(TranslateContext *context, ir::Module *module)
-      : context(context), module(module), regAlloc(module, context) {}
+      : context(context), module(module), regAlloc(module, context) {
+    init();
+  }
   ~IRTranslater();
 
   std::unique_ptr<as::Asm> translate();
@@ -41,6 +97,8 @@ public:
   RegisterAllocation &getRegisterAllocation() { return regAlloc; }
 
 private:
+  void init();
+
   as::Function *translateFunction(ir::Function *function);
   as::Variable *
   translateGlobalVariable(ir::inst::GlobalVariableDefinition globalVar);
@@ -55,6 +113,7 @@ private:
   TranslateContext *context;
   ir::Module *module;
   RegisterAllocation regAlloc;
+  llvm::DenseMap<llvm::StringRef, ir::Type> globalVarMap;
   llvm::DenseMap<ir::ConstantAttr,
                  std::pair<llvm::StringRef, std::optional<as::DataSize>>>
       constantToLabelMap;
@@ -63,6 +122,7 @@ private:
 };
 
 class FunctionTranslater {
+private:
 public:
   FunctionTranslater(IRTranslater *translater, TranslateContext *context,
                      ir::Module *module, ir::Function *function);
@@ -102,8 +162,8 @@ public:
 
   // move srcs to dsts
   // If there are anonymout registers, it handles them as 8byte memory
-  void moveRegisters(as::AsmBuilder &builder, llvm::ArrayRef<as::Register> srcs,
-                     llvm::ArrayRef<as::Register> dsts);
+  void moveRegisters(as::AsmBuilder &builder, llvm::ArrayRef<DataSpace> srcs,
+                     llvm::ArrayRef<DataSpace> dsts);
 
   // return anonymous registers which means stack points
   llvm::SmallVector<as::Register> saveCallerSavedRegisters(
@@ -119,7 +179,7 @@ public:
   SpillAnalysis *getSpillAnalysis() const { return spillAnalysis; }
   ir::Function *getFunction() const { return function; }
 
-  std::optional<as::Register> getSpillMemory(ir::Value value) const {
+  std::optional<DataSpace> getSpillData(ir::Value value) const {
     auto liveRange = liveRangeAnalysis->getLiveRange(value);
     auto it = spillMemories.find(liveRange);
     if (it != spillMemories.end())
@@ -141,7 +201,8 @@ public:
   FunctionStack *getStack() { return &stack; }
 
   as::Register createAnonRegister(as::RegisterType regType,
-                                  const StackPoint &sp, as::DataSize dataSize,
+                                  const StackPoint &sp,
+                                  std::optional<as::DataSize> dataSize,
                                   bool isSigned);
 
   bool hasMultipleReturn() const { return multipleReturn; }
@@ -163,9 +224,10 @@ private:
   SpillAnalysis *spillAnalysis;
   FunctionStack stack;
 
-  llvm::DenseMap<LiveRange, as::Register> spillMemories;
+  llvm::DenseMap<LiveRange, DataSpace> spillMemories;
   llvm::DenseMap<LiveRange, size_t> liveRangeToIndexMap;
-  llvm::DenseMap<as::Register, std::tuple<StackPoint, as::DataSize, bool>>
+  llvm::DenseMap<as::Register,
+                 std::tuple<StackPoint, std::optional<as::DataSize>, bool>>
       anonymousRegisterToSp;
 
   llvm::SmallVector<as::Register, 8> intArgRegisters;
