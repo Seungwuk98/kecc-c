@@ -7,6 +7,9 @@
 namespace kecc::ir {
 
 PassResult CreateFunctionArgument::run(Module *module, Function *func) {
+  if (!func->hasDefinition())
+    return PassResult::skip();
+
   auto funcType = func->getFunctionType().cast<FunctionT>();
   auto argTypes = funcType.getArgTypes();
   if (argTypes.empty())

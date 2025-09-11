@@ -1,12 +1,15 @@
 #include "kecc/translate/InterferenceGraph.h"
+#include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/IRTypes.h"
 #include "kecc/ir/Instruction.h"
+#include "kecc/ir/WalkSupport.h"
 #include "kecc/translate/LiveRangeAnalyses.h"
 #include "kecc/translate/SpillAnalysis.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVectorExtras.h"
+#include <cmath>
 #include <queue>
 
 namespace kecc {
@@ -389,6 +392,30 @@ GraphColoring::Color GraphColoring::getColor(LiveRange liveRange) const {
   return colorMap.at(liveRange);
 }
 
+long double GraphColoring::getCallerSaveCost(Color color) const {
+  return colorSaveCostMap.at(color);
+}
+
+void GraphColoring::initCost(ir::Module *module) {
+  auto *loopAnalysis = module->getOrCreateAnalysis<ir::LoopAnalysis>(module);
+  auto *callLivenessAnalysis =
+      module->getOrCreateAnalysis<CallLivenessAnalysis>(module);
+  const auto &seo = interferenceGraph->getMCS()->getSimplicialElimOrder();
+  ir::Function *func = interferenceGraph->function;
+
+  func->walk([&](ir::InstructionStorage *storage) -> ir::WalkResult {
+    if (!storage->hasTrait<ir::CallLike>())
+      return ir::WalkResult::advance();
+
+    auto baseCost = (long double)pow(
+        10, loopAnalysis->getLoopDepth(storage->getParentBlock()));
+    auto toSave = callLivenessAnalysis->getLiveIn(storage);
+    for (LiveRange lr : toSave)
+      saveCostMap[lr] += baseCost;
+    return ir::WalkResult::advance();
+  });
+}
+
 void GraphColoring::coloring(InterferenceGraph *intefGraph) {
   MaximumCardinalitySearch *mcs = intefGraph->getMCS();
   const auto &seo = mcs->getSimplicialElimOrder();
@@ -396,15 +423,18 @@ void GraphColoring::coloring(InterferenceGraph *intefGraph) {
   for (LiveRange lr : seo) {
     Color color = findAvailableColor(lr);
     colorMap[lr] = color;
-    for (LiveRange neighbor : intefGraph->graph[lr]) {
+    colorSaveCostMap[color] += saveCostMap[lr];
+
+    for (LiveRange neighbor : intefGraph->graph[lr])
       neighborColors[neighbor].insert(color);
-    }
   }
 
   auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap();
   for (const auto &[liveRange, _] : currLRIdMap) {
-    if (!colorMap.contains(liveRange))
+    if (!colorMap.contains(liveRange)) {
       colorMap[liveRange] = 0;
+      colorSaveCostMap[0] += saveCostMap[liveRange];
+    }
   }
 }
 

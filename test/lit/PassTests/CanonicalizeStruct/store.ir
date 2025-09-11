@@ -24,11 +24,17 @@ block b0:
   // CHECK-NEXT: %b0:p0:i64:x
   // CHECK-NEXT: %b0:p1:i64:x
 
-  /// store p0 to l1
-  // CHECK-NEXT: %b0:i0:i64* = typecast %l1:[2 x i64]* to i64*
-  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+  // init memory
+  // CHECK-NEXT: %b0:i0:i64* = getelementptr %l1:[2 x i64]* offset 0:i64
+  // CHECK-NEXT: %b0:i1:unit = store 0:i64 %b0:i0:i64* 
   // CHECK-NEXT: %b0:i2:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
-  // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+  // CHECK-NEXT: %b0:i3:unit = store 0:i64 %b0:i2:i64*
+
+  /// store p0 to l1
+  // CHECK-NEXT: %b0:i4:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i5:unit = store %b0:p0:i64 %b0:i4:i64*
+  // CHECK-NEXT: %b0:i6:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i7:unit = store %b0:p1:i64 %b0:i6:i64*
 
   /// memcpy l1 to l0
   // CHECK-NEXT: memcpy dst:%l0:struct S*, src:%l1:[2 x i64]*, size:12:i64 
@@ -117,8 +123,11 @@ block b0:
   %b0:p0:struct SS2:x
   // CHECK-NEXT: %b0:p0:i64
 
+  /// init memory
+  // CHECK-NEXT: %b0:i0:unit = store 0:i64 %l1:i64*
+  
   /// store p0 to l1
-  // CHECK-NEXT: %b0:i0:unit = store %b0:p0:i64 %l1:i64*
+  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %l1:i64*
 
   /// memcpy sizeof(struct SS2)=3 bytes of l1 data to l0 
   // CHECK-NEXT: memcpy dst:%l0:struct SS2*, src:%l1:i64*, size:3:i64

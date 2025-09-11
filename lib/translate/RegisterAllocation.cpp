@@ -9,6 +9,7 @@
 #include "kecc/translate/TranslateContext.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
+#include <queue>
 
 namespace kecc {
 
@@ -82,6 +83,8 @@ void RegisterAllocation::allocateRegisters() {
   });
 
   for (ir::Function *function : *module->getIR()) {
+    if (!function->hasDefinition())
+      continue;
     auto intInterferenceGraph = spillAnalysis->getInterferenceGraph(
         function, as::RegisterType::Integer);
     auto floatInterferenceGraph = spillAnalysis->getInterferenceGraph(
@@ -219,6 +222,78 @@ void RegisterAllocation::allocateRegistersForFunction(
     }
     return ir::WalkResult::advance();
   });
+
+  /// general case
+  // (1) try to find registers which have advantage to be allocated as
+  // callee-saved registers
+
+  llvm::SmallVector<as::Register> calleeSavedIntRegisters;
+  llvm::SmallVector<as::Register> calleeSavedFloatRegisters;
+
+  for (as::Register reg : intRegisters) {
+    if (reg.isCalleeSaved() && !usedRegisters.contains(reg))
+      calleeSavedIntRegisters.emplace_back(reg);
+  }
+
+  for (as::Register reg : floatRegisters) {
+    if (reg.isCalleeSaved() && !usedRegisters.contains(reg))
+      calleeSavedFloatRegisters.emplace_back(reg);
+  }
+
+  std::priority_queue<std::pair<long double, Color>> intColorQueue;
+  for (Color color = 0u; color < intGraphColoring->getNumColors(); ++color) {
+    if (intColorToRegister.contains(color))
+      continue;
+    long double cost = intGraphColoring->getCallerSaveCost(color);
+    if (cost <= 1.0)
+      continue; // no advantage to use callee-saved register
+    intColorQueue.push({cost, color});
+  }
+
+  for (auto idx = 0u;
+       idx < calleeSavedIntRegisters.size() && !intColorQueue.empty(); ++idx) {
+    const auto [cost, color] = intColorQueue.top();
+    intColorQueue.pop();
+
+    as::Register reg = calleeSavedIntRegisters[idx];
+    intColorToRegister.try_emplace(color, reg);
+    usedRegisters.insert(reg);
+  }
+
+  auto pqComp = [](const std::pair<long double, Color> &a,
+                   const std::pair<long double, Color> &b) {
+    const auto [acost, acolor] = a;
+    const auto [bcost, bcolor] = b;
+    if (acost != bcost)
+      return acost < bcost;
+    return acolor > bcolor;
+  };
+
+  std::priority_queue<std::pair<long double, Color>,
+                      std::vector<std::pair<long double, Color>>,
+                      decltype(pqComp)>
+      floatColorQueue(pqComp);
+  for (Color color = 0u; color < floatGraphColoring->getNumColors(); ++color) {
+    if (floatColorToRegister.contains(color))
+      continue;
+    long double cost = floatGraphColoring->getCallerSaveCost(color);
+    if (cost <= 1.0)
+      continue; // no advantage to use callee-saved register
+    floatColorQueue.push({cost, color});
+  }
+
+  for (auto idx = 0u;
+       idx < calleeSavedFloatRegisters.size() && !floatColorQueue.empty();
+       ++idx) {
+    const auto [cost, color] = floatColorQueue.top();
+    floatColorQueue.pop();
+
+    as::Register reg = calleeSavedFloatRegisters[idx];
+    floatColorToRegister.try_emplace(color, reg);
+    usedRegisters.insert(reg);
+  }
+
+  // (2) other reigsters
 
   auto intRegIdx = 0u;
   for (Color color = 0u; color < intGraphColoring->getNumColors(); ++color) {

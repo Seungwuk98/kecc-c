@@ -1,0 +1,47 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+
+struct B : {a:i64, b:i64, c:i64}
+
+fun struct B @addB(struct B, struct B)
+
+fun struct B @decl_add(i64, i64, i64, i64, i64, i64) {
+init:
+  bid: b0
+  allocations:
+    %l0:struct B
+    %l1:struct B
+
+block b0:
+  %b0:p0:i64
+  %b0:p1:i64
+  %b0:p2:i64
+  %b0:p3:i64
+  %b0:p4:i64
+  %b0:p5:i64
+  
+  // init memory
+  %b0:i0:i64* = getelementptr %l0:struct B* offset 0:i64
+  %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+
+  %b0:i2:i64* = getelementptr %l0:struct B* offset 8:i64
+  %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+
+  %b0:i4:i64* = getelementptr %l0:struct B* offset 16:i64
+  %b0:i5:unit = store %b0:p2:i64 %b0:i4:i64*
+
+  %b0:i6:i64* = getelementptr %l1:struct B* offset 0:i64
+  %b0:i7:unit = store %b0:p0:i64 %b0:i6:i64*
+
+  %b0:i8:i64* = getelementptr %l1:struct B* offset 8:i64
+  %b0:i9:unit = store %b0:p1:i64 %b0:i8:i64*
+
+  %b0:i10:i64* = getelementptr %l1:struct B* offset 16:i64
+  %b0:i11:unit = store %b0:p2:i64 %b0:i10:i64*
+
+  %b0:i12:struct B = load %l0:struct B*  
+  %b0:i13:struct B = load %l1:struct B*
+  
+  %b0:i14:struct B = call @addB:[ret:struct B params:(struct B, struct B)]*(%b0:i12:struct B, %b0:i13:struct B)
+
+  ret %b0:i14:struct B
+}

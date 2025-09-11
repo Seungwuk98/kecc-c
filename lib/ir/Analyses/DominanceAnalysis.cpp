@@ -31,7 +31,7 @@ bool DominatorTree::isDominator(Block *dom, Block *block) const {
   return domOrder <= blockOrder && blockOrder <= dfsLastSubTreeMap.at(dom);
 }
 
-struct DominaceAnalysisBuilder {
+struct DominanceAnalysisBuilder {
   Module *module;
   Function *function;
   llvm::DenseMap<Block *, llvm::DenseSet<Block *>> tree;
@@ -55,7 +55,7 @@ struct DominaceAnalysisBuilder {
 
   int64_t order = 0;
 
-  DominaceAnalysisBuilder(Module *module, Function *function)
+  DominanceAnalysisBuilder(Module *module, Function *function)
       : module(module), function(function) {}
 
   void init();
@@ -71,7 +71,7 @@ struct DominaceAnalysisBuilder {
   DominatorTree build();
 };
 
-void DominaceAnalysisBuilder::init() {
+void DominanceAnalysisBuilder::init() {
   for (Block *block : *function) {
     tree.try_emplace(block, llvm::DenseSet<Block *>());
     dfAdj.try_emplace(block, llvm::DenseSet<Block *>());
@@ -81,7 +81,7 @@ void DominaceAnalysisBuilder::init() {
   dfs(entryBlock);
 }
 
-void DominaceAnalysisBuilder::dfs(Block *block) {
+void DominanceAnalysisBuilder::dfs(Block *block) {
   order++;
 
   newIdx[block] = dsuParent[order] = sdomMap[order] = label[order] = order;
@@ -96,7 +96,7 @@ void DominaceAnalysisBuilder::dfs(Block *block) {
   }
 }
 
-int64_t DominaceAnalysisBuilder::find(int64_t curr, bool init) {
+int64_t DominanceAnalysisBuilder::find(int64_t curr, bool init) {
   if (curr == dsuParent[curr])
     return init ? curr : -1;
 
@@ -111,11 +111,11 @@ int64_t DominaceAnalysisBuilder::find(int64_t curr, bool init) {
   return init ? label[curr] : par;
 }
 
-void DominaceAnalysisBuilder::union_(int64_t curr, int64_t par) {
+void DominanceAnalysisBuilder::union_(int64_t curr, int64_t par) {
   dsuParent[curr] = par;
 }
 
-void DominaceAnalysisBuilder::constructSdom() {
+void DominanceAnalysisBuilder::constructSdom() {
 
   for (int64_t curr = order; curr > 0; --curr) {
     for (auto pred : revAdj[curr]) {
@@ -141,7 +141,7 @@ void DominaceAnalysisBuilder::constructSdom() {
   }
 }
 
-void DominaceAnalysisBuilder::constructIdom() {
+void DominanceAnalysisBuilder::constructIdom() {
   for (int64_t curr = 1; curr <= order; ++curr) {
     if (!idomMap.contains(curr))
       continue;
@@ -153,7 +153,7 @@ void DominaceAnalysisBuilder::constructIdom() {
   }
 }
 
-void DominaceAnalysisBuilder::buildDF() {
+void DominanceAnalysisBuilder::buildDF() {
   for (Block *curr : *function) {
     if (module->getPredecessors(curr).size() < 2)
       continue;
@@ -175,7 +175,7 @@ void DominaceAnalysisBuilder::buildDF() {
   }
 }
 
-void DominaceAnalysisBuilder::dfsDomTree(Block *block) {
+void DominanceAnalysisBuilder::dfsDomTree(Block *block) {
   domTreeOrder[block] = order++;
   for (Block *child : tree[block]) {
     if (!domTreeOrder.contains(child))
@@ -184,7 +184,7 @@ void DominaceAnalysisBuilder::dfsDomTree(Block *block) {
   domTreeLastSubTree[block] = order - 1;
 }
 
-DominatorTree DominaceAnalysisBuilder::build() {
+DominatorTree DominanceAnalysisBuilder::build() {
   init();
   constructSdom();
   constructIdom();
@@ -202,7 +202,9 @@ std::unique_ptr<DominanceAnalysis> DominanceAnalysis::create(Module *module) {
   auto ir = module->getIR();
   llvm::DenseMap<Function *, DominatorTree> dominatorTrees;
   for (auto *function : *ir) {
-    DominaceAnalysisBuilder builder(module, function);
+    if (!function->hasDefinition())
+      continue;
+    DominanceAnalysisBuilder builder(module, function);
     auto dominatorTree = builder.build();
     dominatorTrees.try_emplace(function, std::move(dominatorTree));
   }

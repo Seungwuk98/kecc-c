@@ -115,7 +115,14 @@ IRTranslater::getOrCreateConstantLabel(ir::ConstantAttr constant) {
     newVariable = new as::Variable(label, {directive});
   } else if (auto varConst = constant.dyn_cast<ir::ConstantVariableAttr>()) {
     auto globalVarIt = globalVarMap.find(varConst.getName());
-    assert(globalVarIt != globalVarMap.end() && "Global variable not found");
+    if (globalVarIt == globalVarMap.end()) {
+      // it must be function
+      assert(constant.getType().isa<ir::PointerT>());
+      auto ptrType = constant.getType().cast<ir::PointerT>();
+      assert(ptrType.getPointeeType().isa<ir::FunctionT>());
+
+      return {varConst.getName(), std::nullopt};
+    }
     auto type = globalVarIt->getSecond();
 
     std::optional<as::DataSize> dataSize;
@@ -461,19 +468,22 @@ void FunctionTranslater::init() {
   }
 
   llvm::SmallVector<LiveRange> spillLiveRange;
-  llvm::SmallVector<as::Register> calleeSavedRegisters;
+  llvm::DenseSet<as::Register> calleeSavedRegisters;
   for (const auto &[liveRange, _] : liveRangeToIndexMap) {
     auto reg =
         irTranslater->getRegisterAllocation().getRegister(function, liveRange);
     if (reg.isCalleeSaved())
-      calleeSavedRegisters.emplace_back(reg);
+      calleeSavedRegisters.insert(reg);
 
     if (spillAnalysis->getSpillInfo().spilled.contains(liveRange))
       spillLiveRange.emplace_back(liveRange);
   }
 
+  llvm::SmallVector<as::Register> calleeSavedRegistersVec(
+      calleeSavedRegisters.begin(), calleeSavedRegisters.end());
+
   // initialize callee saved registers
-  llvm::sort(calleeSavedRegisters, [](as::Register a, as::Register b) {
+  llvm::sort(calleeSavedRegistersVec, [](as::Register a, as::Register b) {
     auto aFloat = a.isFloatingPoint();
     auto bFloat = b.isFloatingPoint();
     if (aFloat != bFloat)
@@ -482,7 +492,7 @@ void FunctionTranslater::init() {
   });
 
   size_t totalCalleeSavedSize = 0;
-  for (const auto &reg : calleeSavedRegisters) {
+  for (const auto &reg : calleeSavedRegistersVec) {
     auto sp = stack.calleeSavedRegister(totalCalleeSavedSize);
     totalCalleeSavedSize += module->getContext()->getArchitectureByteSize();
 

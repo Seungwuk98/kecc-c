@@ -176,6 +176,9 @@ void Module::removeInst(InstructionStorage *inst) {
 #ifndef NDEBUG
   for (auto idx = 0u; idx < inst->getResultSize(); ++idx) {
     auto value = inst->getResult(idx);
+    if (value.hasUses()) {
+      llvm::errs() << value << '\n';
+    }
     assert(value.useBegin() == value.useEnd() &&
            "Instruction is still used by other instructions after removal");
   }

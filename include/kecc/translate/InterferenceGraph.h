@@ -91,14 +91,18 @@ public:
         liveRangeAnalysis(
             interfGraph->module->getAnalysis<LiveRangeAnalysis>()) {
     assert(liveRangeAnalysis && "LiveRangeAnalysis must not be null");
+    initCost(interfGraph->module);
     coloring(interfGraph);
   }
 
   Color getColor(LiveRange liveRange) const;
+  long double getCallerSaveCost(Color color) const;
 
   size_t getNumColors() const { return numColors; }
 
 private:
+  void initCost(ir::Module *module);
+
   void coloring(InterferenceGraph *interfGraph);
 
   Color createNewColor();
@@ -108,6 +112,8 @@ private:
   InterferenceGraph *interferenceGraph;
   LiveRangeAnalysis *liveRangeAnalysis;
   llvm::DenseMap<LiveRange, Color> colorMap;
+  llvm::DenseMap<LiveRange, long double> saveCostMap;
+  llvm::DenseMap<Color, long double> colorSaveCostMap;
   llvm::DenseMap<LiveRange, llvm::DenseSet<Color>> neighborColors;
   Color numColors = 0;
 };

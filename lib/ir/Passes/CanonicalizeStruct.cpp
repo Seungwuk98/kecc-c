@@ -219,6 +219,7 @@ private:
   llvm::DenseMap<Block *, llvm::SmallVector<int>> originRetIdx;
   llvm::DenseMap<Function *, llvm::DenseMap<size_t, Phi>> retIdx2ArgMap;
   llvm::DenseMap<Value, Value> replaceMap;
+  llvm::DenseSet<InstructionStorage *> toErase;
 };
 
 static std::pair<Type, llvm::SmallVector<size_t>>
@@ -315,6 +316,8 @@ void CanonicalizeStruct::exit(Module *module) { impl.reset(); }
 PassResult CanonicalizeStruct::run(Module *module) {
   PassResult retResult = PassResult::skip();
   for (Function *function : *module->getIR()) {
+    if (!function->hasDefinition())
+      continue;
     auto result = impl->run(function);
     if (result.isFailure())
       return result;
@@ -394,6 +397,7 @@ Type CanonicalizeStructImpl::convertFuncT(FunctionT funcT) const {
 PassResult CanonicalizeStructImpl::run(Function *func) {
   replaceMap.clear();
   originRetIdx.clear();
+  toErase.clear();
 
   for (Block *block : *func) {
     if (auto ret = block->getExit().dyn_cast<inst::Return>()) {
@@ -437,10 +441,30 @@ PassResult CanonicalizeStructImpl::run(Function *func) {
   }
 
   if (!int64Ptr.getResult().hasUses())
-    module->removeInst(int64Ptr.getStorage());
+    toErase.insert(int64Ptr.getStorage());
+  else {
+    // create initializer in entry block
+    builder.setInsertionPointBeforeInst(*func->getEntryBlock()->tempBegin());
+    auto const0 = createIntConstant(0);
+    builder.create<inst::Store>(func->getRange(), const0, int64Ptr);
+  }
 
   if (!int64_2Ptr.getResult().hasUses())
-    module->removeInst(int64_2Ptr.getStorage());
+    toErase.insert(int64_2Ptr.getStorage());
+  else {
+    // create initializer in entry block
+    builder.setInsertionPointBeforeInst(*func->getEntryBlock()->tempBegin());
+    auto const0 = createIntConstant(0);
+    auto gep =
+        builder.create<inst::Gep>(func->getRange(), int64_2Ptr, const0,
+                                  PointerT::get(module->getContext(), int64T));
+    builder.create<inst::Store>(func->getRange(), const0, gep);
+    auto const8 = createIntConstant(8);
+    gep =
+        builder.create<inst::Gep>(func->getRange(), int64_2Ptr, const8,
+                                  PointerT::get(module->getContext(), int64T));
+    builder.create<inst::Store>(func->getRange(), const0, gep);
+  }
 
   for (Value value : bigStructs) {
     while (replaceMap.contains(value))
@@ -448,6 +472,11 @@ PassResult CanonicalizeStructImpl::run(Function *func) {
 
     processBigValue(value);
   }
+
+  for (InstructionStorage *inst : toErase)
+    inst->dropReferences();
+  for (InstructionStorage *inst : toErase)
+    module->removeInst(inst);
 
   return smallStructs.empty() && bigStructs.empty() ? PassResult::skip()
                                                     : PassResult::success();
@@ -459,6 +488,8 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
          "Value must not be already replaced");
 
   auto inst = value.getInstruction();
+  assert(!toErase.contains(inst) && "Instruction must not be already erased");
+
   auto block = inst->getParentBlock();
   auto structName = value.getType().cast<NameStruct>().getName();
   const auto [size, align, offsets] = sizeMap.at(structName);
@@ -641,7 +672,8 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
   llvm::DenseSet<InstructionStorage *> valueUsers;
   for (Operand *operand : *value.getImpl()) {
     InstructionStorage *user = operand->getOwner();
-    valueUsers.insert(user);
+    if (!toErase.contains(user))
+      valueUsers.insert(user);
   }
 
   for (InstructionStorage *user : valueUsers) {
@@ -697,11 +729,12 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
            llvm::zip(call->getResults(), newCall->getResults()))
         replaceMap[from] = to;
 
-      module->replaceInst(user, newCall->getResults(), true);
+      module->replaceInst(user, newCall->getResults(), false);
+      toErase.insert(call.getStorage());
     } else if (auto store = user->getDefiningInst<inst::Store>()) {
       storeValuesIntoPointer(store.getRange(), builder, newValues,
                              store.getPointer(), size, int64Ptr, int64_2Ptr);
-      module->removeInst(user);
+      toErase.insert(store.getStorage());
     } else if (auto ret = user->getDefiningInst<inst::Return>()) {
       auto oldValues = ret.getValues();
       assert(oldValues.size() == originRetIdx[block].size() &&
@@ -723,7 +756,8 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
       }
 
       auto newRet = builder.create<inst::Return>(ret.getRange(), newRetValues);
-      module->replaceInst(user, newRet->getResults(), true);
+      module->replaceInst(user, newRet->getResults(), false);
+      toErase.insert(ret.getStorage());
     } else if (auto blockExit = user->getDefiningInst<BlockExit>()) {
       assert(llvm::all_of(blockExit->getOperands(),
                           [&](const Operand &op) { return op != value; }) &&
@@ -747,7 +781,7 @@ void CanonicalizeStructImpl::processSmallValue(Value value, Value int64Ptr,
     }
   }
   // finally remove the instruction which is declaring the struct value
-  module->removeInst(inst);
+  toErase.insert(inst);
 }
 
 void CanonicalizeStructImpl::storeValuesIntoPointer(
@@ -852,9 +886,11 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
          "Value must not be already replaced");
 
   auto *inst = value.getInstruction();
+  assert(!toErase.contains(inst));
   auto structT = value.getType().cast<NameStruct>();
 
   Value storedPointer;
+
   if (auto phi = inst->getDefiningInst<Phi>()) {
     IRBuilder builder(module->getContext());
     builder.setInsertionPointAfterInst(inst);
@@ -976,10 +1012,12 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
   llvm::SmallVector<InstructionStorage *> users;
   for (Operand *operand : *value.getImpl()) {
     auto user = operand->getOwner();
-    users.emplace_back(user);
+    if (!toErase.contains(user))
+      users.emplace_back(user);
   }
 
   for (InstructionStorage *user : users) {
+
     if (auto store = user->getDefiningInst<inst::Store>()) {
       // memcpy values into pointer
 
@@ -992,7 +1030,7 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
       builder.create<inst::MemCpy>(store.getRange(), pointer, storedPointer,
                                    constMemSize);
 
-      module->removeInst(user);
+      toErase.insert(store.getStorage());
     } else if (auto call = user->getDefiningInst<inst::Call>()) {
       // replace the argument to pointer
       // The function must be changed to accept a pointer to the struct
@@ -1033,7 +1071,8 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
            llvm::zip(call->getResults(), newCall->getResults()))
         replaceMap[from] = to;
 
-      module->replaceInst(user, newCall->getResults(), true);
+      module->replaceInst(user, newCall->getResults(), false);
+      toErase.insert(call.getStorage());
     } else if (auto ret = user->getDefiningInst<inst::Return>()) {
       // replace the return value to pointer
 
@@ -1069,8 +1108,7 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
       }
 
       builder.create<inst::Return>(ret.getRange(), newRetValues);
-      module->removeInst(user);
-
+      toErase.insert(user);
     } else if (auto blockExit = user->getDefiningInst<BlockExit>()) {
       // replace the jump argument to pointer
       assert(llvm::all_of(blockExit->getOperands(),
@@ -1092,8 +1130,7 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
       }
     }
   }
-
-  module->removeInst(inst);
+  toErase.insert(inst);
 }
 
 void registerCanonicalizeStructPasses() {

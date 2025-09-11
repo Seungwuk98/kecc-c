@@ -30,15 +30,23 @@ block b0:
   //===--------------------------------------------------------------------===//
   /// store
   //===--------------------------------------------------------------------===//
+  // CHECK-NEXT: %b0:i0:i64* = getelementptr %l1:[2 x i64]* offset 0:i64
+  // CHECK-NEXT: %b0:i1:unit = store 0:i64 %b0:i0:i64*
+  // CHECK-NEXT: %b0:i2:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i3:unit = store 0:i64 %b0:i2:i64*
+
+  //===--------------------------------------------------------------------===//
+  /// store
+  //===--------------------------------------------------------------------===//
   
   %b0:i0:unit = store %b0:p0:struct S %l0:struct S*
   /// store p0 to l1
-  // CHECK-NEXT: %b0:i0:i64* = typecast %l1:[2 x i64]* to i64*
-  // CHECK-NEXT: %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+  // CHECK-NEXT: %b0:i4:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i5:unit = store %b0:p0:i64 %b0:i4:i64*
 
   /// store p1 to l1
-  // CHECK-NEXT: %b0:i2:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
-  // CHECK-NEXT: %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+  // CHECK-NEXT: %b0:i6:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i7:unit = store %b0:p1:i64 %b0:i6:i64*
 
   /// memcpy l1 to l0
   // CHECK-NEXT: memcpy dst:%l0:struct S*, src:%l1:[2 x i64]*, size:12:i64
@@ -52,25 +60,25 @@ block b0:
   // CHECK-NEXT: memcpy dst:%l1:[2 x i64]*, src:%l0:struct S*, size:12:i64
 
   /// load first i64 from l1
-  // CHECK-NEXT: %b0:i4:i64* = typecast %l1:[2 x i64]* to i64*
-  // CHECK-NEXT: %b0:i5:i64 = load %b0:i4:i64*
+  // CHECK-NEXT: %b0:i8:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i9:i64 = load %b0:i8:i64*
 
   /// load second i64 from l1
-  // CHECK-NEXT: %b0:i6:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
-  // CHECK-NEXT: %b0:i7:i64 = load %b0:i6:i64*
+  // CHECK-NEXT: %b0:i10:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i11:i64 = load %b0:i10:i64*
 
   //===--------------------------------------------------------------------===//
   /// store 
   //===--------------------------------------------------------------------===//
   
   %b0:i2:unit = store %b0:i1:struct S %l0:struct S*
-  /// store i5 to l1
-  // CHECK-NEXT: %b0:i8:i64* = typecast %l1:[2 x i64]* to i64*
-  // CHECK-NEXT: %b0:i9:unit = store %b0:i5:i64 %b0:i8:i64*
+  /// store i9 to l1
+  // CHECK-NEXT: %b0:i12:i64* = typecast %l1:[2 x i64]* to i64*
+  // CHECK-NEXT: %b0:i13:unit = store %b0:i9:i64 %b0:i12:i64*
   
-  /// store i7 to l1
-  // CHECK-NEXT: %b0:i10:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
-  // CHECK-NEXT: %b0:i11:unit = store %b0:i7:i64 %b0:i10:i64*
+  /// store i11 to l1
+  // CHECK-NEXT: %b0:i14:i64* = getelementptr %l1:[2 x i64]* offset 8:i64
+  // CHECK-NEXT: %b0:i15:unit = store %b0:i11:i64 %b0:i14:i64*
 
   /// memcpy l1 to l0
   // CHECK-NEXT: memcpy dst:%l0:struct S*, src:%l1:[2 x i64]*, size:12:i64
