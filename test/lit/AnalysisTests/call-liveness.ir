@@ -42,27 +42,27 @@ block b3:
 // LR-NEXT:   allocations:
  
 // LR-LABEL:  block b0:
-// LR-NEXT:    L0:i32 = outline constant 1:i32
+// LR-NEXT:    L0:i32 = outline 1:i32
 // LR-NEXT:    L1:i32 = add 0:i32 L0:i32
-// LR-NEXT:    L2:i32 = outline constant 2:i32
+// LR-NEXT:    L2:i32 = outline 2:i32
 // LR-NEXT:    L3:i32 = add 0:i32 L2:i32
 // LR-NEXT:    L4:i1 = typecast L1:i32 to i1
 // LR-NEXT:    br L4:i1, b1, b2
  
 // LR-LABEL:  block b1:
 // LR-NEXT:    L5:i32 = add 1:i32 L1:i32
-// LR-NEXT:    L6:i32 = inline call @test_func:[ret:i32 params:()]))
+// LR-NEXT:    L6:i32 = inline call @test_func:[ret:i32 params:()]()
 // LR-NEXT:    L7:i32 = add L5:i32 L6:i32
 // LR-NEXT:    L9 = L7
 // LR-NEXT:    j b3
  
 // LR-LABEL:  block b2:
-// LR-NEXT:    L8:i32 = outline constant 0:i32
+// LR-NEXT:    L8:i32 = outline 0:i32
 // LR-NEXT:    L9 = L8
 // LR-NEXT:    j b3
  
 // LR-LABEL:  block b3:
-// LR-NEXT:    L10:i32 = inline call @test_func:[ret:i32 params:()]))
+// LR-NEXT:    L10:i32 = inline call @test_func:[ret:i32 params:()]()
 // LR-NEXT:    L11:i32 = add L3:i32 L10:i32
 // LR-NEXT:    ret L11:i32
 // LR-NEXT:  }

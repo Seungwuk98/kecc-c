@@ -73,14 +73,7 @@ void JumpArg::destroy() {
 }
 
 void JumpArg::printJumpArg(IRPrintContext &context) const {
-  context.getOS() << 'b' << block->getId() << '(';
-  const Operand *operands = getTrailingObjects<Operand>();
-  for (size_t i = 0; i < operandSize; ++i) {
-    if (i > 0)
-      context.getOS() << ", ";
-    operands[i].printAsOperand(context);
-  }
-  context.getOS() << ')';
+  context.printJumpArg(this);
 }
 
 void JumpArg::dropReferences() {

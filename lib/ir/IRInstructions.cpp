@@ -24,7 +24,7 @@ void Nop::build(IRBuilder &builder, InstructionState &state) {
 }
 
 void Nop::printer(Nop op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = nop";
 }
 
@@ -39,9 +39,9 @@ void Load::build(IRBuilder &builder, InstructionState &state, Value ptr) {
 }
 
 void Load::printer(Load op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = load ";
-  op.getPointer().printAsOperand(context);
+  context.printOperand(op.getPointerAsOperand());
 }
 
 Value Load::getPointer() const { return getPointerAsOperand(); }
@@ -62,12 +62,12 @@ void Store::build(IRBuilder &builder, InstructionState &state, Value value,
 }
 
 void Store::printer(Store op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = store ";
 
-  op.getValue().printAsOperand(context);
+  context.printOperand(op.getValueAsOperand());
   context.getOS() << ' ';
-  op.getPointer().printAsOperand(context);
+  context.printOperand(op.getPointerAsOperand());
 }
 
 Value Store::getValue() const { return getValueAsOperand(); }
@@ -108,25 +108,19 @@ void Call::build(IRBuilder &builder, InstructionState &state, Value function,
 }
 
 void Call::printer(Call op, IRPrintContext &context) {
-  for (auto idx = 0u; idx < op.getNumResults(); ++idx) {
-    if (idx > 0) {
-      context.getOS() << ", ";
-    }
-    auto value = op.getStorage()->getResult(idx);
-    value.printAsOperand(context, true);
-  }
+  context.printValues(op->getResults());
 
   context.getOS() << " = ";
 
   context.getOS() << "call ";
-  op.getFunction().printAsOperand(context);
+  context.printOperand(op.getFunctionAsOperand());
   context.getOS() << '(';
   for (auto I = op.getArguments().begin(), E = op.getArguments().end(); I != E;
        ++I) {
     if (I != op.getArguments().begin()) {
       context.getOS() << ", ";
     }
-    I->printAsOperand(context);
+    context.printOperand(*I);
   }
   context.getOS() << ')';
 }
@@ -155,10 +149,10 @@ void TypeCast::build(IRBuilder &builder, InstructionState &state, Value value,
 }
 
 void TypeCast::printer(TypeCast op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = typecast ";
 
-  op.getValue().printAsOperand(context);
+  context.printOperand(op.getValueAsOperand());
   context.getOS() << " to " << op.getTargetType().toString();
 }
 
@@ -184,11 +178,11 @@ void Gep::build(IRBuilder &builder, InstructionState &state, Value basePtr,
 }
 
 void Gep::printer(Gep op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = getelementptr ";
-  op.getBasePointer().printAsOperand(context);
+  context.printOperand(op.getBasePointerAsOperand());
   context.getOS() << " offset ";
-  op.getOffset().printAsOperand(context);
+  context.printOperand(op.getOffsetAsOperand());
 }
 
 Value Gep::getBasePointer() const { return getBasePointerAsOperand(); }
@@ -246,7 +240,7 @@ void Binary::build(IRBuilder &builder, InstructionState &state, Value lhs,
 }
 
 void Binary::printer(Binary op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = ";
 
   switch (op.getOpKind()) {
@@ -279,9 +273,9 @@ void Binary::printer(Binary op, IRPrintContext &context) {
   }
 
   context.getOS() << ' ';
-  op.getLhs().printAsOperand(context);
+  context.printOperand(op.getLhsAsOperand());
   context.getOS() << ' ';
-  op.getRhs().printAsOperand(context);
+  context.printOperand(op.getRhsAsOperand());
 }
 
 const Operand &Binary::getLhsAsOperand() const {
@@ -330,7 +324,7 @@ void Unary::printer(Unary op, IRPrintContext &context) {
     break;
   }
 
-  op.getValue().printAsOperand(context);
+  context.printOperand(op.getValueAsOperand());
 }
 
 Value Unary::getValue() const { return getValueAsOperand(); }
@@ -357,7 +351,7 @@ void Jump::build(IRBuilder &builder, InstructionState &state,
 
 void Jump::printer(Jump op, IRPrintContext &context) {
   context.getOS() << "j ";
-  op.getJumpArg()->printJumpArg(context);
+  context.printJumpArg(op.getJumpArg());
 }
 
 JumpArg *Jump::getJumpArg() const { return this->getStorage()->getJumpArg(0); }
@@ -378,11 +372,11 @@ void Branch::build(IRBuilder &builder, InstructionState &state, Value condition,
 void Branch::printer(Branch op, IRPrintContext &context) {
   context.getOS() << "br ";
 
-  op.getCondition().printAsOperand(context);
+  context.printOperand(op.getConditionAsOperand());
   context.getOS() << ", ";
-  op.getIfArg()->printJumpArg(context);
+  context.printJumpArg(op.getIfArg());
   context.getOS() << ", ";
-  op.getElseArg()->printJumpArg(context);
+  context.printJumpArg(op.getElseArg());
 }
 
 const Operand &Branch::getConditionAsOperand() const {
@@ -420,21 +414,20 @@ void Switch::build(IRBuilder &builder, InstructionState &state, Value value,
 
 void Switch::printer(Switch op, IRPrintContext &context) {
   context.getOS() << "switch ";
-  op.getValue().printAsOperand(context);
+  context.printOperand(op.getValueAsOperand());
   context.getOS() << " default ";
-  op.getDefaultCase()->printJumpArg(context);
+  context.printJumpArg(op.getDefaultCase());
   context.getOS() << " [";
 
   {
     IRPrintContext::AddIndent addIndent(context);
 
     for (auto idx = 0u; idx < op.getCaseSize(); ++idx) {
-      Value caseValue = op.getCaseValue(idx);
       JumpArg *caseArg = op.getCaseJumpArg(idx);
       context.printIndent();
-      caseValue.printAsOperand(context);
+      context.printOperand(op.getCaseValueAsOperand(idx));
       context.getOS() << ' ';
-      caseArg->printJumpArg(context);
+      context.printJumpArg(caseArg);
     }
   }
   context.printIndent();
@@ -496,8 +489,7 @@ void Return::printer(Return op, IRPrintContext &context) {
     for (auto idx = 0u; idx < op.getValueSize(); ++idx) {
       if (idx != 0u)
         context.getOS() << ", ";
-      auto value = op.getValue(idx);
-      value.printAsOperand(context);
+      context.printOperand(op.getValueAsOperand(idx));
     }
   }
 }
@@ -742,7 +734,7 @@ void LocalVariable::printAsDef(IRPrintContext &context) const {
 }
 
 void LocalVariable::printer(LocalVariable op, IRPrintContext &context) {
-  Value(op).printAsOperand(context, true);
+  llvm_unreachable("LocalVariable should be printed using printAsDef");
 }
 
 //============================================================================//
@@ -754,8 +746,8 @@ void Unresolved::build(IRBuilder &builder, InstructionState &state, Type type) {
 }
 
 void Unresolved::printer(Unresolved op, IRPrintContext &context) {
-  auto rid = context.getId(op);
-  context.getOS() << rid.toString() << ":" << op.getType() << " = unresolved";
+  context.printValue(op, true);
+  context.getOS() << "= unresolved";
 }
 
 //============================================================================//
@@ -775,9 +767,9 @@ const Operand &OutlineConstant::getConstantAsOperand() const {
 Value OutlineConstant::getConstant() const { return getConstantAsOperand(); }
 
 void OutlineConstant::printer(OutlineConstant op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = outline ";
-  op.getConstant().printAsOperand(context);
+  context.printOperand(op.getConstantAsOperand());
 }
 
 Value OutlineConstant::Adaptor::getConstant() const { return operands[0]; }
@@ -814,12 +806,7 @@ llvm::ArrayRef<Operand> InlineCall::getArguments() const {
 }
 
 void InlineCall::printer(InlineCall op, IRPrintContext &context) {
-  for (auto idx = 0u; idx < op.getNumResults(); ++idx) {
-    if (idx > 0)
-      context.getOS() << ", ";
-    auto value = op.getStorage()->getResult(idx);
-    value.printAsOperand(context, true);
-  }
+  context.printValues(op->getResults(), true);
 
   context.getOS() << " = inline call @" << op.getName() << ":"
                   << op.getFunctionType() << "(";
@@ -828,7 +815,7 @@ void InlineCall::printer(InlineCall op, IRPrintContext &context) {
        ++I) {
     if (I != op.getArguments().begin())
       context.getOS() << ", ";
-    I->printAsOperand(context);
+    context.printOperand(*I);
   }
   context.getOS() << ')';
 }
@@ -843,7 +830,7 @@ void FunctionArgument::build(IRBuilder &builder, InstructionState &state,
 }
 
 void FunctionArgument::printer(FunctionArgument op, IRPrintContext &context) {
-  op.printAsOperand(context);
+  context.printValue(op, true);
   context.getOS() << " = function argument";
 }
 
@@ -861,11 +848,11 @@ void MemCpy::build(IRBuilder &builder, InstructionState &state, Value dest,
 void MemCpy::printer(MemCpy op, IRPrintContext &context) {
   context.getOS() << "memcpy dst:";
 
-  op.getDest().printAsOperand(context);
+  context.printOperand(op.getDestAsOperand());
   context.getOS() << ", src:";
-  op.getSrc().printAsOperand(context);
+  context.printOperand(op.getSrcAsOperand());
   context.getOS() << ", size:";
-  op.getSize().printAsOperand(context);
+  context.printOperand(op.getSizeAsOperand());
 }
 Value MemCpy::getDest() const { return getDestAsOperand(); }
 const Operand &MemCpy::getDestAsOperand() const {
@@ -894,9 +881,9 @@ void Copy::build(IRBuilder &builder, InstructionState &state, Value value,
 }
 
 void Copy::printer(Copy op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op, true);
   context.getOS() << " = copy ";
-  op.getValue().printAsOperand(context);
+  context.printOperand(op.getValueAsOperand());
 }
 
 Value Copy::getValue() const { return getValueAsOperand(); }

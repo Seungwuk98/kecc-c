@@ -145,7 +145,7 @@ block b1000:
 // LR-NEXT:   allocations:
 
 // LR-LABEL: block b1001:
-// LR-NEXT:   L7:i1 = outline constant 0:i1
+// LR-NEXT:   L7:i1 = outline 0:i1
 // LR-NEXT:   L55 = L0
 // LR-NEXT:   L56 = L1
 // LR-NEXT:   L57 = L2
@@ -156,10 +156,10 @@ block b1000:
 // LR-NEXT:   br L7:i1, b0, b1000
 
 // LR-LABEL: block b0:
-// LR-NEXT:   L8:i32 = outline constant 1:i32
+// LR-NEXT:   L8:i32 = outline 1:i32
 // LR-NEXT:   L9:i32:i = add 0:i32 L8:i32
-// LR-NEXT:   L10:i1 = outline constant 0:i1
-// LR-NEXT:   L11:i32 = outline constant 0:i32
+// LR-NEXT:   L10:i1 = outline 0:i1
+// LR-NEXT:   L11:i32 = outline 0:i32
 // LR-NEXT:   L55 = L11
 // LR-NEXT:   L56 = L11
 // LR-NEXT:   L57 = L11
@@ -170,13 +170,13 @@ block b1000:
 // LR-NEXT:   br L10:i1, b1, b1000
 
 // LR-LABEL: block b1:
-// LR-NEXT:   L12:i32 = outline constant 1:i32
+// LR-NEXT:   L12:i32 = outline 1:i32
 // LR-NEXT:   L13:i32:a = add 0:i32 L12:i32
-// LR-NEXT:   L14:i32 = outline constant 1:i32
+// LR-NEXT:   L14:i32 = outline 1:i32
 // LR-NEXT:   L15:i32:c = add 0:i32 L14:i32
-// LR-NEXT:   L16:i1 = outline constant 0:i1
-// LR-NEXT:   L17:i1 = outline constant 1:i1
-// LR-NEXT:   L18:i32 = outline constant 0:i32
+// LR-NEXT:   L16:i1 = outline 0:i1
+// LR-NEXT:   L17:i1 = outline 1:i1
+// LR-NEXT:   L18:i32 = outline 0:i32
 // LR-NEXT:   L55 = L13
 // LR-NEXT:   L56 = L18
 // LR-NEXT:   L57 = L15
@@ -190,14 +190,14 @@ block b1000:
 // LR-NEXT:   ]
 
 // LR-LABEL: block b2:
-// LR-NEXT:   L19:i32 = outline constant 1:i32
+// LR-NEXT:   L19:i32 = outline 1:i32
 // LR-NEXT:   L20:i32:b = add 0:i32 L19:i32
-// LR-NEXT:   L21:i32 = outline constant 1:i32
+// LR-NEXT:   L21:i32 = outline 1:i32
 // LR-NEXT:   L22:i32:c = add 0:i32 L21:i32
-// LR-NEXT:   L23:i32 = outline constant 1:i32
+// LR-NEXT:   L23:i32 = outline 1:i32
 // LR-NEXT:   L24:i32:d = add 0:i32 L23:i32
-// LR-NEXT:   L25:i1 = outline constant 0:i1
-// LR-NEXT:   L26:i32 = outline constant 0:i32
+// LR-NEXT:   L25:i1 = outline 0:i1
+// LR-NEXT:   L26:i32 = outline 0:i32
 // LR-NEXT:   L27 = L20
 // LR-NEXT:   L28 = L26
 // LR-NEXT:   L55 = L26
@@ -213,9 +213,9 @@ block b1000:
 // LR-NEXT:   L29:i32:y = add L13:i32 L27:i32
 // LR-NEXT:   L30:i32:z = add L15:i32 L28:i32
 // LR-NEXT:   L31:i32:i = add L9:i32 1:i32
-// LR-NEXT:   L32:i1 = outline constant 0:i1
-// LR-NEXT:   L33:i1 = outline constant 1:i1
-// LR-NEXT:   L34:i32 = outline constant 0:i32
+// LR-NEXT:   L32:i1 = outline 0:i1
+// LR-NEXT:   L33:i1 = outline 1:i1
+// LR-NEXT:   L34:i32 = outline 0:i32
 // LR-NEXT:   L55 = L34
 // LR-NEXT:   L56 = L27
 // LR-NEXT:   L57 = L34
@@ -229,17 +229,17 @@ block b1000:
 // LR-NEXT:   ]
 
 // LR-LABEL: block b4:
-// LR-NEXT:   L35:i32 = outline constant 0:i32
+// LR-NEXT:   L35:i32 = outline 0:i32
 // LR-NEXT:   ret L35:i32
 
 // LR-LABEL: block b5:
-// LR-NEXT:   L36:i32 = outline constant 1:i32
+// LR-NEXT:   L36:i32 = outline 1:i32
 // LR-NEXT:   L37:i32:a = add 0:i32 L36:i32
-// LR-NEXT:   L38:i32 = outline constant 1:i32
+// LR-NEXT:   L38:i32 = outline 1:i32
 // LR-NEXT:   L39:i32:d = add 0:i32 L38:i32
-// LR-NEXT:   L40:i1 = outline constant 0:i1
-// LR-NEXT:   L41:i1 = outline constant 1:i1
-// LR-NEXT:   L42:i32 = outline constant 0:i32
+// LR-NEXT:   L40:i1 = outline 0:i1
+// LR-NEXT:   L41:i1 = outline 1:i1
+// LR-NEXT:   L42:i32 = outline 0:i32
 // LR-NEXT:   L55 = L37
 // LR-NEXT:   L56 = L42
 // LR-NEXT:   L57 = L42
@@ -253,10 +253,10 @@ block b1000:
 // LR-NEXT:   ]
 
 // LR-LABEL: block b6:
-// LR-NEXT:   L43:i32 = outline constant 1:i32
+// LR-NEXT:   L43:i32 = outline 1:i32
 // LR-NEXT:   L44:i32:d = add 0:i32 L43:i32
-// LR-NEXT:   L45:i1 = outline constant 0:i1
-// LR-NEXT:   L46:i32 = outline constant 0:i32
+// LR-NEXT:   L45:i1 = outline 0:i1
+// LR-NEXT:   L46:i32 = outline 0:i32
 // LR-NEXT:   L55 = L46
 // LR-NEXT:   L56 = L46
 // LR-NEXT:   L57 = L46
@@ -267,10 +267,10 @@ block b1000:
 // LR-NEXT:   br L45:i1, b7, b1000
 
 // LR-LABEL: block b7:
-// LR-NEXT:   L47:i32 = outline constant 1:i32
+// LR-NEXT:   L47:i32 = outline 1:i32
 // LR-NEXT:   L48:i32:b = add 0:i32 L47:i32
-// LR-NEXT:   L49:i1 = outline constant 0:i1
-// LR-NEXT:   L50:i32 = outline constant 0:i32
+// LR-NEXT:   L49:i1 = outline 0:i1
+// LR-NEXT:   L50:i32 = outline 0:i32
 // LR-NEXT:   L27 = L48
 // LR-NEXT:   L28 = L50
 // LR-NEXT:   L55 = L50
@@ -283,10 +283,10 @@ block b1000:
 // LR-NEXT:   br L49:i1, b3, b1000
 
 // LR-LABEL: block b8:
-// LR-NEXT:   L51:i32 = outline constant 1:i32
+// LR-NEXT:   L51:i32 = outline 1:i32
 // LR-NEXT:   L52:i32:c = add 0:i32 L51:i32
-// LR-NEXT:   L53:i1 = outline constant 0:i1
-// LR-NEXT:   L54:i32 = outline constant 0:i32
+// LR-NEXT:   L53:i1 = outline 0:i1
+// LR-NEXT:   L54:i32 = outline 0:i32
 // LR-NEXT:   L55 = L54
 // LR-NEXT:   L56 = L54
 // LR-NEXT:   L57 = L52
@@ -297,7 +297,7 @@ block b1000:
 // LR-NEXT:   br L53:i1, b7, b1000
 
 // LR-LABEL: block b1000:
-// LR-NEXT:   L62:i32 = outline constant 0:i32
+// LR-NEXT:   L62:i32 = outline 0:i32
 // LR-NEXT:   ret L62:i32
 // LR-NEXT: }
 

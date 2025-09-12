@@ -348,6 +348,32 @@ private:
   }
 };
 
+class ValuePrinter {
+public:
+  virtual ~ValuePrinter() = default;
+  virtual void printValue(Value value, IRPrintContext &context,
+                          bool printName) = 0;
+  virtual void printOperand(const Operand &operand,
+                            IRPrintContext &context) = 0;
+  virtual void printJumpArg(const JumpArg *jumpArg,
+                            IRPrintContext &context) = 0;
+};
+
+class DefaultValuePrinter : public ValuePrinter {
+public:
+  DefaultValuePrinter(IRPrintContext &context) : context(context) {}
+
+  void printValue(Value value, IRPrintContext &context,
+                  bool printName) override;
+
+  void printOperand(const Operand &operand, IRPrintContext &context) override;
+
+  void printJumpArg(const JumpArg *jumpArg, IRPrintContext &context) override;
+
+private:
+  IRPrintContext &context;
+};
+
 class IRPrintContext {
 public:
   enum PrintMode {
@@ -356,7 +382,12 @@ public:
   };
 
   IRPrintContext(llvm::raw_ostream &os, PrintMode mode = Default)
-      : mode(mode), os(os) {}
+      : mode(mode), os(os) {
+    valuePrinter = std::make_unique<DefaultValuePrinter>(*this);
+  }
+  IRPrintContext(llvm::raw_ostream &os, std::unique_ptr<ValuePrinter> printer,
+                 PrintMode mode = Default)
+      : mode(mode), os(os), valuePrinter(std::move(printer)) {}
 
   struct AddIndent {
     AddIndent(IRPrintContext &context) : context(context) { context.indent++; }
@@ -378,11 +409,26 @@ public:
 
   void setIndentWidth(unsigned width) { indentWidth = width; }
 
+  void printValue(Value value, bool printName = false) {
+    valuePrinter->printValue(value, *this, printName);
+  }
+
+  void printValues(llvm::ArrayRef<Value> values, bool printName = false);
+
+  void printOperand(const Operand &operand) {
+    valuePrinter->printOperand(operand, *this);
+  }
+
+  void printJumpArg(const JumpArg *jumpArg) {
+    valuePrinter->printJumpArg(jumpArg, *this);
+  }
+
 private:
   unsigned indent = 0;
   unsigned indentWidth = 2;
   PrintMode mode;
   llvm::raw_ostream &os;
+  std::unique_ptr<ValuePrinter> valuePrinter;
   llvm::DenseMap<Value, RegisterId> idMap;
 };
 

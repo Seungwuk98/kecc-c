@@ -246,178 +246,58 @@ namespace print {
 using namespace kecc::ir::inst;
 using Operand = kecc::ir::Operand;
 
-#define PRINT_FUNC(Inst)                                                       \
-  static void print##Inst(                                                     \
-      Inst inst, llvm::raw_ostream &os,                                        \
-      llvm::function_ref<void(const Operand &)> printOperand, size_t indent,   \
-      llvm::function_ref<void(size_t)> printIndent)
+class LiveRangePrinter : public ir::ValuePrinter {
+public:
+  LiveRangePrinter(const SpillInfo &spillInfo,
+                   const LiveRangeAnalysis *liveRangeAnalysis,
+                   const llvm::DenseMap<LiveRange, size_t> &liveRangeToId)
+      : spillInfo(spillInfo), liveRangeAnalysis(liveRangeAnalysis),
+        liveRangeToId((liveRangeToId)) {}
 
-PRINT_FUNC(FunctionArgument) { os << " = function argument"; }
-PRINT_FUNC(Nop) { os << " = nop"; }
-PRINT_FUNC(Load) {
-  os << " = load ";
-  printOperand(inst.getPointerAsOperand());
-}
-PRINT_FUNC(Store) {
-  os << " = store ";
-  printOperand(inst.getValueAsOperand());
-  os << ' ';
-  printOperand(inst.getPointerAsOperand());
-}
-PRINT_FUNC(Call) {
-  os << " = call ";
-  printOperand(inst.getFunctionAsOperand());
-  os << "(";
-  for (size_t i = 0; i < inst.getArguments().size(); ++i) {
-    if (i > 0)
-      os << ", ";
-    printOperand(inst.getArguments()[i]);
-  }
-  os << ")";
-}
-PRINT_FUNC(TypeCast) {
-  os << " = typecast ";
-  printOperand(inst.getValueAsOperand());
-  os << " to " << inst.getType();
-}
-PRINT_FUNC(Gep) {
-  os << " = getelementptr ";
-  printOperand(inst.getBasePointerAsOperand());
-  os << " offset ";
-  printOperand(inst.getOffsetAsOperand());
-}
-PRINT_FUNC(Binary) {
-  os << " = ";
-  switch (inst.getOpKind()) {
-  case Binary::Add:
-    os << "add";
-    break;
-  case Binary::Sub:
-    os << "sub";
-    break;
-  case Binary::Mul:
-    os << "mul";
-    break;
-  case Binary::Div:
-    os << "div";
-    break;
-  case Binary::Mod:
-    os << "mod";
-    break;
-  case Binary::BitAnd:
-    os << "and";
-    break;
-  case Binary::BitOr:
-    os << "or";
-    break;
-  case Binary::BitXor:
-    os << "xor";
-    break;
-  case Binary::Shl:
-    os << "shl";
-    break;
-  case Binary::Shr:
-    os << "shr";
-    break;
-  case Binary::Eq:
-    os << "cmp eq";
-    break;
-  case Binary::Ne:
-    os << "cmp ne";
-    break;
-  case Binary::Lt:
-    os << "cmp lt";
-    break;
-  case Binary::Le:
-    os << "cmp le";
-    break;
-  case Binary::Gt:
-    os << "cmp gt";
-    break;
-  case Binary::Ge:
-    os << "cmp ge";
-    break;
+  void printValue(ir::Value value, ir::IRPrintContext &context,
+                  bool printName) override {
+    if (auto constant = value.getDefiningInst<ir::inst::Constant>()) {
+      constant->print(context);
+      return;
+    }
+
+    auto lr = liveRangeAnalysis->getLiveRange(
+        value.getInstruction()->getParentBlock()->getParentFunction(), value);
+    size_t id = liveRangeToId.at(lr);
+    context.getOS() << "L" << id << ":" << lr.getType();
+    if (printName && !value.getValueName().empty())
+      context.getOS() << ":" << value.getValueName();
   }
 
-  os << ' ';
-  printOperand(inst.getLhsAsOperand());
-  os << ' ';
-  printOperand(inst.getRhsAsOperand());
-}
-PRINT_FUNC(Unary) {
-  os << " = ";
-  switch (inst.getOpKind()) {
-  case Unary::Plus:
-    os << "plus";
-    break;
-  case Unary::Minus:
-    os << "minus";
-    break;
-  case Unary::Negate:
-    os << "negate";
-    break;
-  }
-  os << ' ';
-  printOperand(inst.getValueAsOperand());
-}
-PRINT_FUNC(Jump) { os << "j b" << inst.getJumpArg()->getBlock()->getId(); }
-PRINT_FUNC(Branch) {
-  os << "br ";
-  printOperand(inst.getConditionAsOperand());
-  os << ", b" << inst.getIfArg()->getBlock()->getId() << ", "
-     << "b" << inst.getElseArg()->getBlock()->getId();
-}
-PRINT_FUNC(Switch) {
-  os << "switch ";
-  printOperand(inst.getValueAsOperand());
-  os << " default b" << inst.getDefaultCase()->getBlock()->getId() << " [";
-  for (auto idx = 0u; idx < inst.getCaseSize(); ++idx) {
-    os << '\n';
-    printIndent(indent + 2);
-    printOperand(inst.getCaseValueAsOperand(idx));
-    os << " b" << inst.getCaseJumpArg(idx)->getBlock()->getId();
-  }
-  os << '\n';
-  printIndent(indent);
-  os << "]";
-}
-PRINT_FUNC(Return) {
-  os << "ret ";
-  for (size_t i = 0; i < inst.getValues().size(); ++i) {
-    if (i > 0)
-      os << ", ";
-    printOperand(inst.getValues()[i]);
-  }
-}
-PRINT_FUNC(Unreachable) { os << "unreachable"; }
-PRINT_FUNC(OutlineConstant) {
-  os << " = outline constant ";
-  printOperand(inst.getConstantAsOperand());
-}
-PRINT_FUNC(InlineCall) {
-  os << " = inline call @" << inst.getName() << ':' << inst.getFunctionType()
-     << ')';
-  for (size_t i = 0; i < inst.getArguments().size(); ++i) {
-    if (i > 0)
-      os << ", ";
-    printOperand(inst.getArguments()[i]);
-  }
-  os << ')';
-}
-PRINT_FUNC(MemCpy) {
-  os << "memcpy dst:";
-  printOperand(inst.getDestAsOperand());
-  os << ", src:";
-  printOperand(inst.getSrcAsOperand());
-  os << ", size:";
-  printOperand(inst.getSizeAsOperand());
-}
-PRINT_FUNC(Copy) {
-  os << " = copy ";
-  printOperand(inst.getValueAsOperand());
-}
+  void printOperand(const Operand &operand,
+                    ir::IRPrintContext &context) override {
+    if (auto constant = operand.getDefiningInst<ir::inst::Constant>()) {
+      constant->print(context);
+      return;
+    }
 
-#undef PRINT_FUNC
+    LiveRange lr;
+    if (auto it = spillInfo.restore.find(&operand);
+        it != spillInfo.restore.end()) {
+      lr = it->getSecond();
+    } else {
+      lr = liveRangeAnalysis->getLiveRange(operand);
+    }
+
+    size_t id = liveRangeToId.at(lr);
+    context.getOS() << 'L' << id << ':' << lr.getType();
+  }
+
+  void printJumpArg(const ir::JumpArg *jumpArg,
+                    ir::IRPrintContext &context) override {
+    context.getOS() << "b" << jumpArg->getBlock()->getId();
+  }
+
+private:
+  const SpillInfo &spillInfo;
+  const LiveRangeAnalysis *liveRangeAnalysis;
+  const llvm::DenseMap<LiveRange, size_t> &liveRangeToId;
+};
 
 } // namespace print
 
@@ -431,42 +311,6 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
   };
 
   llvm::DenseMap<LiveRange, size_t> liveRangeToId = getCurrLRIdMap(spillInfo);
-
-  auto printValue = [&](ir::Value value) {
-    if (auto constant = value.getDefiningInst<ir::inst::Constant>()) {
-      ir::IRPrintContext context(os);
-      constant->print(context);
-      return;
-    }
-
-    auto lr = getLiveRange(
-        value.getInstruction()->getParentBlock()->getParentFunction(), value);
-    size_t id = liveRangeToId.at(lr);
-
-    os << "L" << id << ":" << lr.getType();
-    if (!value.getValueName().empty())
-      os << ":" << value.getValueName();
-  };
-
-  auto printOperand = [&](const ir::Operand &operand) {
-    if (auto constant = operand.getDefiningInst<ir::inst::Constant>()) {
-      ir::IRPrintContext context(os);
-      constant->print(context);
-      return;
-    }
-
-    LiveRange lr;
-    if (auto it = spillInfo.restore.find(&operand);
-        it != spillInfo.restore.end()) {
-      lr = it->getSecond();
-    } else {
-      lr = getLiveRange(operand);
-    }
-
-    size_t id = liveRangeToId.at(lr);
-    os << 'L' << id << ':' << lr.getType();
-  };
-
   auto printSpill = [&](llvm::ArrayRef<ir::Value> results, size_t indent) {
     llvm::SmallVector<LiveRange> spills;
     llvm::for_each(results, [&](ir::Value value) {
@@ -499,6 +343,9 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
       }
     }
   };
+
+  ir::IRPrintContext printContext(os, std::make_unique<print::LiveRangePrinter>(
+                                          spillInfo, this, liveRangeToId));
 
   bool first = true;
   size_t indent = 0;
@@ -559,35 +406,11 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
         auto inst = *I;
         printRestore(inst->getOperands(), indent + 2);
         printIndent(indent + 2);
-        auto results = inst->getResults();
-        for (size_t i = 0; i < results.size(); ++i) {
-          if (i > 0)
-            os << ", ";
-          printValue(results[i]);
-        }
 
-        llvm::TypeSwitch<ir::Instruction, void>(ir::Instruction(inst))
-#define CASE(Inst)                                                             \
-  Case([&](ir::inst::Inst inst) {                                              \
-    print::print##Inst(inst, os, printOperand, indent + 2, printIndent);       \
-  })
-            .CASE(FunctionArgument)
-            .CASE(Nop)
-            .CASE(Load)
-            .CASE(Store)
-            .CASE(Call)
-            .CASE(TypeCast)
-            .CASE(Gep)
-            .CASE(Binary)
-            .CASE(Unary)
-            .CASE(OutlineConstant)
-            .CASE(InlineCall)
-            .CASE(MemCpy)
-            .CASE(Copy)
-            .Default([&](ir::Instruction inst) {
-              llvm_unreachable("Can't dump the instruction");
-            });
+        inst->print(printContext);
+
         os << '\n';
+        auto results = inst->getResults();
         printSpill(results, indent + 2);
       }
 
@@ -623,15 +446,7 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
       }
 
       printIndent(indent + 2);
-      llvm::TypeSwitch<ir::BlockExit, void>(exit)
-          .CASE(Jump)
-          .CASE(Branch)
-          .CASE(Switch)
-          .CASE(Return)
-          .CASE(Unreachable)
-          .Default([&](ir::BlockExit jump) {
-            llvm_unreachable("Can't dump the jump instruction");
-          });
+      exit->print(printContext);
       os << '\n';
 #undef CASE
     }

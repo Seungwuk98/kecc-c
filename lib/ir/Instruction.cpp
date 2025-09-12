@@ -316,6 +316,37 @@ void InstructionStorage::dropReferences() {
   }
 }
 
+//============================================================================//
+
+void DefaultValuePrinter::printValue(Value value, IRPrintContext &context,
+                                     bool printName) {
+  auto rid = context.getId(value);
+  context.getOS() << rid.toString() << ":" << value.getType();
+  if (printName && !value.getValueName().empty())
+    context.getOS() << ":" << value.getValueName();
+}
+
+void DefaultValuePrinter::printOperand(const Operand &operand,
+                                       IRPrintContext &context) {
+  if (auto constant = operand.getDefiningInst<inst::Constant>()) {
+    constant.print(context);
+    return;
+  }
+  printValue(operand, context, false);
+}
+
+void DefaultValuePrinter::printJumpArg(const JumpArg *jumpArg,
+                                       IRPrintContext &context) {
+  context.getOS() << 'b' << jumpArg->getBlock()->getId() << '(';
+  auto operands = jumpArg->getArgs();
+  for (size_t i = 0; i < operands.size(); ++i) {
+    if (i > 0)
+      context.getOS() << ", ";
+    context.printOperand(operands[i]);
+  }
+  context.getOS() << ')';
+}
+
 RegisterId IRPrintContext::getId(Value inst) const { return idMap.at(inst); }
 void IRPrintContext::setId(Value inst, RegisterId id) {
   assert(idMap.find(inst) == idMap.end() && "ID already exists for this value");
@@ -327,6 +358,14 @@ void IRPrintContext::printIndent() {
 }
 
 void IRPrintContext::clearIdMap() { idMap.clear(); }
+
+void IRPrintContext::printValues(llvm::ArrayRef<Value> values, bool printName) {
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (i != 0)
+      os << ", ";
+    printValue(values[i], printName);
+  }
+}
 
 //============================================================================//
 /// Phi
