@@ -15,8 +15,8 @@ init:
     %l1:struct S:r
     %l2:struct S:result
     // %l3:[2 x i64]
-  // CHECK-NEXT: addi sp,sp,-140
-  // CHECK-NEXT: sd ra,132(sp)
+  // CHECK-NEXT: addi sp,sp,-108
+  // CHECK-NEXT: sd ra,100(sp)
 
   /// callee-saved registers
   // CHECK-NEXT: sd s0,68(sp)
@@ -169,6 +169,6 @@ block b0:
   // CHECK-NEXT: ld s2,84(sp)
   // CHECK-NEXT: ld s3,92(sp)
 
-  // CHECK-NEXT: ld ra,132(sp)
-  // CHECK-NEXT: addi sp,sp,140
+  // CHECK-NEXT: ld ra,100(sp)
+  // CHECK-NEXT: addi sp,sp,108
 }

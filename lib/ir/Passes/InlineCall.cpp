@@ -26,6 +26,22 @@ public:
                               [](Value arg) { return arg; }));
       rewriter.replaceInst(call.getStorage(), inlineCall->getResults());
       return utils::LogicalResult::success();
+    } else if (auto outlineConstant =
+                   func.getDefiningInst<inst::OutlineConstant>()) {
+      auto constant =
+          outlineConstant.getConstant().getDefiningInst<inst::Constant>();
+      assert(constant && "Constant instruction expected");
+      auto variable = constant.getValue().cast<ConstantVariableAttr>();
+      auto name = variable.getName();
+      auto funcT =
+          func.getType().cast<PointerT>().getPointeeType().cast<FunctionT>();
+      auto inlineCall = rewriter.create<inst::InlineCall>(
+          call.getRange(), name, funcT,
+          llvm::map_to_vector(call.getArguments(),
+                              [](Value arg) { return arg; }));
+      rewriter.replaceInst(call.getStorage(), inlineCall->getResults());
+      rewriter.removeInst(outlineConstant.getStorage());
+      return utils::LogicalResult::success();
     } else
       return utils::LogicalResult::failure();
   }

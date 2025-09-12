@@ -89,6 +89,7 @@ ir::PassResult runPasses(ir::Module *module) {
   ir::PassManager pm;
 
   pm.addPass<ir::CanonicalizeStruct>();
+  pm.addPass<ir::FoldTypeCast>();
   pm.addPass<ir::InlineCallPass>();
   pm.addPass<ir::ConversionToCopyPass>();
   pm.addPass<ir::OutlineConstantPass>();
@@ -226,6 +227,7 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
   kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
   kecc::ir::registerPass<kecc::ir::ConversionToCopyPass>();
+  kecc::ir::registerPass<kecc::ir::FoldTypeCast>();
 
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "Kecc IR Translation Compiler\n");

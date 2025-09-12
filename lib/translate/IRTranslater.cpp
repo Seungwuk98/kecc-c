@@ -603,7 +603,7 @@ void FunctionTranslater::init() {
     spillMemories.try_emplace(liveRange, DataSpace::memory(anon));
   }
 
-  stack.setSpilledRegistersSize(totalCalleeSavedSize);
+  stack.setSpilledRegistersSize(totalSpillSize);
 }
 
 as::Register FunctionTranslater::getRegister(ir::Value value) {

@@ -4,14 +4,36 @@ struct B : {a:i64, b:i64, c:i64}
 
 fun struct B @addB(struct B, struct B)
 
+// CHECK: .globl decl_add
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type decl_add, @function
 fun struct B @decl_add(i64, i64, i64, i64, i64, i64) {
+// CHECK-NEXT: decl_add:
 init:
   bid: b0
   allocations:
     %l0:struct B
     %l1:struct B
+    // %l2:struct B <- temp0
+    // %l3:struct B <- temp1
+    // %l4:struct B <- for function call
+
+  // CHECK-NEXT: addi sp,sp,-168
+  // CHECK-NEXT: sd ra,160(sp)
+  // CHECK-NEXT: sd s0,136(sp)
+  // CHECK-NEXT: sd s1,144(sp)
+  // CHECK-NEXT: sd s2,152(sp) 
+
+  // CHECK-NEXT: addi [[L0:[a-z][0-9]+]],sp,0
+  // CHECK-NEXT: addi [[L1:[a-z][0-9]+]],sp,24
+  // CHECK-NEXT: addi [[L2:[a-z][0-9]+]],sp,48
+  // CHECK-NEXT: addi [[L3:[a-z][0-9]+]],sp,72
+  // CHECK-NEXT: addi [[L4:[a-z][0-9]+]],sp,96
+    
 
 block b0:
+// CHECK-LABEL: .decl_add_L0:
+  // struct B* <- return ptr
   %b0:p0:i64
   %b0:p1:i64
   %b0:p2:i64
@@ -22,26 +44,116 @@ block b0:
   // init memory
   %b0:i0:i64* = getelementptr %l0:struct B* offset 0:i64
   %b0:i1:unit = store %b0:p0:i64 %b0:i0:i64*
+  // CHECK-NEXT: sd a1,0([[L0]])
 
   %b0:i2:i64* = getelementptr %l0:struct B* offset 8:i64
+  // CHECK-NEXT: addi [[L_B_M:[a-z][0-9]+]],[[L0]],8
   %b0:i3:unit = store %b0:p1:i64 %b0:i2:i64*
+  // CHECK-NEXT: sd a2,0([[L_B_M]])
 
   %b0:i4:i64* = getelementptr %l0:struct B* offset 16:i64
+  // CHECK-NEXT: addi [[L_C_M:[a-z][0-9]+]],[[L0]],16
   %b0:i5:unit = store %b0:p2:i64 %b0:i4:i64*
+  // CHECK-NEXT: sd a3,0([[L_C_M]])
 
   %b0:i6:i64* = getelementptr %l1:struct B* offset 0:i64
-  %b0:i7:unit = store %b0:p0:i64 %b0:i6:i64*
+  %b0:i7:unit = store %b0:p3:i64 %b0:i6:i64*
+  // CHECK-NEXT: sd a4,0([[L1]])
 
   %b0:i8:i64* = getelementptr %l1:struct B* offset 8:i64
-  %b0:i9:unit = store %b0:p1:i64 %b0:i8:i64*
+  // CHECK-NEXT: addi [[R_B_M:[a-z][0-9]+]],[[L1]],8
+  %b0:i9:unit = store %b0:p4:i64 %b0:i8:i64*
+  // CHECK-NEXT: sd a5,0([[R_B_M]])
 
   %b0:i10:i64* = getelementptr %l1:struct B* offset 16:i64
-  %b0:i11:unit = store %b0:p2:i64 %b0:i10:i64*
+  // CHECK-NEXT: addi [[R_C_M:[a-z][0-9]+]],[[L1]],16
+  %b0:i11:unit = store %b0:p5:i64 %b0:i10:i64*
+  // CHECK-NEXT: sd a6,0([[R_C_M]])
 
   %b0:i12:struct B = load %l0:struct B*  
+  /// memcpy l0 to l2
+  // CHECK-NEXT: addiw [[SIZE0:[a-z][0-9]+]],zero,24
+
+  /// caller save
+  // CHECK: sd t2,120(sp)
+  // CHECK-NEXT: sd a0,128(sp)
+
+  // CHECK: mv a0,[[L2]]
+  // CHECK-NEXT: a2,[[SIZE0]]
+  // CHECK-NEXT: a1,[[L0]]
+  // CHECK-NEXT: call memcpy
+
+  /// restore caller save
+  // CHECK: ld t2,120(sp)
+  // CHECK-NEXT: ld a0,128(sp)
+
   %b0:i13:struct B = load %l1:struct B*
+  /// memcpy l1 to l3
+  // CHECK: addiw [[SIZE1:[a-z][0-9]+]],zero,24
+
+  /// caller save
+  // CHECK: sd a0,120(sp)
+
+  // CHECK: mv a0,[[L3]]
+  // CHECK-NEXT: mv a1,[[L1]]
+  // CHECK-NEXT: mv a2,[[SIZE1]]
+  // CHECK-NEXT: call memcpy
+
+  /// restore caller save
+  // CHECK: ld a0,120(sp)
+
   
   %b0:i14:struct B = call @addB:[ret:struct B params:(struct B, struct B)]*(%b0:i12:struct B, %b0:i13:struct B)
 
+  /// caller save
+  // CHECK: sd a0,120(sp)
+  
+  // CHECK: mv a0,[[L4]]
+  // CHECK-NEXT: mv a1,[[L2]]
+  // CHECK-NEXT: mv a2,[[L3]]
+  // CHECK-NEXT: call addB
+
+  /// restore caller save
+  // CHECK: ld a0,120(sp)
+
+  /// memcpy l4 to return
+  // CHECK: addiw [[SIZE2:[a-z][0-9]+]],zero,24
+  // CHECK-NEXT: mv a1,[[L4]]
+  // CHECK-NEXT: mv a2,[[SIZE2]]
+  // CHECK-NEXT: call memcpy
+
   ret %b0:i14:struct B
+  // CHECK-NEXT: ld s0,136(sp)
+  // CHECK-NEXT: ld s1,144(sp)
+  // CHECK-NEXT: ld s2,152(sp) 
+
+  // CHECK-NEXT: ld ra,160(sp)
+  // CHECK-NEXT: addi sp,sp,168
+}
+
+//////// main.c
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+
+struct B {
+  long long a, b, c;
+};
+
+struct B addB(struct B l, struct B r) {
+  struct B newB;
+  newB.a = l.a + r.a;
+  newB.b = l.b + r.b;
+  newB.c = l.c + r.c;
+  return newB;
+}
+
+extern struct B decl_add(long long l_a, long long l_b, long long l_c,
+                         long long r_a, long long r_b, long long r_c);
+
+int main() {
+  struct B result = decl_add(1, 2, 3, 4, 5, 6);
+
+  printf("a:%lld, b:%lld, c:%lld\n", result.a, result.b, result.c);
+  // RESULT: a:5, b:7, c:9
+  return 0;
 }

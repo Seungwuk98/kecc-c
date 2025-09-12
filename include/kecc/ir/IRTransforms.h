@@ -149,6 +149,26 @@ private:
   std::unique_ptr<CanonicalizeStructImpl> impl;
 };
 
+class FoldTypeCast : public Pass {
+public:
+  FoldTypeCast() {}
+
+  PassResult run(Module *module) override;
+
+  static llvm::StringRef getPassName() { return "fold-type-cast"; }
+  llvm::StringRef getPassArgument() const override { return getPassName(); }
+
+  void setOption(llvm::StringRef option) override {
+    if (option == "func-ptr-only")
+      funcPtrOnly = true;
+    else
+      funcPtrOnly = false;
+  }
+
+private:
+  bool funcPtrOnly = false;
+};
+
 void registerCanonicalizeStructPasses();
 
 class InlineCallPass : public Pass {

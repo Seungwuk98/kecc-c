@@ -129,25 +129,6 @@ static size_t findBiggerNrstPow2(size_t value) {
   return result;
 }
 
-class FoldTypeCast : public Pass {
-public:
-  FoldTypeCast() {}
-
-  PassResult run(Module *module) override;
-
-  llvm::StringRef getPassArgument() const override { return "fold-type-cast"; }
-
-  void setOption(llvm::StringRef option) override {
-    if (option == "func-ptr-only")
-      funcPtrOnly = true;
-    else
-      funcPtrOnly = false;
-  }
-
-private:
-  bool funcPtrOnly = false;
-};
-
 class FoldTypeCastPattern : public InstConversionPattern<inst::TypeCast> {
 public:
   FoldTypeCastPattern(bool funcPtrOnly) : funcPtrOnly(funcPtrOnly) {}
@@ -326,7 +307,6 @@ PassResult CanonicalizeStruct::run(Module *module) {
   }
 
   convertAllFuncT(module);
-
   return retResult;
 }
 

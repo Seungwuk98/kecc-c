@@ -404,6 +404,18 @@ PRINT_FUNC(InlineCall) {
   }
   os << ')';
 }
+PRINT_FUNC(MemCpy) {
+  os << "memcpy dst:";
+  printOperand(inst.getDestAsOperand());
+  os << ", src:";
+  printOperand(inst.getSrcAsOperand());
+  os << ", size:";
+  printOperand(inst.getSizeAsOperand());
+}
+PRINT_FUNC(Copy) {
+  os << " = copy ";
+  printOperand(inst.getValueAsOperand());
+}
 
 #undef PRINT_FUNC
 
@@ -570,6 +582,8 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
             .CASE(Unary)
             .CASE(OutlineConstant)
             .CASE(InlineCall)
+            .CASE(MemCpy)
+            .CASE(Copy)
             .Default([&](ir::Instruction inst) {
               llvm_unreachable("Can't dump the instruction");
             });

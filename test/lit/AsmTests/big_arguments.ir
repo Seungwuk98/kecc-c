@@ -1,4 +1,4 @@
-// RUN: kecc-translate %s | FileCheck %s
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
 
 // CHECK: .globl test
 // CHECK-NEXT: .align 1
@@ -46,4 +46,17 @@ block b0:
 
   ret %b0:i8:i32
   // CHECK-NEXT: ret
+}
+
+////// main.c 
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+
+extern int test(int, int, int, int, int, int, int, int, int, int);
+
+int main() {
+  int result = test(0, 1, 2, 3, 4, 5, 6, 7, 8, 9); 
+  printf("result: %d\n", result);
+  // RESULT: result: 45
+  return 0;
 }
