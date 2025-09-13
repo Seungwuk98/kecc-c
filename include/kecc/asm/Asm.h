@@ -136,6 +136,11 @@ public:
     Iterator it;
   };
 
+  InsertionPoint lastInsertionPoint() {
+    auto endIt = end();
+    return InsertionPoint(this, --endIt);
+  }
+
   void walk(llvm::function_ref<void(Instruction *)> func) const;
 
 private:

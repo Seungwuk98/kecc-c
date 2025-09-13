@@ -2,6 +2,7 @@
 #include "ExecutorConfig.h.in"
 #include "kecc/utils/LogicalResult.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/InitLLVM.h"
@@ -21,6 +22,9 @@ static llvm::cl::opt<std::string> input(llvm::cl::Positional,
 
 static llvm::cl::opt<int>
     dumpSource("dump-source", llvm::cl::desc("Dump splitted source files"));
+
+static llvm::cl::opt<std::string>
+    arg("arg", llvm::cl::desc("Argument for the program"));
 } // namespace cl
 
 struct TempDirectory {
@@ -263,12 +267,15 @@ int keccTestExecutorMain() {
     return returnCode;
   }
 
+  llvm::SmallVector<llvm::StringRef> exeArgs{
+      QEMU_RISCV64_STATIC,
+      llvm::StringRef{exePath.data(), exePath.size()},
+  };
+  auto args = llvm::split(cl::arg, ' ');
+  exeArgs.append(args.begin(), args.end());
+
   // run executable with qemu
-  returnCode = llvm::sys::ExecuteAndWait(
-      QEMU_RISCV64_STATIC, {
-                               QEMU_RISCV64_STATIC,
-                               llvm::StringRef{exePath.data(), exePath.size()},
-                           });
+  returnCode = llvm::sys::ExecuteAndWait(QEMU_RISCV64_STATIC, exeArgs);
 
   if (returnCode != 0) {
     llvm::errs() << "Error: execution failed with return code " << returnCode

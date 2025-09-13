@@ -1,0 +1,169 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+// RUN: kecc-test-executor %s --arg="kecc test program" | FileCheck %s --check-prefix=RESULT 
+// RESULT: kecc test program
+
+fun unit @print_char(i8)
+fun unit @print_space()
+fun unit @print_line()
+
+// CHECK: .globl main
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type main, @function
+fun i32 @main(i32 /* argc */, i8** /* argv */) { 
+// CHECK-NEXT: main:
+init:
+  bid: b0
+  allocations:
+    %l0:i32:i
+    %l1:i32:j
+    // CHECK-NEXT: addi sp,sp,-52
+    // CHECK-NEXT: sd ra,44(sp)
+
+    // CHECK-NEXT: sd s0,20(sp)
+    // CHECK-NEXT: sd s1,28(sp)
+    // CHECK-NEXT: sd s2,36(sp)
+
+    // CHECK-NEXT: addi [[L0:[a-z][0-9]+]],sp,0
+    // CHECK-NEXT: addi [[L1:[a-z][0-9]+]],sp,4
+
+
+block b0:
+// CHECK-LABEL: .main_L0:
+  %b0:p0:i32 
+  %b0:p1:i8**
+
+  %b0:i0:unit = store 1:i32 %l0:i32*
+  // CHECK-NEXT: addiw [[ONE_0:[a-z][0-9]+]],zero,1
+  // CHECK-NEXT: sw [[ONE_0]],0([[L0]])
+  j b1()
+  // CHECK-NEXT: j .main_L1
+
+block b1: // preds: b0, b1
+// CHECK-LABEL: .main_L1:
+  %b1:i0:i32:i = load %l0:i32*
+  // CHECK-NEXT: lw [[LOAD_I0:[a-z][0-9]+]],0([[L0]])
+  %b1:i1:i1 = cmp lt %b1:i0:i32 %b0:p0:i32 
+  // CHECK-NEXT: slt [[SLT_0:[a-z][0-9]+]],[[LOAD_I0]],a0
+  br %b1:i1:i1, b2(), b4()
+  // CHECK-NEXT: beq [[SLT_0]],zero,.main_L4
+  // CHECK-NEXT: j .main_L2
+
+block b2: // preds: b1
+// CHECK-LABEL: .main_L2:
+  %b2:i0:i32:i = load %l0:i32*
+  // CHECK-NEXT: lw [[LOAD_I1:[a-z][0-9]+]],0([[L0]])
+  %b2:i1:i32:offset = mul %b2:i0:i32 8:i32
+  // CHECK-NEXT: addiw [[VAL_8:[a-z][0-9]+]],zero,8
+  // CHECK-NEXT: mulw [[OFFSET_0:[a-z][0-9]+]],[[LOAD_I1]],[[VAL_8]]
+  %b2:i2:i64 = typecast %b2:i1:i32 to i64
+  %b2:i3:i8** = getelementptr %b0:p1:i8** offset %b2:i2:i64 
+  // CHECK-NEXT: add [[STR_PTR_M:[a-z][0-9]+]],a1,[[OFFSET_0]]
+  
+  %b2:i4:i8* = load %b2:i3:i8**
+  // CHECK-NEXT: ld [[STR_PTR:[a-z][0-9]+]],0([[STR_PTR_M]])
+  %b2:i5:unit = store 0:i32 %l1:i32*
+  // CHECK-NEXT: addiw [[VAL_0:[a-z][0-9]+]],zero,0
+  // CHECK-NEXT: sw [[VAL_0]],0([[L1]])
+  j b5()
+  // CHECK-NEXT: j .main_L5
+
+
+block b3: // preds: b7
+// CHECK-LABEL: .main_L3:
+  %b3:i0:i32:i = load %l0:i32* 
+  // CHECK-NEXT: lw [[LOAD_I2:[a-z][0-9]+]],0([[L0]])
+  %b3:i1:i32 = add %b3:i0:i32 1:i32
+  // CHECK-NEXT: addiw [[NEW_I:[a-z][0-9]+]],[[LOAD_I2]],1
+  %b3:i2:unit = store %b3:i1:i32 %l0:i32*
+  // CHECK-NEXT: sw [[NEW_I]],0([[L0]])
+  j b1()
+  // CHECK-NEXT: j .main_L1
+
+block b4: // preds: b1
+// CHECK-LABEL: .main_L4:
+  %b4:i0:unit = call @print_line:[ret:unit params:()]*()
+  // CHECK-NEXT: call print_line 
+  // CHECK-NEXT: addiw [[VAL_0_2:[a-z][0-9]+]],zero,0 
+  // CHECK-NEXT: mv a0,[[VAL_0_2]]
+  ret 0:i32
+  // CHECK-NEXT: ld s0,20(sp)
+  // CHECK-NEXT: ld s1,28(sp)
+  // CHECK-NEXT: ld s2,36(sp)
+
+  // CHECK-NEXT: ld ra,44(sp)
+  // CHECK-NEXT: addi sp,sp,52
+  // CHECK-NEXT: ret
+
+block b5: // preds: b2, b6
+// CHECK-LABEL: .main_L5:
+  %b5:i0:i32:j = load %l1:i32*
+  // CHECK-NEXT: lw [[LOAD_J0:[a-z][0-9]+]],0([[L1]])
+  %b5:i1:i64 = typecast %b5:i0:i32 to i64
+  %b5:i2:i8* = getelementptr %b2:i4:i8* offset %b5:i1:i64
+  // CHECK-NEXT: add [[CHAR_M:[a-z][0-9]+]],[[STR_PTR]],[[LOAD_J0]]
+  %b5:i3:i8 = load %b5:i2:i8* 
+  // CHECK-NEXT: lb [[CHAR:[a-z][0-9]+]],0([[CHAR_M]])
+
+  %b5:i4:i1 = cmp eq %b5:i3:i8 0:i8
+  // CHECK-NEXT: addiw [[VAL_0_3:[a-z][0-9]+]],zero,0
+  // CHECK-NEXT: xor [[TEMP0:[a-z][0-9]+]],[[CHAR]],[[VAL_0_3]]
+  // CHECK-NEXT: seqz [[EQ:[a-z][0-9]+]],[[TEMP0]]
+  br %b5:i4:i1, b7(), b6()
+  // CHECK-NEXT: beq [[EQ]],zero,.main_L6
+  // CHECK-NEXT: j .main_L7
+
+block b6: // preds b5
+// CHECK-LABEL: .main_L6:
+  %b6:i0:unit = call @print_char:[ret:unit params:(i8)]*(%b5:i3:i8) 
+  // save caller-saved registers
+  // CHECK: sw a0,8(sp)
+  // CHECK-NEXT: sd a1,12(sp)
+
+  // CHECK: mv a0,[[CHAR]]
+  // CHECK-NEXT: call print_char
+
+  // restore caller-saved registers
+  // CHECK: lw a0,8(sp)
+  // CHECK-NEXT: ld a1,12(sp)
+
+  %b6:i1:i32:j = load %l1:i32*
+  // CHECK: lw [[LOAD_J1:[a-z][0-9]+]],0([[L1]])
+  %b6:i2:i32 = add %b6:i1:i32 1:i32 
+  // CHECK-NEXT: addiw [[NEW_J:[a-z][0-9]+]],[[LOAD_J1]],1
+  %b6:i3:unit = store %b6:i2:i32 %l1:i32*
+  // CHECK-NEXT: sw [[NEW_J]],0([[L1]])
+  j b5()
+  // CHECK-NEXT: j .main_L5
+
+block b7: // preds b5
+// CHECK-LABEL: .main_L7:
+  %b7:i0:unit = call @print_space:[ret:unit params:()]*()
+  // save caller-saved registers
+  // CHECK: sw a0,8(sp)
+  // CHECK-NEXT: sd a1,12(sp)
+
+  // CHECK: call print_space
+
+  // restore caller-saved registers
+  // CHECK: lw a0,8(sp)
+  // CHECK-NEXT: ld a1,12(sp)
+
+  j b3()
+  // CHECK: j .main_L3
+}
+
+
+////// print.c
+#include <stdio.h>
+
+void print_char(char c) {
+  printf("%c", c);
+}
+
+void print_space() {
+  printf(" ");
+}
+
+void print_line() {
+  printf("\n");
+}

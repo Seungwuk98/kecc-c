@@ -5,6 +5,7 @@
 #include "kecc/asm/AsmBuilder.h"
 #include "kecc/asm/AsmInstruction.h"
 #include "kecc/ir/IRAttributes.h"
+#include "kecc/ir/IRBuilder.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/Module.h"
 #include "kecc/ir/Value.h"
@@ -238,6 +239,7 @@ private:
   llvm::SmallVector<as::Register> functionIntArgMemories;
   llvm::SmallVector<as::Register> functionFloatArgMemories;
   std::optional<as::Register> returnAddressMemory;
+  as::Block::InsertionPoint returnInsertionPoint;
   size_t anonRegIndex = 0;
   bool hasCall = false;
   bool multipleReturn = false;

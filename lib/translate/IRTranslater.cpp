@@ -831,9 +831,13 @@ as::Function *FunctionTranslater::translate() {
 
   if (multipleReturn) {
     auto endBlock = new as::Block(functionEndLabel());
-    builder.setInsertionPointStart(endBlock);
-    writeFunctionEndImpl(builder);
+    returnInsertionPoint = endBlock->lastInsertionPoint();
     blocks.emplace_back(endBlock);
+  }
+
+  if (returnInsertionPoint.isValid()) {
+    builder.setInsertionPoint(returnInsertionPoint);
+    writeFunctionEndImpl(builder);
   }
 
   as::Function *newFunction = new as::Function(blocks);
@@ -947,7 +951,7 @@ void FunctionTranslater::writeFunctionEnd(as::AsmBuilder &builder) {
   if (multipleReturn)
     builder.create<as::pseudo::J>(functionEndLabel());
   else
-    writeFunctionEndImpl(builder);
+    returnInsertionPoint = builder.getInsertionPoint();
 }
 
 void FunctionTranslater::writeFunctionEndImpl(as::AsmBuilder &builder) {

@@ -424,7 +424,7 @@ bool BType::classof(const Instruction *inst) {
   return llvm::isa<btype::Beq, btype::Bne, btype::Blt, btype::Bge>(inst);
 }
 void BType::printInner(llvm::raw_ostream &os) const {
-  os << std::format("{}\t{},{}, {}", toString(), rs1.toString(), rs2.toString(),
+  os << std::format("{}\t{},{},{}", toString(), rs1.toString(), rs2.toString(),
                     imm);
 }
 

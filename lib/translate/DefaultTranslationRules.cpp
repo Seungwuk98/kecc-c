@@ -1445,7 +1445,8 @@ static void castIntToInt(as::AsmBuilder &builder, as::Register rd,
 
   if (fromBitWidth == toBitWidth) {
     // mv rd, srcReg
-    builder.create<as::pseudo::Mv>(rd, srcReg);
+    if (rd != srcReg)
+      builder.create<as::pseudo::Mv>(rd, srcReg);
   } else if (fromBitWidth < toBitWidth) {
     if (!fromSigned && toSigned) {
       // fill 0 in higher bits
@@ -1454,7 +1455,7 @@ static void castIntToInt(as::AsmBuilder &builder, as::Register rd,
                                       as::DataSize::doubleWord());
       builder.create<as::itype::Srli>(rd, rd, getImmediate(bitDiff),
                                       as::DataSize::doubleWord());
-    } else {
+    } else if (rd != srcReg) {
       // mv rd, srcReg
       builder.create<as::pseudo::Mv>(rd, srcReg);
     }
