@@ -68,8 +68,9 @@ SpillInfo LiveRangeAnalysisImpl::spill(
   for (ir::Block *block : *func) {
     for (ir::InstructionStorage *inst : *block) {
       llvm::ArrayRef<ir::Operand> operands;
-      if (auto call = inst->getDefiningInst<ir::inst::Call>()) {
-        operands = call.getFunctionAsOperand();
+      if (inst->hasTrait<ir::CallLike>()) {
+        if (auto call = inst->getDefiningInst<ir::inst::Call>())
+          operands = call.getFunctionAsOperand();
       } else {
         operands = inst->getOperands();
       }
@@ -404,7 +405,9 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
 
       for (auto I = block->tempBegin(), E = block->tempEnd(); I != E; ++I) {
         auto inst = *I;
-        printRestore(inst->getOperands(), indent + 2);
+        if (!inst->hasTrait<ir::CallLike>())
+          printRestore(inst->getOperands(), indent + 2);
+
         printIndent(indent + 2);
 
         inst->print(printContext);

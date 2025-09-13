@@ -266,6 +266,7 @@ public:
                                          ir::InstructionStorage *inst) = 0;
 
   virtual bool restoreActively() const { return false; }
+  virtual bool spillActively() const { return false; }
   virtual bool callFunction() const { return false; }
 
   TypeID getId() const { return typeId; }

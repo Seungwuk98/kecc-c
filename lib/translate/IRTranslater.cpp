@@ -777,11 +777,13 @@ utils::LogicalResult translateInstruction(as::AsmBuilder &builder,
       return result;
   }
 
-  for (ir::Value result : inst->getResults()) {
-    auto liveRange = translater.getLiveRangeAnalysis()->getLiveRange(
-        translater.getFunction(), result);
-    if (translater.isSpilled(liveRange)) {
-      translater.spillRegister(builder, liveRange);
+  if (!rule->spillActively()) {
+    for (ir::Value result : inst->getResults()) {
+      auto liveRange = translater.getLiveRangeAnalysis()->getLiveRange(
+          translater.getFunction(), result);
+      if (translater.isSpilled(liveRange)) {
+        translater.spillRegister(builder, liveRange);
+      }
     }
   }
 
@@ -888,23 +890,26 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
       break;
 
     auto liveRange = liveRangeAnalysis->getLiveRange(function, arg);
+    auto spilled = isSpilled(liveRange);
+    auto hasUsage = arg.getResult().hasUses();
     auto rd = getRegister(arg);
     auto dataSize = getDataSize(arg.getType());
 
     if (arg.getType().isa<ir::FloatT>()) {
       if (argFloatIndex >= getFloatArgRegisters().size()) {
-        auto sp = functionFloatArgMemories[argFloatIndex -
-                                           getFloatArgRegisters().size()];
-        builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize,
-                                        true);
+        if (!spilled && hasUsage) {
+          auto sp = functionFloatArgMemories[argFloatIndex -
+                                             getFloatArgRegisters().size()];
+          builder.create<as::itype::Load>(rd, sp, getImmediate(0), dataSize,
+                                          true);
+        }
         // If the argument is spilled, we don't need to spill it again because
         // it already has a memory from caller
       } else {
-        auto argReg = getFloatArgRegisters()[argFloatIndex];
-        assert(argReg == rd &&
+        assert(getFloatArgRegisters()[argFloatIndex] == rd &&
                "Argument register must match the register allocated for the "
                "argument");
-        if (isSpilled(liveRange)) {
+        if (isSpilled(liveRange) && hasUsage) {
           spillRegister(builder, liveRange);
         }
       }
@@ -916,18 +921,20 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
       }
 
       if (argIntIndex >= getIntArgRegisters().size()) {
-        auto sp =
-            functionIntArgMemories[argIntIndex - getIntArgRegisters().size()];
-        auto load = builder.create<as::itype::Load>(rd, sp, getImmediate(0),
-                                                    dataSize, isSigned);
+        if (!spilled && hasUsage) {
+          auto sp =
+              functionIntArgMemories[argIntIndex - getIntArgRegisters().size()];
+          auto load = builder.create<as::itype::Load>(rd, sp, getImmediate(0),
+                                                      dataSize, isSigned);
+        }
+
         // If the argument is spilled, we don't need to spill it again because
         // it already has a memory from caller
       } else {
-        auto argReg = getIntArgRegisters()[argIntIndex];
-        assert(argReg == rd &&
+        assert(getIntArgRegisters()[argIntIndex] == rd &&
                "Argument register must match the register allocated for the "
                "argument");
-        if (isSpilled(liveRange)) {
+        if (isSpilled(liveRange) && hasUsage) {
           spillRegister(builder, liveRange);
         }
       }

@@ -59,8 +59,9 @@ private:
 class SpillCost {
 public:
   SpillCost(ir::Module *module, ir::Function *function,
-            InterferenceGraph *interfGraph)
-      : module(module), function(function), interfGraph(interfGraph) {
+            InterferenceGraph *interfGraph, TranslateContext *translateContext)
+      : module(module), function(function), interfGraph(interfGraph),
+        translateContext(translateContext) {
     estimateSpillCost();
   }
 
@@ -74,6 +75,7 @@ private:
   ir::Module *module;
   ir::Function *function;
   InterferenceGraph *interfGraph;
+  TranslateContext *translateContext;
   llvm::DenseMap<LiveRange, long double> spillCostMap;
 };
 

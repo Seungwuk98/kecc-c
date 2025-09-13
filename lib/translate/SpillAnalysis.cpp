@@ -4,6 +4,7 @@
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/WalkSupport.h"
 #include "kecc/translate/InterferenceGraph.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVectorExtras.h"
 #include <cmath>
 #include <limits>
@@ -38,10 +39,60 @@ void SpillCost::estimateSpillCost() {
     LiveRange liveRange = liveRangeAnalysis->getLiveRange(function, localVar);
     if (spillAnalysis &&
         spillAnalysis->getSpillInfo().spilled.contains(liveRange)) {
-      spillCostMap[liveRange] = std::numeric_limits<long double>::max();
+      spillCostMap[liveRange] = std::numeric_limits<long double>::infinity();
     } else {
-      spillCostMap[liveRange] = std::numeric_limits<long double>::min();
+      spillCostMap[liveRange] = -std::numeric_limits<long double>::infinity();
     }
+  }
+
+  // handle function arguments
+  llvm::SmallVector<LiveRange> intArgs;
+  llvm::SmallVector<LiveRange> floatArgs;
+  for (ir::InstructionStorage *inst : *function->getEntryBlock()) {
+    auto arg = inst->getDefiningInst<ir::inst::FunctionArgument>();
+    if (!arg)
+      break;
+
+    LiveRange liveRange = liveRangeAnalysis->getLiveRange(function, arg);
+    if (arg.getType().isa<ir::FloatT>())
+      floatArgs.emplace_back(liveRange);
+    else
+      intArgs.emplace_back(liveRange);
+  }
+
+  llvm::SmallVector<as::Register, 8> intArgReg;
+  llvm::SmallVector<as::Register, 8> floatArgReg;
+  llvm::for_each(
+      translateContext->getRegistersForAllocate(as::RegisterType::Integer),
+      [&](as::Register reg) {
+        if (reg.isArg())
+          intArgReg.emplace_back(reg);
+      });
+  llvm::for_each(translateContext->getRegistersForAllocate(
+                     as::RegisterType::FloatingPoint),
+                 [&](as::Register reg) {
+                   if (reg.isArg())
+                     floatArgReg.emplace_back(reg);
+                 });
+
+  for (auto argIndex = intArgReg.size(); argIndex < intArgs.size();
+       ++argIndex) {
+    auto liveRange = intArgs[argIndex];
+    if (spillAnalysis &&
+        spillAnalysis->getSpillInfo().spilled.contains(liveRange))
+      spillCostMap[liveRange] = std::numeric_limits<long double>::infinity();
+    else
+      spillCostMap[liveRange] = -std::numeric_limits<long double>::infinity();
+  }
+
+  for (auto argIndex = floatArgReg.size(); argIndex < floatArgs.size();
+       ++argIndex) {
+    auto liveRange = floatArgs[argIndex];
+    if (spillAnalysis &&
+        spillAnalysis->getSpillInfo().spilled.contains(liveRange))
+      spillCostMap[liveRange] = std::numeric_limits<long double>::infinity();
+    else
+      spillCostMap[liveRange] = -std::numeric_limits<long double>::infinity();
   }
 
   for (ir::Block *block : *function) {
@@ -60,7 +111,8 @@ void SpillCost::estimateSpillCost() {
         if (spillAnalysis &&
             spillAnalysis->getSpillInfo().restore.contains(&op)) {
           liveRange = spillAnalysis->getSpillInfo().restore.at(&op);
-          spillCostMap[liveRange] = std::numeric_limits<long double>::max();
+          spillCostMap[liveRange] =
+              std::numeric_limits<long double>::infinity();
         } else {
           liveRange = liveRangeAnalysis->getLiveRange(function, op);
           if (spillCostMap.find(liveRange) == spillCostMap.end()) {
@@ -87,11 +139,11 @@ void SpillCost::estimateSpillCost() {
             }
             spillCostMap[to] += depthValue;
           } else {
-            spillCostMap[to] = std::numeric_limits<long double>::max();
+            spillCostMap[to] = std::numeric_limits<long double>::infinity();
           }
 
           if (fromRestored)
-            spillCostMap[from] = std::numeric_limits<long double>::max();
+            spillCostMap[from] = std::numeric_limits<long double>::infinity();
           else
             spillCostMap[from] += depthValue;
         }
@@ -105,7 +157,8 @@ void SpillCost::estimateSpillCost() {
         // handle spilled
         if (spillAnalysis &&
             spillAnalysis->getSpillInfo().spilled.contains(liveRange))
-          spillCostMap[liveRange] = std::numeric_limits<long double>::max();
+          spillCostMap[liveRange] =
+              std::numeric_limits<long double>::infinity();
         else
           spillCostMap[liveRange] += depthValue;
       }
@@ -142,6 +195,8 @@ void SpillCost::dump(llvm::raw_ostream &os) const {
 bool SpillAnalysis::trySpill(size_t iter) {
   bool spilled = false;
   for (ir::Function *func : *getModule()->getIR()) {
+    if (!func->hasDefinition())
+      continue;
     auto count = 0;
     while (true) {
       if (iter >= 0 && count++ >= iter)
@@ -190,14 +245,17 @@ bool SpillAnalysis::trySpill(ir::Function *function, as::RegisterType regType) {
   auto spillCount = maxClique.size() - avaiableRegs.size();
 
   // Calculate spill costs for each live range in the maximum clique
-  SpillCost spillCost(getModule(), function, interfGraph);
+  SpillCost spillCost(getModule(), function, interfGraph, translateContext);
 
   auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap(getSpillInfo());
   auto comparator = [&](LiveRange a, LiveRange b) {
-    size_t aCost = spillCost.getSpillCost(a);
-    size_t bCost = spillCost.getSpillCost(b);
-    if (aCost != bCost)
-      return aCost < bCost; // Higher cost means lower priority
+    long double aCost = spillCost.getSpillCost(a);
+    long double bCost = spillCost.getSpillCost(b);
+    if (aCost < bCost)
+      return true;
+
+    if (bCost < aCost)
+      return false;
 
     return currLRIdMap.at(a) < currLRIdMap.at(b); // Use ID as tiebreaker
   };
@@ -205,6 +263,7 @@ bool SpillAnalysis::trySpill(ir::Function *function, as::RegisterType regType) {
   llvm::SmallVector<LiveRange> spillCandidates(maxClique.begin(),
                                                maxClique.end());
   llvm::stable_sort(spillCandidates, comparator);
+
   spillCandidates.erase(spillCandidates.begin() + spillCount,
                         spillCandidates.end());
 

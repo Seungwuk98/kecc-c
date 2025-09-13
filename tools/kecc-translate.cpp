@@ -185,14 +185,16 @@ int keccTranslateMain() {
         auto interfGraph = spillAnalysis->getInterferenceGraph(
             function, as::RegisterType::Integer);
         assert(interfGraph && "Interference graph must not be null");
-        SpillCost spillCost(module.get(), function, interfGraph);
+        SpillCost spillCost(module.get(), function, interfGraph,
+                            &translateContext);
         spillCost.dump(os);
 
         os << "For floating-point live ranges:\n";
         interfGraph = spillAnalysis->getInterferenceGraph(
             function, as::RegisterType::FloatingPoint);
         assert(interfGraph && "Interference graph must not be null");
-        spillCost = SpillCost(module.get(), function, interfGraph);
+        spillCost =
+            SpillCost(module.get(), function, interfGraph, &translateContext);
         spillCost.dump(os);
         os << '\n';
       });

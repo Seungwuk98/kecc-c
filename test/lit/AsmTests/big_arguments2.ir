@@ -1,0 +1,188 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+
+fun i32 @test_callee(
+  i32, i32, i32, i32, i32, i32, i32, i32, i32, i32,
+  i32, i32, i32, i32, i32, i32, i32, i32, i32, i32,
+  i32, i32, i32, i32, i32, i32, i32, i32, i32, i32
+)
+
+// CHECK: .globl test_caller 
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type test_caller, @function
+fun i32 @test_caller(
+  i32, i32, i32, i32, i32, i32, i32, i32, i32, i32,
+  i32, i32, i32, i32, i32, i32, i32, i32, i32, i32,
+  i32, i32, i32, i32, i32, i32, i32, i32, i32, i32
+) {
+// CHECK-NEXT: test_caller:
+init:
+  bid: b0
+  allocations:
+  // CHECK-NEXT: addi sp,sp,-300
+  // CHECK-NEXT: sd ra,292(sp)
+
+  // save callee-saved registers
+  // CHECK-NEXT: sd s0,176(sp)
+  // CHECK-NEXT: sd s1,184(sp)
+  // CHECK-NEXT: sd s2,192(sp)
+  // CHECK-NEXT: sd s3,200(sp)
+  // CHECK-NEXT: sd s4,208(sp)
+  // CHECK-NEXT: sd s5,216(sp)
+  // CHECK-NEXT: sd s6,224(sp)
+  // CHECK-NEXT: sd s7,232(sp)
+  // CHECK-NEXT: sd s8,240(sp)
+  // CHECK-NEXT: sd s9,248(sp)
+  // CHECK-NEXT: sd s10,256(sp)
+  // CHECK-NEXT: sd s11,264(sp)
+
+
+block b0:
+// CHECK-LABEL: .test_caller_L0:
+  %b0:p0:i32
+  %b0:p1:i32
+  %b0:p2:i32
+  %b0:p3:i32
+  %b0:p4:i32
+  %b0:p5:i32
+  %b0:p6:i32
+  %b0:p7:i32
+  %b0:p8:i32
+  %b0:p9:i32
+  %b0:p10:i32
+  %b0:p11:i32
+  %b0:p12:i32
+  %b0:p13:i32
+  %b0:p14:i32
+  %b0:p15:i32
+  %b0:p16:i32
+  %b0:p17:i32
+  %b0:p18:i32
+  %b0:p19:i32
+  %b0:p20:i32
+  %b0:p21:i32
+  %b0:p22:i32
+  %b0:p23:i32
+  %b0:p24:i32
+  %b0:p25:i32
+  %b0:p26:i32
+  %b0:p27:i32
+  %b0:p28:i32
+  %b0:p29:i32
+
+  // CHECK-NEXT: addiw [[VAL_0:[a-z][0-9]+]],zero,0 
+  // CHECK-NEXT: sw [[VAL_0]],272(sp)
+  // CHECK-NEXT: addiw [[VAL_1:[a-z][0-9]+]],zero,1 
+  // CHECK-NEXT: sw [[VAL_1]],276(sp)
+  // CHECK-NEXT: addiw [[VAL_2:[a-z][0-9]+]],zero,2 
+  // CHECK-NEXT: sw [[VAL_2]],280(sp)
+  // CHECK-NEXT: addiw [[VAL_3:[a-z][0-9]+]],zero,3 
+  // CHECK-NEXT: sw [[VAL_3]],284(sp)
+  // CHECK-NEXT: addiw [[VAL_4:[a-z][0-9]+]],zero,4 
+  // CHECK-NEXT: sw [[VAL_4]],288(sp)
+
+  // CHECK-NEXT: addiw [[VAL_5:[a-z][0-9]+]],zero,5 
+  // CHECK-NEXT: addiw [[VAL_6:[a-z][0-9]+]],zero,6 
+  // CHECK-NEXT: addiw [[VAL_7:[a-z][0-9]+]],zero,7 
+  // CHECK-NEXT: addiw [[VAL_8:[a-z][0-9]+]],zero,8 
+  // CHECK-NEXT: addiw [[VAL_9:[a-z][0-9]+]],zero,9 
+  // CHECK-NEXT: addiw [[VAL_10:[a-z][0-9]+]],zero,10 
+  // CHECK-NEXT: addiw [[VAL_11:[a-z][0-9]+]],zero,11 
+  // CHECK-NEXT: addiw [[VAL_12:[a-z][0-9]+]],zero,12 
+  // CHECK-NEXT: addiw [[VAL_13:[a-z][0-9]+]],zero,13 
+  // CHECK-NEXT: addiw [[VAL_14:[a-z][0-9]+]],zero,14 
+  // CHECK-NEXT: addiw [[VAL_15:[a-z][0-9]+]],zero,15 
+  // CHECK-NEXT: addiw [[VAL_16:[a-z][0-9]+]],zero,16 
+  // CHECK-NEXT: addiw [[VAL_17:[a-z][0-9]+]],zero,17 
+  // CHECK-NEXT: addiw [[VAL_18:[a-z][0-9]+]],zero,18 
+  // CHECK-NEXT: addiw [[VAL_19:[a-z][0-9]+]],zero,19 
+  // CHECK-NEXT: addiw [[VAL_20:[a-z][0-9]+]],zero,20 
+  // CHECK-NEXT: addiw [[VAL_21:[a-z][0-9]+]],zero,21 
+  // CHECK-NEXT: addiw [[VAL_22:[a-z][0-9]+]],zero,22 
+  // CHECK-NEXT: addiw [[VAL_23:[a-z][0-9]+]],zero,23 
+  // CHECK-NEXT: addiw [[VAL_24:[a-z][0-9]+]],zero,24 
+  // CHECK-NEXT: addiw [[VAL_25:[a-z][0-9]+]],zero,25 
+  // CHECK-NEXT: addiw [[VAL_26:[a-z][0-9]+]],zero,26 
+  // CHECK-NEXT: addiw [[VAL_27:[a-z][0-9]+]],zero,27 
+  // CHECK-NEXT: addiw [[VAL_28:[a-z][0-9]+]],zero,28 
+  // CHECK-NEXT: addiw [[VAL_29:[a-z][0-9]+]],zero,29 
+  
+  // CHECK-NEXT: sd [[VAL_8]],0(sp)
+  // CHECK-NEXT: sd [[VAL_9]],8(sp)
+  // CHECK-NEXT: sd [[VAL_10]],16(sp)
+  // CHECK-NEXT: sd [[VAL_11]],24(sp)
+  // CHECK-NEXT: sd [[VAL_12]],32(sp)
+  // CHECK-NEXT: sd [[VAL_13]],40(sp)
+  // CHECK-NEXT: sd [[VAL_14]],48(sp)
+  // CHECK-NEXT: sd [[VAL_15]],56(sp)
+  // CHECK-NEXT: sd [[VAL_16]],64(sp)
+  // CHECK-NEXT: sd [[VAL_17]],72(sp)
+  // CHECK-NEXT: sd [[VAL_18]],80(sp)
+  // CHECK-NEXT: sd [[VAL_19]],88(sp)
+  // CHECK-NEXT: sd [[VAL_20]],96(sp)
+  // CHECK-NEXT: sd [[VAL_21]],104(sp)
+  // CHECK-NEXT: sd [[VAL_22]],112(sp)
+  // CHECK-NEXT: sd [[VAL_23]],120(sp)
+  // CHECK-NEXT: sd [[VAL_24]],128(sp)
+  // CHECK-NEXT: sd [[VAL_25]],136(sp)
+  // CHECK-NEXT: sd [[VAL_26]],144(sp)
+  // CHECK-NEXT: sd [[VAL_27]],152(sp)
+  // CHECK-NEXT: sd [[VAL_28]],160(sp)
+  // CHECK-NEXT: sd [[VAL_29]],168(sp)
+
+  // CHECK-NEXT: lw a3,284(sp)
+  // CHECK-NEXT: lw a4,288(sp)
+  // CHECK-NEXT: mv a5,[[VAL_5]]
+  // CHECK-NEXT: mv a6,[[VAL_6]]
+  // CHECK-NEXT: mv a7,[[VAL_7]]
+  // CHECK-NEXT: lw a0,272(sp)
+  // CHECK-NEXT: lw a1,276(sp)
+  // CHECK-NEXT: lw a2,280(sp)
+  %b0:i0:i32 = call @test_callee:[ret:i32 params:(i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32)]*(0:i32, 1:i32, 2:i32, 3:i32, 4:i32, 5:i32, 6:i32, 7:i32, 8:i32, 9:i32, 10:i32, 11:i32, 12:i32, 13:i32, 14:i32, 15:i32, 16:i32, 17:i32, 18:i32, 19:i32, 20:i32, 21:i32, 22:i32, 23:i32, 24:i32, 25:i32, 26:i32, 27:i32, 28:i32, 29:i32)
+  // CHECK-NEXT: call test_callee
+
+  ret %b0:i0:i32
+  // restore callee-saved registers
+  // CHECK-NEXT: ld s0,176(sp)
+  // CHECK-NEXT: ld s1,184(sp)
+  // CHECK-NEXT: ld s2,192(sp)
+  // CHECK-NEXT: ld s3,200(sp)
+  // CHECK-NEXT: ld s4,208(sp)
+  // CHECK-NEXT: ld s5,216(sp)
+  // CHECK-NEXT: ld s6,224(sp)
+  // CHECK-NEXT: ld s7,232(sp)
+  // CHECK-NEXT: ld s8,240(sp)
+  // CHECK-NEXT: ld s9,248(sp)
+  // CHECK-NEXT: ld s10,256(sp)
+  // CHECK-NEXT: ld s11,264(sp)
+
+  // CHECK-NEXT: ld ra,292(sp)
+  // CHECK-NEXT: addi sp,sp,300
+}
+
+
+////// main.c
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+
+int test_callee(
+  int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9,
+  int a10, int a11, int a12, int a13, int a14, int a15, int a16, int a17, int a18, int a19,
+  int a20, int a21, int a22, int a23, int a24, int a25, int a26, int a27, int a28, int a29
+) {
+  return a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 
+        + a16 + a17 + a18 + a19 + a20 + a21 + a22 + a23 + a24 + a25 + a26 + a27 + a28 + a29;
+}
+
+extern int test_caller(
+  int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9,
+  int a10, int a11, int a12, int a13, int a14, int a15, int a16, int a17, int a18, int a19,
+  int a20, int a21, int a22, int a23, int a24, int a25, int a26, int a27, int a28, int a29
+);
+
+int main() {
+  int result = test_caller(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  printf("result: %d\n", result);
+  // RESULT: result: 435
+  return 0;
+}
+

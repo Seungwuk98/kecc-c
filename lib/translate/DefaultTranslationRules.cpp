@@ -1556,6 +1556,8 @@ class FunctionArgTranslationRule
 public:
   FunctionArgTranslationRule() {}
 
+  bool spillActively() const override { return true; }
+
   utils::LogicalResult translate(as::AsmBuilder &builder,
                                  FunctionTranslater &translater,
                                  ir::inst::FunctionArgument inst) override {

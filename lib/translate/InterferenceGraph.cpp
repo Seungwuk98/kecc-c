@@ -57,6 +57,11 @@ void InterferenceGraphBuilder::build() {
       for (LiveRange otherLR : funcArgs) {
         insert(liveRange, otherLR);
       }
+      if (spillAnalysis &&
+          spillAnalysis->getSpillInfo().spilled.contains(liveRange)) {
+        continue;
+      }
+
       funcArgs.emplace_back(liveRange);
     }
   }
@@ -128,8 +133,8 @@ void InterferenceGraphBuilder::build() {
           liveRange = liveRangeAnalysis->getLiveRange(func, operand);
           if (spillAnalysis &&
               spillAnalysis->getSpillInfo().spilled.contains(liveRange)) {
-            assert(!inst->hasTrait<ir::CallLike>() &&
-                   "Spilled live range should not be used in call-like "
+            assert(inst->hasTrait<ir::CallLike>() &&
+                   "Spilled live range should be used in call-like "
                    "instructions");
             continue;
           }
