@@ -1,0 +1,103 @@
+// RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
+
+// CHECK: .globl test
+// CHECK-NEXT: .align 1
+// CHECK-NEXT: .type test, @function
+fun unit @test(i32*, f32*, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32 /* int memory arg start */, f32, i32, f32, i32, f32 /* float memory arg start*/, i32, f32) {
+// CHECK-NEXT: test:
+init:
+  bid: b0
+  allocations:
+  // CHECK-NEXT: lw [[I_8:[a-z][0-9]+]],0(sp)
+  // CHECK-NEXT: lw [[I_9:[a-z][0-9]+]],8(sp)
+  // CHECK-NEXT: lw [[I_10:[a-z][0-9]+]],16(sp)
+  // CHECK-NEXT: flw [[F_8:f[a-z][0-9]+]],24(sp)
+  // CHECK-NEXT: lw [[I_11:[a-z][0-9]+]],32(sp)
+  // CHECK-NEXT: flw [[F_9:f[a-z][0-9]+]],40(sp)
+
+block b0:
+// CHECK-LABEL: .test_L0:
+  %b0:p0:i32* // a0
+  %b0:p1:f32* // a1
+  %b0:p2:i32  // a2
+  %b0:p3:f32  // fa0
+  %b0:p4:i32  // a3
+  %b0:p5:f32  // fa1
+  %b0:p6:i32  // a4
+  %b0:p7:f32  // fa2
+  %b0:p8:i32  // a5
+  %b0:p9:f32  // fa3
+  %b0:p10:i32 // a6
+  %b0:p11:f32 // fa4
+  %b0:p12:i32 // a7
+  %b0:p13:f32 // fa5
+  %b0:p14:i32 // 0(sp)
+  %b0:p15:f32 // fa6
+  %b0:p16:i32 // 8(sp)
+  %b0:p17:f32 // fa7
+  %b0:p18:i32 // 16(sp)
+  %b0:p19:f32 // 24(sp) 
+  %b0:p20:i32 // 32(sp)
+  %b0:p21:f32 // 40(sp)
+
+  %b0:i0:i32 = add %b0:p2:i32 %b0:p4:i32
+  // CHECK-NEXT: addw [[ADD_0:[a-z][0-9]+]],a2,a3
+  %b0:i1:i32 = add %b0:i0:i32 %b0:p6:i32
+  // CHECK-NEXT: addw [[ADD_1:[a-z][0-9]+]],[[ADD_0]],a4
+  %b0:i2:i32 = add %b0:i1:i32 %b0:p8:i32
+  // CHECK-NEXT: addw [[ADD_2:[a-z][0-9]+]],[[ADD_1]],a5
+  %b0:i3:i32 = add %b0:i2:i32 %b0:p10:i32
+  // CHECK-NEXT: addw [[ADD_3:[a-z][0-9]+]],[[ADD_2]],a6
+  %b0:i4:i32 = add %b0:i3:i32 %b0:p12:i32
+  // CHECK-NEXT: addw [[ADD_4:[a-z][0-9]+]],[[ADD_3]],a7
+  %b0:i5:i32 = add %b0:i4:i32 %b0:p14:i32
+  // CHECK-NEXT: addw [[ADD_5:[a-z][0-9]+]],[[ADD_4]],[[I_8]]
+  %b0:i6:i32 = add %b0:i5:i32 %b0:p16:i32
+  // CHECK-NEXT: addw [[ADD_6:[a-z][0-9]+]],[[ADD_5]],[[I_9]]
+  %b0:i7:i32 = add %b0:i6:i32 %b0:p18:i32
+  // CHECK-NEXT: addw [[ADD_7:[a-z][0-9]+]],[[ADD_6]],[[I_10]]
+  %b0:i8:i32 = add %b0:i7:i32 %b0:p20:i32
+  // CHECK-NEXT: addw [[ADD_8:[a-z][0-9]+]],[[ADD_7]],[[I_11]]
+
+  %b0:i9:f32 = add %b0:p3:f32 %b0:p5:f32
+  // CHECK-NEXT: fadd.s [[FADD_0:f[a-z][0-9]+]],fa0,fa1
+  %b0:i10:f32 = add %b0:i9:f32 %b0:p7:f32
+  // CHECK-NEXT: fadd.s [[FADD_1:f[a-z][0-9]+]],[[FADD_0]],fa2
+  %b0:i11:f32 = add %b0:i10:f32 %b0:p9:f32
+  // CHECK-NEXT: fadd.s [[FADD_2:f[a-z][0-9]+]],[[FADD_1]],fa3
+  %b0:i12:f32 = add %b0:i11:f32 %b0:p11:f32
+  // CHECK-NEXT: fadd.s [[FADD_3:f[a-z][0-9]+]],[[FADD_2]],fa4
+  %b0:i13:f32 = add %b0:i12:f32 %b0:p13:f32
+  // CHECK-NEXT: fadd.s [[FADD_4:f[a-z][0-9]+]],[[FADD_3]],fa5
+  %b0:i14:f32 = add %b0:i13:f32 %b0:p15:f32
+  // CHECK-NEXT: fadd.s [[FADD_5:f[a-z][0-9]+]],[[FADD_4]],fa6
+  %b0:i15:f32 = add %b0:i14:f32 %b0:p17:f32
+  // CHECK-NEXT: fadd.s [[FADD_6:f[a-z][0-9]+]],[[FADD_5]],fa7
+  %b0:i16:f32 = add %b0:i15:f32 %b0:p19:f32
+  // CHECK-NEXT: fadd.s [[FADD_7:f[a-z][0-9]+]],[[FADD_6]],[[F_8]]
+  %b0:i17:f32 = add %b0:i16:f32 %b0:p21:f32
+  // CHECK-NEXT: fadd.s [[FADD_8:f[a-z][0-9]+]],[[FADD_7]],[[F_9]]
+
+  %b0:i18:unit = store %b0:i8:i32 %b0:p0:i32*
+  // CHECK-NEXT: sw [[ADD_8]],0(a0)
+  %b0:i19:unit = store %b0:i17:f32 %b0:p1:f32*
+  // CHECK-NEXT: fsw [[FADD_8]],0(a1)
+  ret
+  // CHECK-NEXT: ret
+}
+
+//////////////// main.c 
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
+#include <stdio.h>
+
+extern void test(int*, float*, int, float, int, float, int, float, int, float, int, float, int, float, int, float, int, float, int, float, int, float);
+
+int main() {
+  int result_int;
+  float result_float;
+  test(&result_int, &result_float, 0, 0.0, 1, 0.1, 2, 0.2, 3, 0.3, 4, 0.4, 5, 0.5, 6, 0.6, 7, 0.7, 8, 0.8, 9, 0.9);
+
+  printf("int:%d, float:%f\n", result_int, result_float);
+  // RESULT: int:45, float:4.500000
+  return 0;
+}

@@ -1,62 +1,111 @@
 // RUN: kecc-test-executor %s --dump-source=0 | kecc-translate | FileCheck %s
 
-// CHECK: .globl test
+fun unit @test_callee(i32*, f32*, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32)
+
+// CHECK: .globl test_caller
 // CHECK-NEXT: .align 1
-// CHECK-NEXT: .type test, @function
-fun i32 @test (i32, i32, i32, i32, i32, i32, i32, i32, i32, i32) {
-// CHECK-NEXT: test
+// CHECK-NEXT: .type test_caller, @function
+fun unit @test_caller(i32*, f32*) { 
+// CHECK-NEXT: test_caller:
 init:
   bid: b0
   allocations:
-  // CHECK-NEXT: lw [[ARG_8:[a-z][0-9]+]],0(sp)
-  // CHECK-NEXT: lw [[ARG_9:[a-z][0-9]+]],8(sp)
+  // CHECK-NEXT: addi sp,sp,-56
+  // CHECK-NEXT: sd ra,48(sp)
 
 block b0:
-// CHECK-LABEL: .test_L0:
-  %b0:p0:i32
-  %b0:p1:i32
-  %b0:p2:i32
-  %b0:p3:i32
-  %b0:p4:i32
-  %b0:p5:i32
-  %b0:p6:i32
-  %b0:p7:i32
-  %b0:p8:i32
-  %b0:p9:i32
+// CHECK-LABEL: .test_caller_L0:
+  %b0:p0:i32*
+  %b0:p1:f32*
 
-  %b0:i0:i32 = add %b0:p0:i32 %b0:p1:i32
-  // CHECK-NEXT: addw [[T0:[a-z][0-9]+]],a0,a1
-  %b0:i1:i32 = add %b0:p2:i32 %b0:p3:i32
-  // CHECK-NEXT: addw [[T1:[a-z][0-9]+]],a2,a3
-  %b0:i2:i32 = add %b0:p4:i32 %b0:p5:i32
-  // CHECK-NEXT: addw [[T2:[a-z][0-9]+]],a4,a5
-  %b0:i3:i32 = add %b0:p6:i32 %b0:p7:i32
-  // CHECK-NEXT: addw [[T3:[a-z][0-9]+]],a6,a7
-  %b0:i4:i32 = add %b0:p8:i32 %b0:p9:i32
-  // CHECK-NEXT: addw [[T4:[a-z][0-9]+]],[[ARG_8]],[[ARG_9]]
+  // CHECK-NEXT: addiw a2,zero,0
+  // CHECK-NEXT: fmv.w.x fa0,zero
 
-  %b0:i5:i32 = add %b0:i0:i32 %b0:i1:i32
-  // CHECK-NEXT: addw [[T5:[a-z][0-9]+]],[[T0]],[[T1]]
-  %b0:i6:i32 = add %b0:i2:i32 %b0:i3:i32
-  // CHECK-NEXT: addw [[T6:[a-z][0-9]+]],[[T2]],[[T3]]
-  %b0:i7:i32 = add %b0:i4:i32 %b0:i5:i32
-  // CHECK-NEXT: addw [[T7:[a-z][0-9]+]],[[T4]],[[T5]] 
-  %b0:i8:i32 = add %b0:i6:i32 %b0:i7:i32
-  // CHECK-NEXT: addw a0,[[T6]],[[T7]]
+  // CHECK-NEXT: addiw a3,zero,1
+  // CHECK-NEXT: lui t0,253133
+  // CHECK-NEXT: addiw t0,t0,-819
+  // CHECK-NEXT: fmv.w.x fa1,t0
 
-  ret %b0:i8:i32
-  // CHECK-NEXT: ret
+
+  // CHECK-NEXT: addiw a4,zero,2
+  // CHECK-NEXT: lui t0,255181
+  // CHECK-NEXT: addiw t0,t0,-819
+  // CHECK-NEXT: fmv.w.x fa2,t0
+
+  
+  // CHECK-NEXT: addiw a5,zero,3
+  // CHECK-NEXT: lui t0,256410
+  // CHECK-NEXT: addiw t0,t0,-1638
+  // CHECK-NEXT: fmv.w.x fa3,t0
+
+  
+  // CHECK-NEXT: addiw a6,zero,4
+  // CHECK-NEXT: lui t0,257229
+  // CHECK-NEXT: addiw t0,t0,-819
+  // CHECK-NEXT: fmv.w.x fa4,t0
+
+
+  // CHECK-NEXT: addiw a7,zero,5
+  // CHECK-NEXT: lui t0,258048
+  // CHECK-NEXT: fmv.w.x fa5,t0
+
+
+  // CHECK-NEXT: addiw [[A8:[a-z][0-9]+]],zero,6
+  // CHECK-NEXT: lui t0,258458
+  // CHECK-NEXT: addiw t0,t0,-1638
+  // CHECK-NEXT: fmv.w.x fa6,t0
+
+
+  // CHECK-NEXT: addiw [[A9:[a-z][0-9]+]],zero,7
+  // CHECK-NEXT: lui t0,258867
+  // CHECK-NEXT: addiw t0,t0,819
+  // CHECK-NEXT: fmv.w.x fa7,t0
+
+
+  // CHECK-NEXT: addiw [[A10:[a-z][0-9]+]],zero,8
+  // CHECK-NEXT: lui t0,259277
+  // CHECK-NEXT: addiw t0,t0,-819
+  // CHECK-NEXT: fmv.w.x [[FA8:f[a-z][0-9]+]],t0
+
+  
+  // CHECK-NEXT: addiw [[A11:[a-z][0-9]+]],zero,9
+  // CHECK-NEXT: lui t0,259686
+  // CHECK-NEXT: addiw t0,t0,1638
+  // CHECK-NEXT: fmv.w.x [[FA9:f[a-z][0-9]+]],t0
+
+  // CHECK-NEXT: sd [[A8]],0(sp)
+  // CHECK-NEXT: sd [[A9]],8(sp)
+  // CHECK-NEXT: sd [[A10]],16(sp)
+  // CHECK-NEXT: sd [[A11]],32(sp)
+  // CHECK-NEXT: fsd [[FA8]],24(sp)
+  // CHECK-NEXT: fsd [[FA9]],40(sp)
+  %b0:i0:unit = call @test_callee:[ret:unit params:(i32*, f32*, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32, i32, f32)]*(%b0:p0:i32*, %b0:p1:f32*, 0:i32, 0.0:f32, 1:i32, 0.1:f32, 2:i32, 0.2:f32, 3:i32, 0.3:f32, 4:i32, 0.4:f32, 5:i32, 0.5:f32, 6:i32, 0.6:f32, 7:i32, 0.7:f32, 8:i32, 0.8:f32, 9:i32, 0.9:f32)
+  // CHECK-NEXT: call test_callee
+
+  // CHECK-NEXT: ld ra,48(sp)
+  // CHECK-NEXT: addi sp,sp,56
+  ret
 }
 
-////// main.c 
+
+/////// main.c 
 // RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT
 #include <stdio.h>
 
-extern int test(int, int, int, int, int, int, int, int, int, int);
+void test_callee(int* result_int, float* result_float, int i0, float f0, int i1, float f1, int i2, float f2, int i3, float f3, int i4, float f4, int i5, float f5, int i6, float f6, int i7, float f7, int i8, float f8, int i9, float f9) {
+  *result_int = i0 + i1 + i2 + i3 + i4 + i5 + i6 + i7 + i8 + i9;
+  *result_float = f0 + f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9;
+}
+
+extern void test_caller(int*, float*);
 
 int main() {
-  int result = test(0, 1, 2, 3, 4, 5, 6, 7, 8, 9); 
-  printf("result: %d\n", result);
-  // RESULT: result: 45
+  int result_int;
+  float result_float;
+  test_caller(&result_int, &result_float); 
+  printf("int:%d, float:%f\n", result_int, result_float);
+  // RESULT: int:45, float:4.5
   return 0;
 }
+
+

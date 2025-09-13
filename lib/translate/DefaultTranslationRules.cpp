@@ -959,10 +959,10 @@ static void callPreparation(as::AsmBuilder &builder,
       if (floatArgRegs.size() >= translater.getFloatArgRegisters().size()) {
         auto sp = stack->callArgument(argMemorySize);
         argMemorySize +=
-            translater.getModule()->getContext()->getArchitectureBitSize();
-        auto anonReg =
-            translater.createAnonRegister(as::RegisterType::FloatingPoint, sp,
-                                          as::DataSize::doubleWord(), false);
+            translater.getModule()->getContext()->getArchitectureByteSize();
+        auto anonReg = translater.createAnonRegister(
+            as::RegisterType::FloatingPoint, sp,
+            as::DataSize::doublePrecision(), false);
         floatArgRegs.emplace_back(DataSpace::memory(anonReg));
       } else {
         floatArgRegs.emplace_back(DataSpace::value(
@@ -974,7 +974,7 @@ static void callPreparation(as::AsmBuilder &builder,
         // argument memory
         auto sp = stack->callArgument(argMemorySize);
         argMemorySize +=
-            translater.getModule()->getContext()->getArchitectureBitSize();
+            translater.getModule()->getContext()->getArchitectureByteSize();
         auto anonReg = translater.createAnonRegister(
             as::RegisterType::Integer, sp, as::DataSize::doubleWord(), false);
         intArgRegs.emplace_back(DataSpace::memory(anonReg));
