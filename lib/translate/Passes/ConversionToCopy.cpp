@@ -1,40 +1,44 @@
 #include "kecc/ir/IRAttributes.h"
 #include "kecc/ir/IRInstructions.h"
-#include "kecc/ir/IRTransforms.h"
 #include "kecc/ir/IRTypes.h"
 #include "kecc/ir/PatternMatch.h"
+#include "kecc/translate/IntermediateInsts.h"
+#include "kecc/translate/TranslatePasses.h"
 #include "kecc/utils/LogicalResult.h"
 
-namespace kecc::ir {
+namespace kecc::translate {
 
-Instruction createCopy(IRRewriter &rewriter, llvm::SMRange range, Value value,
-                       Type retType) {
+ir::Instruction createCopy(ir::IRRewriter &rewriter, llvm::SMRange range,
+                           ir::Value value, ir::Type retType) {
   if (value.isConstant()) {
     // create outline constant
-    return rewriter.create<inst::OutlineConstant>(range, value);
+    return rewriter.create<ir::inst::OutlineConstant>(range, value);
   }
 
-  return rewriter.create<inst::Copy>(range, value, retType);
+  return rewriter.create<translate::inst::Copy>(range, value, retType);
 }
 
-class BinaryCopyPattern : public InstPattern<inst::Binary> {
+class BinaryCopyPattern : public ir::InstPattern<ir::inst::Binary> {
 public:
   BinaryCopyPattern() {};
 
-  utils::LogicalResult matchAdd(IRRewriter &rewriter, inst::Binary binary) {
+  utils::LogicalResult matchAdd(ir::IRRewriter &rewriter,
+                                ir::inst::Binary binary) {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
     auto type = binary.getLhs().getType();
 
-    auto rewriteAdd = [&](inst::Constant constant, Value other) -> bool {
-      if (type.isa<FloatT>()) {
-        auto value = constant.getValue().cast<ConstantFloatAttr>().getValue();
+    auto rewriteAdd = [&](ir::inst::Constant constant,
+                          ir::Value other) -> bool {
+      if (type.isa<ir::FloatT>()) {
+        auto value =
+            constant.getValue().cast<ir::ConstantFloatAttr>().getValue();
         if (value.isZero()) {
           rewriter.replaceInst(binary.getStorage(), other);
           return true;
         }
-      } else if (type.isa<IntT>()) {
-        auto value = constant.getValue().cast<ConstantIntAttr>().getValue();
+      } else if (type.isa<ir::IntT>()) {
+        auto value = constant.getValue().cast<ir::ConstantIntAttr>().getValue();
         if (value == 0) {
           rewriter.replaceInst(binary.getStorage(), other);
           return true;
@@ -44,14 +48,14 @@ public:
     };
 
     if (lhs.isConstant()) {
-      auto constant = lhs.getDefiningInst<inst::Constant>();
+      auto constant = lhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteAdd(constant, rhs);
       if (replaced)
         return utils::LogicalResult::success();
     }
 
     if (rhs.isConstant()) {
-      auto constant = rhs.getDefiningInst<inst::Constant>();
+      auto constant = rhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteAdd(constant, lhs);
       if (replaced)
         return utils::LogicalResult::success();
@@ -60,21 +64,23 @@ public:
     return utils::LogicalResult::failure();
   }
 
-  utils::LogicalResult matchSub(IRRewriter &rewriter, inst::Binary binary) {
+  utils::LogicalResult matchSub(ir::IRRewriter &rewriter,
+                                ir::inst::Binary binary) {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
     auto type = binary.getLhs().getType();
 
     if (rhs.isConstant()) {
-      auto constant = rhs.getDefiningInst<inst::Constant>();
-      if (type.isa<FloatT>()) {
-        auto value = constant.getValue().cast<ConstantFloatAttr>().getValue();
+      auto constant = rhs.getDefiningInst<ir::inst::Constant>();
+      if (type.isa<ir::FloatT>()) {
+        auto value =
+            constant.getValue().cast<ir::ConstantFloatAttr>().getValue();
         if (value.isZero()) {
           rewriter.replaceInst(binary.getStorage(), lhs);
           return utils::LogicalResult::success();
         }
-      } else if (type.isa<IntT>()) {
-        auto value = constant.getValue().cast<ConstantIntAttr>().getValue();
+      } else if (type.isa<ir::IntT>()) {
+        auto value = constant.getValue().cast<ir::ConstantIntAttr>().getValue();
         if (value == 0) {
           rewriter.replaceInst(binary.getStorage(), lhs);
           return utils::LogicalResult::success();
@@ -84,20 +90,23 @@ public:
     return utils::LogicalResult::failure();
   }
 
-  utils::LogicalResult matchMul(IRRewriter &rewriter, inst::Binary binary) {
+  utils::LogicalResult matchMul(ir::IRRewriter &rewriter,
+                                ir::inst::Binary binary) {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
     auto type = binary.getLhs().getType();
 
-    auto rewriteMul = [&](inst::Constant constant, Value other) -> bool {
-      if (type.isa<FloatT>()) {
-        auto value = constant.getValue().cast<ConstantFloatAttr>().getValue();
+    auto rewriteMul = [&](ir::inst::Constant constant,
+                          ir::Value other) -> bool {
+      if (type.isa<ir::FloatT>()) {
+        auto value =
+            constant.getValue().cast<ir::ConstantFloatAttr>().getValue();
         if (value.isExactlyValue(1.0)) {
           rewriter.replaceInst(binary.getStorage(), other);
           return true;
         }
-      } else if (type.isa<IntT>()) {
-        auto value = constant.getValue().cast<ConstantIntAttr>().getValue();
+      } else if (type.isa<ir::IntT>()) {
+        auto value = constant.getValue().cast<ir::ConstantIntAttr>().getValue();
         if (value == 1) {
           rewriter.replaceInst(binary.getStorage(), other);
           return true;
@@ -107,14 +116,14 @@ public:
     };
 
     if (lhs.isConstant()) {
-      auto constant = lhs.getDefiningInst<inst::Constant>();
+      auto constant = lhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteMul(constant, rhs);
       if (replaced)
         return utils::LogicalResult::success();
     }
 
     if (rhs.isConstant()) {
-      auto constant = rhs.getDefiningInst<inst::Constant>();
+      auto constant = rhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteMul(constant, lhs);
       if (replaced)
         return utils::LogicalResult::success();
@@ -122,21 +131,23 @@ public:
     return utils::LogicalResult::failure();
   }
 
-  utils::LogicalResult matchDiv(IRRewriter &rewriter, inst::Binary binary) {
+  utils::LogicalResult matchDiv(ir::IRRewriter &rewriter,
+                                ir::inst::Binary binary) {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
     auto type = binary.getLhs().getType();
 
     if (rhs.isConstant()) {
-      auto constant = rhs.getDefiningInst<inst::Constant>();
-      if (type.isa<FloatT>()) {
-        auto value = constant.getValue().cast<ConstantFloatAttr>().getValue();
+      auto constant = rhs.getDefiningInst<ir::inst::Constant>();
+      if (type.isa<ir::FloatT>()) {
+        auto value =
+            constant.getValue().cast<ir::ConstantFloatAttr>().getValue();
         if (value.isExactlyValue(1.0)) {
           rewriter.replaceInst(binary.getStorage(), lhs);
           return utils::LogicalResult::success();
         }
-      } else if (type.isa<IntT>()) {
-        auto value = constant.getValue().cast<ConstantIntAttr>().getValue();
+      } else if (type.isa<ir::IntT>()) {
+        auto value = constant.getValue().cast<ir::ConstantIntAttr>().getValue();
         if (value == 1) {
           rewriter.replaceInst(binary.getStorage(), lhs);
           return utils::LogicalResult::success();
@@ -146,15 +157,17 @@ public:
     return utils::LogicalResult::failure();
   }
 
-  utils::LogicalResult matchAnd(IRRewriter &rewriter, inst::Binary binary) {
+  utils::LogicalResult matchAnd(ir::IRRewriter &rewriter,
+                                ir::inst::Binary binary) {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
     auto type = binary.getLhs().getType();
 
-    auto rewriteAnd = [&](inst::Constant constant, Value other) -> bool {
-      if (type.isa<IntT>()) {
-        auto value = constant.getValue().cast<ConstantIntAttr>();
-        auto allOnes = ConstantIntAttr::get(
+    auto rewriteAnd = [&](ir::inst::Constant constant,
+                          ir::Value other) -> bool {
+      if (type.isa<ir::IntT>()) {
+        auto value = constant.getValue().cast<ir::ConstantIntAttr>();
+        auto allOnes = ir::ConstantIntAttr::get(
             type.getContext(), -1, value.getBitWidth(), value.isSigned());
         if (value == allOnes) {
           rewriter.replaceInst(binary.getStorage(), other);
@@ -165,14 +178,14 @@ public:
     };
 
     if (lhs.isConstant()) {
-      auto constant = lhs.getDefiningInst<inst::Constant>();
+      auto constant = lhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteAnd(constant, rhs);
       if (replaced)
         return utils::LogicalResult::success();
     }
 
     if (rhs.isConstant()) {
-      auto constant = rhs.getDefiningInst<inst::Constant>();
+      auto constant = rhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteAnd(constant, lhs);
       if (replaced)
         return utils::LogicalResult::success();
@@ -180,14 +193,15 @@ public:
     return utils::LogicalResult::failure();
   }
 
-  utils::LogicalResult matchOr(IRRewriter &rewriter, inst::Binary binary) {
+  utils::LogicalResult matchOr(ir::IRRewriter &rewriter,
+                               ir::inst::Binary binary) {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
     auto type = binary.getLhs().getType();
 
-    auto rewriteOr = [&](inst::Constant constant, Value other) -> bool {
-      if (type.isa<IntT>()) {
-        auto value = constant.getValue().cast<ConstantIntAttr>().getValue();
+    auto rewriteOr = [&](ir::inst::Constant constant, ir::Value other) -> bool {
+      if (type.isa<ir::IntT>()) {
+        auto value = constant.getValue().cast<ir::ConstantIntAttr>().getValue();
         if (value == 0) {
           rewriter.replaceInst(binary.getStorage(), other);
           return true;
@@ -197,14 +211,14 @@ public:
     };
 
     if (lhs.isConstant()) {
-      auto constant = lhs.getDefiningInst<inst::Constant>();
+      auto constant = lhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteOr(constant, rhs);
       if (replaced)
         return utils::LogicalResult::success();
     }
 
     if (rhs.isConstant()) {
-      auto constant = rhs.getDefiningInst<inst::Constant>();
+      auto constant = rhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteOr(constant, lhs);
       if (replaced)
         return utils::LogicalResult::success();
@@ -212,14 +226,16 @@ public:
     return utils::LogicalResult::failure();
   }
 
-  utils::LogicalResult matchXor(IRRewriter &rewriter, inst::Binary binary) {
+  utils::LogicalResult matchXor(ir::IRRewriter &rewriter,
+                                ir::inst::Binary binary) {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
     auto type = binary.getLhs().getType();
 
-    auto rewriteXor = [&](inst::Constant constant, Value other) -> bool {
-      if (type.isa<IntT>()) {
-        auto value = constant.getValue().cast<ConstantIntAttr>().getValue();
+    auto rewriteXor = [&](ir::inst::Constant constant,
+                          ir::Value other) -> bool {
+      if (type.isa<ir::IntT>()) {
+        auto value = constant.getValue().cast<ir::ConstantIntAttr>().getValue();
         if (value == 0) {
           rewriter.replaceInst(binary.getStorage(), other);
           return true;
@@ -229,14 +245,14 @@ public:
     };
 
     if (lhs.isConstant()) {
-      auto constant = lhs.getDefiningInst<inst::Constant>();
+      auto constant = lhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteXor(constant, rhs);
       if (replaced)
         return utils::LogicalResult::success();
     }
 
     if (rhs.isConstant()) {
-      auto constant = rhs.getDefiningInst<inst::Constant>();
+      auto constant = rhs.getDefiningInst<ir::inst::Constant>();
       auto replaced = rewriteXor(constant, lhs);
       if (replaced)
         return utils::LogicalResult::success();
@@ -245,8 +261,8 @@ public:
     return utils::LogicalResult::failure();
   }
 
-  utils::LogicalResult matchAndRewrite(IRRewriter &rewriter,
-                                       inst::Binary binary) override {
+  utils::LogicalResult matchAndRewrite(ir::IRRewriter &rewriter,
+                                       ir::inst::Binary binary) override {
     auto lhs = binary.getLhs();
     auto rhs = binary.getRhs();
 
@@ -257,19 +273,19 @@ public:
       return utils::LogicalResult::failure();
 
     switch (binary.getOpKind()) {
-    case inst::Binary::OpKind::Add:
+    case ir::inst::Binary::OpKind::Add:
       return matchAdd(rewriter, binary);
-    case inst::Binary::OpKind::Sub:
+    case ir::inst::Binary::OpKind::Sub:
       return matchSub(rewriter, binary);
-    case inst::Binary::OpKind::Mul:
+    case ir::inst::Binary::OpKind::Mul:
       return matchMul(rewriter, binary);
-    case inst::Binary::OpKind::Div:
+    case ir::inst::Binary::OpKind::Div:
       return matchDiv(rewriter, binary);
-    case inst::Binary::OpKind::BitAnd:
+    case ir::inst::Binary::OpKind::BitAnd:
       return matchAnd(rewriter, binary);
-    case inst::Binary::OpKind::BitOr:
+    case ir::inst::Binary::OpKind::BitOr:
       return matchOr(rewriter, binary);
-    case inst::Binary::OpKind::BitXor:
+    case ir::inst::Binary::OpKind::BitXor:
       return matchXor(rewriter, binary);
     default:
       return utils::LogicalResult::failure();
@@ -277,20 +293,20 @@ public:
   }
 };
 
-class TypeCastCopyPattern : public InstPattern<inst::TypeCast> {
+class TypeCastCopyPattern : public ir::InstPattern<ir::inst::TypeCast> {
 public:
   TypeCastCopyPattern() {};
 
-  utils::LogicalResult matchAndRewrite(IRRewriter &rewriter,
-                                       inst::TypeCast typeCast) override {
+  utils::LogicalResult matchAndRewrite(ir::IRRewriter &rewriter,
+                                       ir::inst::TypeCast typeCast) override {
     auto target = typeCast.getValue();
     if (target.getType() == typeCast.getType()) {
       rewriter.replaceInst(typeCast.getStorage(), target);
       return utils::LogicalResult::success();
     }
 
-    if (target.getType().isa<PointerT>() &&
-        typeCast.getType().isa<PointerT>()) {
+    if (target.getType().isa<ir::PointerT>() &&
+        typeCast.getType().isa<ir::PointerT>()) {
       auto copy = createCopy(rewriter, typeCast->getRange(), target,
                              typeCast.getType());
       rewriter.replaceInst(typeCast.getStorage(), copy->getResults());
@@ -300,17 +316,17 @@ public:
   }
 };
 
-class GepCopyPattern : public InstPattern<inst::Gep> {
+class GepCopyPattern : public ir::InstPattern<ir::inst::Gep> {
 public:
   GepCopyPattern() {};
 
-  utils::LogicalResult matchAndRewrite(IRRewriter &rewriter,
-                                       inst::Gep gep) override {
+  utils::LogicalResult matchAndRewrite(ir::IRRewriter &rewriter,
+                                       ir::inst::Gep gep) override {
     auto offset = gep.getOffset();
     if (offset.isConstant()) {
-      auto intValue = offset.getDefiningInst<inst::Constant>()
+      auto intValue = offset.getDefiningInst<ir::inst::Constant>()
                           .getValue()
-                          .cast<ConstantIntAttr>()
+                          .cast<ir::ConstantIntAttr>()
                           .getValue();
       if (!intValue) {
         if (gep.getType() == gep.getBasePointer().getType()) {
@@ -328,13 +344,13 @@ public:
   }
 };
 
-class UnaryCopyPattern : public InstPattern<inst::Unary> {
+class UnaryCopyPattern : public ir::InstPattern<ir::inst::Unary> {
 public:
   UnaryCopyPattern() {};
 
-  utils::LogicalResult matchAndRewrite(IRRewriter &rewriter,
-                                       inst::Unary unary) override {
-    if (unary.getOpKind() == inst::Unary::Plus) {
+  utils::LogicalResult matchAndRewrite(ir::IRRewriter &rewriter,
+                                       ir::inst::Unary unary) override {
+    if (unary.getOpKind() == ir::inst::Unary::Plus) {
       rewriter.replaceInst(unary.getStorage(), unary.getValue());
       return utils::LogicalResult::success();
     }
@@ -343,26 +359,26 @@ public:
   }
 };
 
-void ConversionToCopyPass::init(Module *module) {
-  if (!module->getContext()->isRegisteredInst<inst::Copy>()) {
-    module->getContext()->registerInst<inst::Copy>();
+void ConversionToCopyPass::init(ir::Module *module) {
+  if (!module->getContext()->isRegisteredInst<translate::inst::Copy>()) {
+    module->getContext()->registerInst<translate::inst::Copy>();
   }
 
-  if (!module->getContext()->isRegisteredInst<inst::OutlineConstant>()) {
-    module->getContext()->registerInst<inst::OutlineConstant>();
+  if (!module->getContext()->isRegisteredInst<ir::inst::OutlineConstant>()) {
+    module->getContext()->registerInst<ir::inst::OutlineConstant>();
   }
 }
 
-PassResult ConversionToCopyPass::run(Module *module) {
-  PatternSet patternSet;
+ir::PassResult ConversionToCopyPass::run(ir::Module *module) {
+  ir::PatternSet patternSet;
   patternSet.addPatterns<BinaryCopyPattern, UnaryCopyPattern, GepCopyPattern,
                          TypeCastCopyPattern>();
 
   auto result = applyPatternConversion(module, patternSet);
   if (!result.succeeded())
-    return PassResult::failure();
+    return ir::PassResult::failure();
 
-  return PassResult::success();
+  return ir::PassResult::success();
 }
 
-} // namespace kecc::ir
+} // namespace kecc::translate

@@ -4,6 +4,7 @@
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/IRTypes.h"
 #include "kecc/translate/IRTranslater.h"
+#include "kecc/translate/IntermediateInsts.h"
 #include "kecc/translate/TranslateContext.h"
 #include "kecc/utils/LogicalResult.h"
 
@@ -1567,13 +1568,14 @@ public:
   }
 };
 
-class CopyTranslationRule : public InstructionTranslationRule<ir::inst::Copy> {
+class CopyTranslationRule
+    : public InstructionTranslationRule<translate::inst::Copy> {
 public:
   CopyTranslationRule() {}
 
   utils::LogicalResult translate(as::AsmBuilder &builder,
                                  FunctionTranslater &translater,
-                                 ir::inst::Copy copy) override {
+                                 translate::inst::Copy copy) override {
     auto src = translater.getOperandRegister(&copy.getValueAsOperand());
     auto dst = translater.getRegister(copy);
 

@@ -499,6 +499,12 @@ struct VariadicResults : TraitBase<ConcreteType, VariadicResults> {
 template <typename ConcreteType>
 struct SideEffect : TraitBase<ConcreteType, SideEffect> {};
 
+template <typename ConcreteType>
+struct ReadMemory : TraitBase<ConcreteType, ReadMemory> {};
+
+template <typename ConcreteType>
+struct WriteMemory : TraitBase<ConcreteType, WriteMemory> {};
+
 template <typename ConcreteType> struct Pure : TraitBase<ConcreteType, Pure> {};
 
 template <typename ConcreteType>

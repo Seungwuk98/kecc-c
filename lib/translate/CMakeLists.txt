@@ -12,6 +12,7 @@ add_library(
   RegisterAllocation.cpp
   FunctionStack.cpp
   DefaultTranslationRules.cpp
+  IntermediateInsts.cpp
 )
 
 target_link_libraries(KeccTranslate
@@ -21,3 +22,5 @@ target_link_libraries(KeccTranslate
   KeccIR
   KeccASM
 )
+
+add_subdirectory(Passes)

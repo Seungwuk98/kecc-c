@@ -869,30 +869,6 @@ const Operand &MemCpy::getSizeAsOperand() const {
 Value MemCpy::Adaptor::getDest() const { return operands[0]; }
 Value MemCpy::Adaptor::getSrc() const { return operands[1]; }
 Value MemCpy::Adaptor::getSize() const { return operands[2]; }
-
-//============================================================================//
-/// Copy
-//============================================================================//
-
-void Copy::build(IRBuilder &builder, InstructionState &state, Value value,
-                 Type type) {
-  state.pushType(type);
-  state.pushOperand(value);
-}
-
-void Copy::printer(Copy op, IRPrintContext &context) {
-  context.printValue(op, true);
-  context.getOS() << " = copy ";
-  context.printOperand(op.getValueAsOperand());
-}
-
-Value Copy::getValue() const { return getValueAsOperand(); }
-const Operand &Copy::getValueAsOperand() const {
-  return this->getStorage()->getOperand(0);
-}
-
-Value Copy::Adaptor::getValue() const { return operands[0]; }
-
 void registerBuiltinInstructions(IRContext *context) {
   context->registerInst<Phi>();
   context->registerInst<inst::Nop>();

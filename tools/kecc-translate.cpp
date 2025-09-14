@@ -8,6 +8,7 @@
 #include "kecc/translate/IRTranslater.h"
 #include "kecc/translate/SpillAnalysis.h"
 #include "kecc/translate/TranslateContext.h"
+#include "kecc/translate/TranslatePasses.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -91,7 +92,7 @@ ir::PassResult runPasses(ir::Module *module) {
   pm.addPass<ir::CanonicalizeStruct>();
   pm.addPass<ir::FoldTypeCast>();
   pm.addPass<ir::InlineCallPass>();
-  pm.addPass<ir::ConversionToCopyPass>();
+  pm.addPass<translate::ConversionToCopyPass>();
   pm.addPass<ir::OutlineConstantPass>();
 
   pm.addPass<ir::OutlineMultipleResults>();
@@ -228,7 +229,7 @@ int main(int argc, const char **argv) {
   kecc::ir::registerPass<kecc::ir::CanonicalizeStruct>();
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
   kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
-  kecc::ir::registerPass<kecc::ir::ConversionToCopyPass>();
+  kecc::ir::registerPass<kecc::translate::ConversionToCopyPass>();
   kecc::ir::registerPass<kecc::ir::FoldTypeCast>();
 
   llvm::cl::ParseCommandLineOptions(argc, argv,

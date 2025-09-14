@@ -1,0 +1,51 @@
+// RUN: kecc-opt %s --inline-memory-inst | FileCheck %s
+struct X : {a:i32, b:i32, c:i32 }
+struct Y : {a:struct X, b: struct X, c: struct X}
+struct Z : {a:struct Y, b: struct Y, c: struct Y}
+
+var struct Z @global_var = {
+  {
+    {1, 2, 3}, {4, 5, 6}, {7, 8, 9}
+  }, 
+  {
+    {10, 11, 12}, {13, 14, 15}, {16, 17, 18}
+  }, 
+  {
+    {19, 20, 21}, {22, 23, 24}, {25, 26, 27}
+  }
+}
+
+fun i32 @main () {
+// CHECK: fun i32 @main ()
+init:
+  bid: b0
+  allocations:
+// CHECK: init:
+// CHECK-NEXT:   bid: b0
+// CHECK-NEXT:   allocations:
+
+block b0:
+// CHECK-LABEL: block b0:
+  %b0:i0:struct Y* = getelementptr @global_var:struct Z* offset 0:i64
+  // CHECK-NEXT: %b0:i0:struct Y* = getelementptr @global_var:struct Z* offset 0:i64
+  %b0:i1:struct X* = getelementptr %b0:i0:struct Y* offset 0:i64
+  // CHECK-NEXT: %b0:i1:struct X* = getelementptr @global_var:struct Z* offset 0:i64
+  %b0:i2:i32* = getelementptr %b0:i1:struct X* offset 0:i64
+  // CHECK-NEXT: %b0:i2:i32* = getelementptr @global_var:struct Z* offset 0:i64
+  %b0:i3:i32 = load %b0:i2:i32*
+  // CHECK-NEXT: %b0:i3:i32 = load @global_var:struct Z* offset 0
+  %b0:i4:i32 = add %b0:i3:i32 10:i32
+  // CHECK-NEXT: %b0:i4:i32 = add %b0:i3:i32 10:i32
+
+  %b0:i5:struct Y* = getelementptr @global_var:struct Z* offset 36:i64
+  // CHECK-NEXT: %b0:i5:struct Y* = getelementptr @global_var:struct Z* offset 36:i64
+  %b0:i6:struct X* = getelementptr %b0:i5:struct Y* offset 24:i64
+  // CHECK-NEXT: %b0:i6:struct X* = getelementptr @global_var:struct Z* offset 60:i64
+  %b0:i7:i32* = getelementptr %b0:i6:struct X* offset 6:i64
+  // CHECK-NEXT: %b0:i7:i32* = getelementptr @global_var:struct Z* offset 66:i64
+
+  %b0:i8:unit = store %b0:i4:i32 %b0:i7:i32*
+  // CHECK-NEXT: store %b0:i4:i32 @global_var:struct Z* offset 66
+  ret 0:i32
+  // CHECK-NEXT: ret 0:i32
+}

@@ -23,7 +23,8 @@ public:
   };
 };
 
-class Load : public InstructionTemplate<Load, Instruction, OneResult> {
+class Load
+    : public InstructionTemplate<Load, Instruction, OneResult, ReadMemory> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value ptr);
@@ -42,7 +43,7 @@ public:
 };
 
 class Store : public InstructionTemplate<Store, Instruction, NOperand<2>::Trait,
-                                         OneResult, SideEffect> {
+                                         OneResult, SideEffect, WriteMemory> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value value,
@@ -502,27 +503,6 @@ public:
     Value getDest() const;
     Value getSrc() const;
     Value getSize() const;
-
-    llvm::ArrayRef<Value> operands;
-  };
-};
-
-class Copy : public InstructionTemplate<Copy, Instruction, OneResult, Pure> {
-public:
-  using Base::Base;
-  static void build(IRBuilder &builder, InstructionState &state, Value value,
-                    Type type);
-
-  Value getValue() const;
-  const Operand &getValueAsOperand() const;
-
-  static void printer(Copy op, IRPrintContext &context);
-
-  struct Adaptor {
-    Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
-        : operands(operands) {}
-
-    Value getValue() const;
 
     llvm::ArrayRef<Value> operands;
   };

@@ -8,6 +8,7 @@ target_link_libraries(
   KeccIRAnalyses
   KeccIRPasses
   KeccTranslate
+  KeccTranslatePasses
 )
 
 add_executable(kecc-translate kecc-translate.cpp)
@@ -22,6 +23,7 @@ target_link_libraries(
   KeccIRPasses
   KeccASM
   KeccTranslate
+  KeccTranslatePasses
 )
 
 add_executable(kecc-test-executor kecc-test-executor.cpp)
@@ -47,5 +49,6 @@ target_link_libraries(
   KeccIRPasses
   KeccASM
   KeccTranslate
+  KeccTranslatePasses
 )
 

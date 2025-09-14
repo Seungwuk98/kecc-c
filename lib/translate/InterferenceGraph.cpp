@@ -4,6 +4,7 @@
 #include "kecc/ir/IRTypes.h"
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/WalkSupport.h"
+#include "kecc/translate/IntermediateInsts.h"
 #include "kecc/translate/LiveRangeAnalyses.h"
 #include "kecc/translate/SpillAnalysis.h"
 #include "llvm/ADT/STLExtras.h"
@@ -88,7 +89,7 @@ void InterferenceGraphBuilder::build() {
       }
 
       for (LiveRange lr : liveRanges) {
-        if (auto copy = inst->getDefiningInst<ir::inst::Copy>()) {
+        if (auto copy = inst->getDefiningInst<translate::inst::Copy>()) {
           LiveRange target;
           if (spillAnalysis && spillAnalysis->getSpillInfo().restore.contains(
                                    &copy.getValueAsOperand())) {
