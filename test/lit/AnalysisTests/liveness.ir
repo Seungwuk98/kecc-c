@@ -139,20 +139,20 @@ block b1000:
 }
 
 // LR: Live Range Analysis dump:
-// LR: fun i32 @test_func () {
+// LR-NEXT: fun i32 @test_func () {
 // LR-NEXT: init:
 // LR-NEXT:   bid: b1001
 // LR-NEXT:   allocations:
 
 // LR-LABEL: block b1001:
 // LR-NEXT:   L7:i1 = outline 0:i1
-// LR-NEXT:   L55 = L0
-// LR-NEXT:   L56 = L1
-// LR-NEXT:   L57 = L2
-// LR-NEXT:   L58 = L3
-// LR-NEXT:   L59 = L4
-// LR-NEXT:   L60 = L5
-// LR-NEXT:   L61 = L6
+// LR-NEXT:   L52 = L0
+// LR-NEXT:   L53 = L1
+// LR-NEXT:   L54 = L2
+// LR-NEXT:   L55 = L3
+// LR-NEXT:   L56 = L4
+// LR-NEXT:   L57 = L5
+// LR-NEXT:   L58 = L6
 // LR-NEXT:   br L7:i1, b0, b1000
 
 // LR-LABEL: block b0:
@@ -160,13 +160,13 @@ block b1000:
 // LR-NEXT:   L9:i32:i = add 0:i32 L8:i32
 // LR-NEXT:   L10:i1 = outline 0:i1
 // LR-NEXT:   L11:i32 = outline 0:i32
+// LR-NEXT:   L52 = L11
+// LR-NEXT:   L53 = L11
+// LR-NEXT:   L54 = L11
 // LR-NEXT:   L55 = L11
 // LR-NEXT:   L56 = L11
 // LR-NEXT:   L57 = L11
-// LR-NEXT:   L58 = L11
-// LR-NEXT:   L59 = L11
-// LR-NEXT:   L60 = L11
-// LR-NEXT:   L61 = L9
+// LR-NEXT:   L58 = L9
 // LR-NEXT:   br L10:i1, b1, b1000
 
 // LR-LABEL: block b1:
@@ -175,135 +175,131 @@ block b1000:
 // LR-NEXT:   L14:i32 = outline 1:i32
 // LR-NEXT:   L15:i32:c = add 0:i32 L14:i32
 // LR-NEXT:   L16:i1 = outline 0:i1
-// LR-NEXT:   L17:i1 = outline 1:i1
-// LR-NEXT:   L18:i32 = outline 0:i32
-// LR-NEXT:   L55 = L13
-// LR-NEXT:   L56 = L18
-// LR-NEXT:   L57 = L15
-// LR-NEXT:   L58 = L18
-// LR-NEXT:   L59 = L18
-// LR-NEXT:   L60 = L18
-// LR-NEXT:   L61 = L18
+// LR-NEXT:   L17:i32 = outline 0:i32
+// LR-NEXT:   L52 = L13
+// LR-NEXT:   L53 = L17
+// LR-NEXT:   L54 = L15
+// LR-NEXT:   L55 = L17
+// LR-NEXT:   L56 = L17
+// LR-NEXT:   L57 = L17
+// LR-NEXT:   L58 = L17
 // LR-NEXT:   switch L16:i1 default b1000 [
-// LR-NEXT:     L16:i1 b2
-// LR-NEXT:     L17:i1 b5
+// LR-NEXT:     0:i1 b2
+// LR-NEXT:     1:i1 b5
 // LR-NEXT:   ]
 
 // LR-LABEL: block b2:
-// LR-NEXT:   L19:i32 = outline 1:i32
-// LR-NEXT:   L20:i32:b = add 0:i32 L19:i32
-// LR-NEXT:   L21:i32 = outline 1:i32
-// LR-NEXT:   L22:i32:c = add 0:i32 L21:i32
-// LR-NEXT:   L23:i32 = outline 1:i32
-// LR-NEXT:   L24:i32:d = add 0:i32 L23:i32
-// LR-NEXT:   L25:i1 = outline 0:i1
-// LR-NEXT:   L26:i32 = outline 0:i32
-// LR-NEXT:   L27 = L20
-// LR-NEXT:   L28 = L26
-// LR-NEXT:   L55 = L26
-// LR-NEXT:   L56 = L20
-// LR-NEXT:   L57 = L22
-// LR-NEXT:   L58 = L24
-// LR-NEXT:   L59 = L26
-// LR-NEXT:   L60 = L26
-// LR-NEXT:   L61 = L26
-// LR-NEXT:   br L25:i1, b3, b1000
+// LR-NEXT:   L18:i32 = outline 1:i32
+// LR-NEXT:   L19:i32:b = add 0:i32 L18:i32
+// LR-NEXT:   L20:i32 = outline 1:i32
+// LR-NEXT:   L21:i32:c = add 0:i32 L20:i32
+// LR-NEXT:   L22:i32 = outline 1:i32
+// LR-NEXT:   L23:i32:d = add 0:i32 L22:i32
+// LR-NEXT:   L24:i1 = outline 0:i1
+// LR-NEXT:   L25:i32 = outline 0:i32
+// LR-NEXT:   L26 = L19
+// LR-NEXT:   L27 = L25
+// LR-NEXT:   L52 = L25
+// LR-NEXT:   L53 = L19
+// LR-NEXT:   L54 = L21
+// LR-NEXT:   L55 = L23
+// LR-NEXT:   L56 = L25
+// LR-NEXT:   L57 = L25
+// LR-NEXT:   L58 = L25
+// LR-NEXT:   br L24:i1, b3, b1000
 
 // LR-LABEL: block b3:
-// LR-NEXT:   L29:i32:y = add L13:i32 L27:i32
-// LR-NEXT:   L30:i32:z = add L15:i32 L28:i32
-// LR-NEXT:   L31:i32:i = add L9:i32 1:i32
-// LR-NEXT:   L32:i1 = outline 0:i1
-// LR-NEXT:   L33:i1 = outline 1:i1
-// LR-NEXT:   L34:i32 = outline 0:i32
-// LR-NEXT:   L55 = L34
-// LR-NEXT:   L56 = L27
-// LR-NEXT:   L57 = L34
-// LR-NEXT:   L58 = L28
-// LR-NEXT:   L59 = L29
-// LR-NEXT:   L60 = L30
-// LR-NEXT:   L61 = L31
-// LR-NEXT:   switch L32:i1 default b1000 [
-// LR-NEXT:     L32:i1 b1
-// LR-NEXT:     L33:i1 b4
+// LR-NEXT:   L28:i32:y = add L13:i32 L26:i32
+// LR-NEXT:   L29:i32:z = add L15:i32 L27:i32
+// LR-NEXT:   L30:i32:i = add L9:i32 1:i32
+// LR-NEXT:   L31:i1 = outline 0:i1
+// LR-NEXT:   L32:i32 = outline 0:i32
+// LR-NEXT:   L52 = L32
+// LR-NEXT:   L53 = L26
+// LR-NEXT:   L54 = L32
+// LR-NEXT:   L55 = L27
+// LR-NEXT:   L56 = L28
+// LR-NEXT:   L57 = L29
+// LR-NEXT:   L58 = L30
+// LR-NEXT:   switch L31:i1 default b1000 [
+// LR-NEXT:     0:i1 b1
+// LR-NEXT:     1:i1 b4
 // LR-NEXT:   ]
 
 // LR-LABEL: block b4:
-// LR-NEXT:   L35:i32 = outline 0:i32
-// LR-NEXT:   ret L35:i32
+// LR-NEXT:   L33:i32 = outline 0:i32
+// LR-NEXT:   ret L33:i32
 
 // LR-LABEL: block b5:
+// LR-NEXT:   L34:i32 = outline 1:i32
+// LR-NEXT:   L35:i32:a = add 0:i32 L34:i32
 // LR-NEXT:   L36:i32 = outline 1:i32
-// LR-NEXT:   L37:i32:a = add 0:i32 L36:i32
-// LR-NEXT:   L38:i32 = outline 1:i32
-// LR-NEXT:   L39:i32:d = add 0:i32 L38:i32
-// LR-NEXT:   L40:i1 = outline 0:i1
-// LR-NEXT:   L41:i1 = outline 1:i1
-// LR-NEXT:   L42:i32 = outline 0:i32
+// LR-NEXT:   L37:i32:d = add 0:i32 L36:i32
+// LR-NEXT:   L38:i1 = outline 0:i1
+// LR-NEXT:   L39:i32 = outline 0:i32
+// LR-NEXT:   L52 = L35
+// LR-NEXT:   L53 = L39
+// LR-NEXT:   L54 = L39
 // LR-NEXT:   L55 = L37
-// LR-NEXT:   L56 = L42
-// LR-NEXT:   L57 = L42
+// LR-NEXT:   L56 = L39
+// LR-NEXT:   L57 = L39
 // LR-NEXT:   L58 = L39
-// LR-NEXT:   L59 = L42
-// LR-NEXT:   L60 = L42
-// LR-NEXT:   L61 = L42
-// LR-NEXT:   switch L40:i1 default b1000 [
-// LR-NEXT:     L40:i1 b6
-// LR-NEXT:     L41:i1 b8
+// LR-NEXT:   switch L38:i1 default b1000 [
+// LR-NEXT:     0:i1 b6
+// LR-NEXT:     1:i1 b8
 // LR-NEXT:   ]
 
 // LR-LABEL: block b6:
-// LR-NEXT:   L43:i32 = outline 1:i32
-// LR-NEXT:   L44:i32:d = add 0:i32 L43:i32
-// LR-NEXT:   L45:i1 = outline 0:i1
-// LR-NEXT:   L46:i32 = outline 0:i32
-// LR-NEXT:   L55 = L46
-// LR-NEXT:   L56 = L46
-// LR-NEXT:   L57 = L46
-// LR-NEXT:   L58 = L44
-// LR-NEXT:   L59 = L46
-// LR-NEXT:   L60 = L46
-// LR-NEXT:   L61 = L46
-// LR-NEXT:   br L45:i1, b7, b1000
+// LR-NEXT:   L40:i32 = outline 1:i32
+// LR-NEXT:   L41:i32:d = add 0:i32 L40:i32
+// LR-NEXT:   L42:i1 = outline 0:i1
+// LR-NEXT:   L43:i32 = outline 0:i32
+// LR-NEXT:   L52 = L43
+// LR-NEXT:   L53 = L43
+// LR-NEXT:   L54 = L43
+// LR-NEXT:   L55 = L41
+// LR-NEXT:   L56 = L43
+// LR-NEXT:   L57 = L43
+// LR-NEXT:   L58 = L43
+// LR-NEXT:   br L42:i1, b7, b1000
 
 // LR-LABEL: block b7:
-// LR-NEXT:   L47:i32 = outline 1:i32
-// LR-NEXT:   L48:i32:b = add 0:i32 L47:i32
-// LR-NEXT:   L49:i1 = outline 0:i1
-// LR-NEXT:   L50:i32 = outline 0:i32
-// LR-NEXT:   L27 = L48
-// LR-NEXT:   L28 = L50
-// LR-NEXT:   L55 = L50
-// LR-NEXT:   L56 = L48
-// LR-NEXT:   L57 = L50
-// LR-NEXT:   L58 = L50
-// LR-NEXT:   L59 = L50
-// LR-NEXT:   L60 = L50
-// LR-NEXT:   L61 = L50
-// LR-NEXT:   br L49:i1, b3, b1000
+// LR-NEXT:   L44:i32 = outline 1:i32
+// LR-NEXT:   L45:i32:b = add 0:i32 L44:i32
+// LR-NEXT:   L46:i1 = outline 0:i1
+// LR-NEXT:   L47:i32 = outline 0:i32
+// LR-NEXT:   L26 = L45
+// LR-NEXT:   L27 = L47
+// LR-NEXT:   L52 = L47
+// LR-NEXT:   L53 = L45
+// LR-NEXT:   L54 = L47
+// LR-NEXT:   L55 = L47
+// LR-NEXT:   L56 = L47
+// LR-NEXT:   L57 = L47
+// LR-NEXT:   L58 = L47
+// LR-NEXT:   br L46:i1, b3, b1000
 
 // LR-LABEL: block b8:
-// LR-NEXT:   L51:i32 = outline 1:i32
-// LR-NEXT:   L52:i32:c = add 0:i32 L51:i32
-// LR-NEXT:   L53:i1 = outline 0:i1
-// LR-NEXT:   L54:i32 = outline 0:i32
-// LR-NEXT:   L55 = L54
-// LR-NEXT:   L56 = L54
-// LR-NEXT:   L57 = L52
-// LR-NEXT:   L58 = L54
-// LR-NEXT:   L59 = L54
-// LR-NEXT:   L60 = L54
-// LR-NEXT:   L61 = L54
-// LR-NEXT:   br L53:i1, b7, b1000
+// LR-NEXT:   L48:i32 = outline 1:i32
+// LR-NEXT:   L49:i32:c = add 0:i32 L48:i32
+// LR-NEXT:   L50:i1 = outline 0:i1
+// LR-NEXT:   L51:i32 = outline 0:i32
+// LR-NEXT:   L52 = L51
+// LR-NEXT:   L53 = L51
+// LR-NEXT:   L54 = L49
+// LR-NEXT:   L55 = L51
+// LR-NEXT:   L56 = L51
+// LR-NEXT:   L57 = L51
+// LR-NEXT:   L58 = L51
+// LR-NEXT:   br L50:i1, b7, b1000
 
 // LR-LABEL: block b1000:
-// LR-NEXT:   L62:i32 = outline 0:i32
-// LR-NEXT:   ret L62:i32
+// LR-NEXT:   L59:i32 = outline 0:i32
+// LR-NEXT:   ret L59:i32
 // LR-NEXT: }
 
-
-/// a: L13, b: L27, c: L15  
-/// d: L28, i: L9
+/// a: L13, b: L26, c: L15  
+/// d: L27, i: L9
 /// This results are not perfectly same with textbook and it caused from 
 /// difference with SSA program
 /// In block b7, `VarKill` contains `L28`(d), so `L28` was kiiled in block b6, b8  
@@ -313,12 +309,12 @@ block b1000:
 // LN-NEXT:   block b1001: <empty>
 // LN-NEXT:   block b0: L9
 // LN-NEXT:   block b1: L9, L13, L15
-// LN-NEXT:   block b2: L9, L13, L15, L27, L28
+// LN-NEXT:   block b2: L9, L13, L15, L26, L27
 // LN-NEXT:   block b3: L9
 // LN-NEXT:   block b4: <empty>
 // LN-NEXT:   block b5: L9, L13, L15
 // LN-NEXT:   block b6: L9, L13, L15
-// LN-NEXT:   block b7: L9, L13, L15, L27, L28
+// LN-NEXT:   block b7: L9, L13, L15, L26, L27
 // LN-NEXT:   block b8: L9, L13, L15
 // LN-NEXT:   block b1000: <empty>
 

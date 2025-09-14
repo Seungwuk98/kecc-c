@@ -243,16 +243,23 @@ public:
   ConstantFloatAttr convertToFloatAttr() const {
     if (getFloatType().getBitWidth() == 32) {
       llvm::APFloat apFloat(llvm::APFloat::IEEEsingle());
-      auto err = apFloat.convertFromString(getValue(),
-                                           llvm::APFloat::rmNearestTiesToEven);
-      assert(err && "Failed to convert string to APFloat");
-      (void)err;
+      auto result = apFloat.convertFromString(
+          getValue(), llvm::APFloat::rmNearestTiesToEven);
+      if (auto err = result.takeError()) {
+        llvm::errs() << "Failed to convert string to APFloat: "
+                     << llvm::toString(std::move(err)) << "\n";
+        llvm::report_fatal_error("Invalid float string");
+      }
       return ConstantFloatAttr::get(getContext(), apFloat);
     } else if (getFloatType().getBitWidth() == 64) {
       llvm::APFloat apFloat(llvm::APFloat::IEEEdouble());
-      auto err = apFloat.convertFromString(getValue(),
-                                           llvm::APFloat::rmNearestTiesToEven);
-      assert(err && "Failed to convert string to APFloat");
+      auto result = apFloat.convertFromString(
+          getValue(), llvm::APFloat::rmNearestTiesToEven);
+      if (auto err = result.takeError()) {
+        llvm::errs() << "Failed to convert string to APFloat: "
+                     << llvm::toString(std::move(err)) << "\n";
+        llvm::report_fatal_error("Invalid float string");
+      }
       return ConstantFloatAttr::get(getContext(), apFloat);
     } else {
       llvm_unreachable("Unsupported float type for ConstantStringFloat");
@@ -845,7 +852,7 @@ ConstantFloatAttr ASTFloat::interpret() const {
                                : llvm::APFloat::IEEEsingle());
   auto err = floatValue.convertFromString(getValue(),
                                           llvm::APFloat::rmNearestTiesToEven);
-  if (!err.takeError().success())
+  if (!err)
     return nullptr;
 
   return ConstantFloatAttr::get(getContext(), floatValue);

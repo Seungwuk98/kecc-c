@@ -180,6 +180,10 @@ void RegisterAllocation::allocateRegistersForFunction(
 
     for (const ir::Operand &operand : returnValues) {
       LiveRange liveRange;
+
+      if (operand.getType().isa<ir::UnitT>())
+        continue;
+
       if (spillAnalysis->getSpillInfo().restore.contains(&operand))
         liveRange = spillAnalysis->getSpillInfo().restore.at(&operand);
       else

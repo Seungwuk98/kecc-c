@@ -300,6 +300,8 @@ int main(void) {
   // RESULT: -32
   printf("%d\n", (int) shl_i8(50, 5));
   // RESULT: 64
+  printf("%d\n", (int) shl_i8(127, 1));
+  // RESULT: -2
 
   // ===== u8 =====
   printf("%u\n", (unsigned) shl_u8(1u, 0));

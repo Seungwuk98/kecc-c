@@ -175,8 +175,9 @@ void SpillCost::dump(llvm::raw_ostream &os) const {
   LiveRangeAnalysis *liveRangeAnalysis =
       module->getAnalysis<LiveRangeAnalysis>();
   assert(liveRangeAnalysis && "LiveRangeAnalysis must not be null");
+  SpillAnalysis *spillAnalysis = module->getAnalysis<SpillAnalysis>();
 
-  auto currIdMap = liveRangeAnalysis->getCurrLRIdMap();
+  auto currIdMap = liveRangeAnalysis->getFuncLRIdMap(function);
 
   auto comparator = [&](LiveRange a, LiveRange b) {
     return currIdMap.at(a) < currIdMap.at(b);
@@ -247,7 +248,7 @@ bool SpillAnalysis::trySpill(ir::Function *function, as::RegisterType regType) {
   // Calculate spill costs for each live range in the maximum clique
   SpillCost spillCost(getModule(), function, interfGraph, translateContext);
 
-  auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap(getSpillInfo());
+  auto currLRIdMap = liveRangeAnalysis->getFuncLRIdMap(function);
   auto comparator = [&](LiveRange a, LiveRange b) {
     long double aCost = spillCost.getSpillCost(a);
     long double bCost = spillCost.getSpillCost(b);
@@ -271,10 +272,8 @@ bool SpillAnalysis::trySpill(ir::Function *function, as::RegisterType regType) {
                                               spillCandidates.end());
 
   // Replace every values' live ranges with new live ranges
-  SpillInfo newSpillInfo =
-      liveRangeAnalysis->spill(function, spilledLiveRanges);
+  liveRangeAnalysis->spill(this, function, spilledLiveRanges);
 
-  spillInfo.insert(newSpillInfo);
   // Update liveness analysis
   auto newLivenessAnalysis = LivenessAnalysis::create(getModule(), spillInfo);
   getModule()->insertAnalysis(std::move(newLivenessAnalysis));

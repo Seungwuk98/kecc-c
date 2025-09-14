@@ -220,9 +220,9 @@ block b4:
 // SPILL1-LABEL: Liveness Analysis dump:
 // SPILL1-NEXT: Function: @test_func
 // SPILL1-NEXT:   block b0: L4, L5
-// SPILL1-NEXT:   block b1: L4, L5, L11
-// SPILL1-NEXT:   block b2: L4, L5, L11
-// SPILL1-NEXT:   block b3: L4, L5, L11
+// SPILL1-NEXT:   block b1: L4, L5, L16
+// SPILL1-NEXT:   block b2: L4, L5, L16
+// SPILL1-NEXT:   block b3: L4, L5, L16
 // SPILL1-NEXT:   block b4: <empty>
 
 // SPILL1: Interference graph for function: @test_func
@@ -231,6 +231,7 @@ block b4:
 // SPILL1-NEXT: L0: L4, L5
 // SPILL1-NEXT: L1: L4, L5
 // SPILL1-NEXT: L2: L4, L5
+// SPILL1-NEXT: L3: <empty>
 // SPILL1-NEXT: L4: L0, L1, L2, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L19, L20, L21, L22, L24
 // SPILL1-NEXT: L5: L0, L1, L2, L4, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L19, L24
 // SPILL1-NEXT: L6: L4, L5, L7
@@ -336,6 +337,8 @@ block b4:
 // SPILL2-NEXT: L0: L5
 // SPILL2-NEXT: L1: L5
 // SPILL2-NEXT: L2: L5
+// SPILL2-NEXT: L3: <empty>
+// SPILL2-NEXT: L4: <empty>
 // SPILL2-NEXT: L5: L0, L1, L2, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18, L20, L21, L22, L23, L24, L30
 // SPILL2-NEXT: L6: L5, L7
 // SPILL2-NEXT: L7: L5, L6
@@ -350,6 +353,7 @@ block b4:
 // SPILL2-NEXT: L16: L5, L17
 // SPILL2-NEXT: L17: L5, L16
 // SPILL2-NEXT: L18: L5
+// SPILL2-NEXT: L19: <empty>
 // SPILL2-NEXT: L20: L5, L29
 // SPILL2-NEXT: L21: L5, L29
 // SPILL2-NEXT: L22: L5, L29

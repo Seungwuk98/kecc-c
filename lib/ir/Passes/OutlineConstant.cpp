@@ -4,14 +4,12 @@
 #include "kecc/ir/IRTransforms.h"
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/PatternMatch.h"
+#include "kecc/translate/TranslateConstants.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace kecc::ir {
 
 namespace {
-
-#define I_UPPER_IMM12 ((1 << 11) - 1)
-#define I_LOWER_IMM12 (-(1 << 11))
 
 struct InlineConstantState {
   enum Kind {
@@ -40,14 +38,14 @@ struct InlineConstantState {
 static InlineConstantState getInlineConstantState(Value value) {
   if (auto constant = value.getDefiningInst<inst::Constant>()) {
     auto constAttr = constant.getValue();
-    auto canbeInline = llvm::TypeSwitch<ConstantAttr, bool>(constAttr)
-                           .Case([&](ConstantIntAttr intAttr) -> bool {
-                             auto value = intAttr.getValue();
-                             std::int64_t signedValue = value;
-                             return signedValue >= I_LOWER_IMM12 &&
-                                    signedValue <= I_UPPER_IMM12;
-                           })
-                           .Default([&](ConstantAttr) { return false; });
+    auto canbeInline =
+        llvm::TypeSwitch<ConstantAttr, bool>(constAttr)
+            .Case([&](ConstantIntAttr intAttr) -> bool {
+              auto value = intAttr.getValue();
+              std::int64_t signedValue = value;
+              return signedValue >= MIN_INT_12 && signedValue <= MAX_INT_12;
+            })
+            .Default([&](ConstantAttr) { return false; });
     return canbeInline ? InlineConstantState::canbeInline()
                        : InlineConstantState::outline();
   }
@@ -131,7 +129,7 @@ public:
     case inst::Binary::Ge:
       if (!lhsCS.isNonConstant())
         createOutlineAndMatch(lhs, lhsSetter);
-      else if (!rhsCS.isNonConstant())
+      if (!rhsCS.isNonConstant())
         createOutlineAndMatch(rhs, rhsSetter);
       break;
     }
@@ -172,6 +170,83 @@ public:
   }
 };
 
+static bool
+outlineJumpArgs(IRRewriter &rewriter, InstructionStorage *inst, bool notified,
+                llvm::DenseMap<ConstantAttr, Value> &constantCache) {
+  bool matched = false;
+  for (auto [idx, value] : llvm::enumerate(inst->getJumpArgs())) {
+    auto jumpArgState = value->getAsState();
+    bool argMatched = false;
+    for (auto [argIdx, arg] : llvm::enumerate(jumpArgState.getArgs())) {
+      auto inlineState = getInlineConstantState(arg);
+      if (!inlineState.isNonConstant()) {
+
+        auto constantAttr = arg.getDefiningInst<inst::Constant>().getValue();
+        if (constantAttr.isa<ConstantUnitAttr>())
+          continue; // Unit constant should not be outlined
+        if (!notified) {
+          rewriter.notifyStartUpdate(inst);
+          notified = true;
+        }
+
+        if (auto it = constantCache.find(constantAttr);
+            it != constantCache.end()) {
+          jumpArgState.setArg(argIdx, it->second);
+        } else {
+          auto outlineConstant =
+              createOutline(rewriter, inst, arg, [&](Value newValue) {
+                jumpArgState.setArg(argIdx, newValue);
+              });
+          if (!constantAttr.isa<ConstantUndefAttr>())
+            constantCache[constantAttr] = outlineConstant;
+        }
+
+        argMatched = true;
+      }
+    }
+    if (argMatched) {
+      if (!notified) {
+        rewriter.notifyStartUpdate(inst);
+        notified = true;
+      }
+      inst->setJumpArg(idx, jumpArgState);
+      matched = true;
+    }
+  }
+  return matched;
+}
+
+class ConvertSwitch : public InstPattern<inst::Switch> {
+public:
+  ConvertSwitch() : InstPattern() {}
+
+  utils::LogicalResult matchAndRewrite(IRRewriter &rewriter,
+                                       inst::Switch switchInst) override {
+
+    auto valueCS = getInlineConstantState(switchInst.getValue());
+    bool matched = false;
+    llvm::DenseMap<ConstantAttr, Value> constantCache;
+    if (!valueCS.isNonConstant()) {
+      rewriter.notifyStartUpdate(switchInst.getStorage());
+      auto constant =
+          switchInst.getValue().getDefiningInst<inst::Constant>().getValue();
+      auto outline =
+          createOutline(rewriter, switchInst.getStorage(),
+                        switchInst.getValue(), [&](Value newValue) {
+                          switchInst.getStorage()->setOperand(0, newValue);
+                        });
+      constantCache.try_emplace(constant, outline);
+      matched = true;
+    }
+
+    matched |= outlineJumpArgs(rewriter, switchInst.getStorage(), matched,
+                               constantCache);
+
+    return matched ? utils::LogicalResult::success()
+                   : utils::LogicalResult::failure(); // match fail
+  }
+};
+
 class ConvertInstructions : public Pattern {
 public:
   ConvertInstructions() : Pattern(1, PatternId::getGeneral()) {}
@@ -180,7 +255,8 @@ public:
                                        InstructionStorage *inst) override {
     if (inst->getDefiningInst<inst::Binary>() ||
         inst->getDefiningInst<inst::Gep>() ||
-        inst->getDefiningInst<inst::OutlineConstant>())
+        inst->getDefiningInst<inst::OutlineConstant>() ||
+        inst->getDefiningInst<inst::Switch>())
       return utils::LogicalResult::failure();
 
     bool matched = false;
@@ -190,11 +266,13 @@ public:
     for (auto [idx, value] : llvm::enumerate(inst->getOperands())) {
       auto inlineState = getInlineConstantState(value);
       if (!inlineState.isNonConstant()) {
+        auto constantAttr = value.getDefiningInst<inst::Constant>().getValue();
+        if (constantAttr.isa<ConstantUnitAttr>())
+          continue; // Unit constant should not be outlined
         if (!notified) {
           rewriter.notifyStartUpdate(inst);
           notified = true;
         }
-        auto constantAttr = value.getDefiningInst<inst::Constant>().getValue();
         if (auto it = constantCache.find(constantAttr);
             it != constantCache.end()) {
           inst->setOperand(idx, it->second);
@@ -213,42 +291,7 @@ public:
       }
     }
 
-    for (auto [idx, value] : llvm::enumerate(inst->getJumpArgs())) {
-      auto jumpArgState = value->getAsState();
-      bool argMatched = false;
-      for (auto [argIdx, arg] : llvm::enumerate(jumpArgState.getArgs())) {
-        auto inlineState = getInlineConstantState(arg);
-        if (!inlineState.isNonConstant()) {
-          if (!notified) {
-            rewriter.notifyStartUpdate(inst);
-            notified = true;
-          }
-          auto constantAttr = arg.getDefiningInst<inst::Constant>().getValue();
-          if (auto it = constantCache.find(constantAttr);
-              it != constantCache.end()) {
-            jumpArgState.setArg(argIdx, it->second);
-          } else {
-            auto outlineConstant =
-                createOutline(rewriter, inst, arg, [&](Value newValue) {
-                  jumpArgState.setArg(argIdx, newValue);
-                });
-            if (!constantAttr.isa<ConstantUndefAttr>())
-              constantCache[constantAttr] = outlineConstant;
-          }
-
-          argMatched = true;
-        }
-      }
-      if (argMatched) {
-        if (!notified) {
-          rewriter.notifyStartUpdate(inst);
-          notified = true;
-        }
-        inst->setJumpArg(idx, jumpArgState);
-        matched = true;
-      }
-    }
-
+    matched |= outlineJumpArgs(rewriter, inst, notified, constantCache);
     return matched ? utils::LogicalResult::success()
                    : utils::LogicalResult::failure(); // match fail
   }
@@ -264,7 +307,8 @@ void OutlineConstantPass::init(Module *module) {
 
 PassResult OutlineConstantPass::run(Module *module) {
   PatternSet patterns;
-  patterns.addPatterns<ConvertBinary, ConvertGep, ConvertInstructions>();
+  patterns.addPatterns<ConvertBinary, ConvertGep, ConvertSwitch,
+                       ConvertInstructions>();
 
   applyPatternConversion(module, patterns);
 

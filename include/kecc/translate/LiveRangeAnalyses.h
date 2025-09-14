@@ -10,6 +10,7 @@
 #include "llvm/ADT/DenseSet.h"
 
 namespace kecc {
+class SpillAnalysis;
 
 struct SpillInfo {
   SpillInfo() = default;
@@ -59,16 +60,15 @@ public:
 
   void dump(llvm::raw_ostream &os, const SpillInfo &info = {}) const;
 
-  void print(LiveRange liveRange, llvm::raw_ostream &os) const;
-  void print(LiveRange liveRange, llvm::raw_ostream &os,
-             const llvm::DenseMap<LiveRange, size_t> &currLRIdMap) const;
+  const llvm::DenseMap<LiveRange, size_t> &
+  getFuncLRIdMap(ir::Function *func) const;
 
-  llvm::DenseMap<LiveRange, size_t>
-  getCurrLRIdMap(const SpillInfo &spillInfo = {}) const;
+  const llvm::DenseMap<ir::Function *, llvm::DenseMap<LiveRange, size_t>> &
+  getLRIdMap() const;
 
   // returns restoring map
-  SpillInfo spill(ir::Function *func,
-                  const llvm::DenseSet<LiveRange> &liveRanges);
+  void spill(SpillAnalysis *spillAnalysis, ir::Function *func,
+             const llvm::DenseSet<LiveRange> &liveRanges);
 
 private:
   LiveRangeAnalysis(ir::Module *module,

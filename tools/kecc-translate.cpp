@@ -89,6 +89,7 @@ std::unique_ptr<ir::Module> parseAndBuildModule(ir::IRContext &context) {
 ir::PassResult runPasses(ir::Module *module) {
   ir::PassManager pm;
 
+  pm.addPass<ir::CFGReach>();
   pm.addPass<ir::CanonicalizeStruct>();
   pm.addPass<ir::FoldTypeCast>();
   pm.addPass<ir::InlineCallPass>();
@@ -223,6 +224,7 @@ int keccTranslateMain() {
 int main(int argc, const char **argv) {
   llvm::InitLLVM x(argc, argv);
 
+  kecc::ir::registerPass<kecc::ir::CFGReach>();
   kecc::ir::registerPass<kecc::ir::CanonicalizeConstant>();
   kecc::ir::registerPass<kecc::ir::OutlineConstantPass>();
   kecc::ir::registerPass<kecc::ir::InlineCallPass>();

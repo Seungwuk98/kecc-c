@@ -44,10 +44,20 @@ struct InterferenceGraphBuilder {
 
 void InterferenceGraphBuilder::build() {
   SpillAnalysis *spillAnalysis = module->getAnalysis<SpillAnalysis>();
+  auto liveRangeToIdMap = liveRangeAnalysis->getFuncLRIdMap(func);
+
+  // initialize graph with all live ranges
+
+  for (const auto &[liveRange, _] : liveRangeToIdMap) {
+    if (isFloat && liveRange.getType().isa<ir::FloatT>()) {
+      graph[liveRange];
+    } else if (!isFloat && !liveRange.getType().isa<ir::FloatT>()) {
+      graph[liveRange];
+    }
+  }
 
   // special case for function argument
   // All function arguments are interfering with each other
-
   {
     llvm::SmallVector<LiveRange> funcArgs;
     for (ir::InstructionStorage *inst : *func->getEntryBlock()) {
@@ -234,27 +244,6 @@ std::unique_ptr<InterferenceGraph> InterferenceGraph::create(ir::Module *module,
       new InterferenceGraph(module, func, isFloat, std::move(builder.graph)));
 }
 
-void InterferenceGraph::update() {
-  auto *liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  if (!liveRangeAnalysis) {
-    auto analysis = LiveRangeAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    liveRangeAnalysis = module->getAnalysis<LiveRangeAnalysis>();
-  }
-
-  auto *livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  if (!livenessAnalysis) {
-    auto analysis = LivenessAnalysis::create(module);
-    module->insertAnalysis(std::move(analysis));
-    livenessAnalysis = module->getAnalysis<LivenessAnalysis>();
-  }
-
-  InterferenceGraphBuilder builder(module, function, liveRangeAnalysis,
-                                   livenessAnalysis, isFloat);
-  builder.build();
-  graph = std::move(builder.graph);
-}
-
 InterferenceGraph::InterferenceGraph(
     ir::Module *module, ir::Function *function, bool isFloat,
     llvm::DenseMap<LiveRange, llvm::DenseSet<LiveRange>> graph)
@@ -276,8 +265,7 @@ void InterferenceGraph::dump(llvm::raw_ostream &os) const {
 
   SpillAnalysis *spillAnalysis = module->getAnalysis<SpillAnalysis>();
 
-  auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap(
-      spillAnalysis ? spillAnalysis->getSpillInfo() : SpillInfo());
+  auto currLRIdMap = liveRangeAnalysis->getFuncLRIdMap(function);
 
   auto keys =
       llvm::map_to_vector(graph, [](const auto &pair) { return pair.first; });
@@ -322,8 +310,8 @@ void MaximumCardinalitySearch::init() {
 
   auto *spillAnalysis = interferenceGraph->module->getAnalysis<SpillAnalysis>();
 
-  liveRangeIdMap = liveRangeAnalysis->getCurrLRIdMap(
-      spillAnalysis ? spillAnalysis->getSpillInfo() : SpillInfo());
+  liveRangeIdMap =
+      liveRangeAnalysis->getFuncLRIdMap(interferenceGraph->function);
 }
 
 void MaximumCardinalitySearch::search() {
@@ -367,6 +355,9 @@ void MaximumCardinalitySearch::search() {
       }
     }
   }
+
+  assert(simplicialElimOrder.size() == interferenceGraph->graph.size() &&
+         "Simplicial elimination order should contain all live ranges");
 }
 
 void MaximumCardinalitySearch::dump(llvm::raw_ostream &os) const {
@@ -422,20 +413,21 @@ void GraphColoring::initCost(ir::Module *module) {
   });
 }
 
-void GraphColoring::coloring(InterferenceGraph *intefGraph) {
-  MaximumCardinalitySearch *mcs = intefGraph->getMCS();
+void GraphColoring::coloring(InterferenceGraph *interfGraph) {
+  MaximumCardinalitySearch *mcs = interfGraph->getMCS();
   const auto &seo = mcs->getSimplicialElimOrder();
+  auto spillAnalysis = interfGraph->module->getAnalysis<SpillAnalysis>();
 
   for (LiveRange lr : seo) {
     Color color = findAvailableColor(lr);
     colorMap[lr] = color;
     colorSaveCostMap[color] += saveCostMap[lr];
 
-    for (LiveRange neighbor : intefGraph->graph[lr])
+    for (LiveRange neighbor : interfGraph->graph[lr])
       neighborColors[neighbor].insert(color);
   }
 
-  auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap();
+  auto currLRIdMap = liveRangeAnalysis->getFuncLRIdMap(interfGraph->function);
   for (const auto &[liveRange, _] : currLRIdMap) {
     if (!colorMap.contains(liveRange)) {
       colorMap[liveRange] = 0;

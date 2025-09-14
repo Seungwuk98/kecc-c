@@ -21,10 +21,6 @@ public:
 
   size_t getDegree(LiveRange liveRange) const;
 
-  // update the interference graph after spilling
-  // LiveRangeAnalysis and LivenessAnalysis must be up to date
-  void update();
-
   bool isForFloatType() const { return isFloat; }
 
   void dump(llvm::raw_ostream &os) const;

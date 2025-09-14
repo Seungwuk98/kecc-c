@@ -361,7 +361,7 @@ void IRTranslater::translateGlobalVariableImpl(
                                       directives, currSize);
         }
 
-        if (arrayT.getSize() < arrayAttr.getValues().size()) {
+        if (arrayT.getSize() > arrayAttr.getValues().size()) {
           auto [size, align] =
               elementT.getSizeAndAlign(structSizeAnalysis->getStructSizeMap());
           if (size < align)
@@ -446,8 +446,7 @@ void FunctionTranslater::init() {
                      floatArgRegisters.emplace_back(reg);
                  });
 
-  liveRangeToIndexMap =
-      liveRangeAnalysis->getCurrLRIdMap(spillAnalysis->getSpillInfo());
+  liveRangeToIndexMap = liveRangeAnalysis->getFuncLRIdMap(function);
 
   // initialize `hasCall`
   size_t returnCount = 0;
@@ -514,7 +513,10 @@ void FunctionTranslater::init() {
     assert(localVar &&
            "LocalVariable instruction must be defined in the allocation block");
 
-    auto type = localVar.getType().cast<ir::PointerT>().getPointeeType();
+    auto type = localVar.getType()
+                    .cast<ir::PointerT>()
+                    .getPointeeType()
+                    .constCanonicalize();
 
     std::optional<as::DataSize> dataSize;
     if (!type.isa<ir::NameStruct, ir::ArrayT>())
@@ -1021,7 +1023,10 @@ void FunctionTranslater::moveRegisters(as::AsmBuilder &builder,
         }
       } else {
         // register to register move
-        builder.create<as::pseudo::Mv>(dst, src);
+        if (dataSize.isFloat())
+          builder.create<as::pseudo::Fmv>(dataSize, dst, src);
+        else
+          builder.create<as::pseudo::Mv>(dst, src);
       }
       break;
     }
@@ -1425,6 +1430,7 @@ void loadData(as::AsmBuilder &builder, FunctionTranslater &translater,
 }
 
 as::DataSize getDataSize(ir::Type type) {
+  type = type.constCanonicalize();
   auto [size, _] = type.getSizeAndAlign(ir::StructSizeMap{});
   if (type.isa<ir::FloatT>()) {
     if (size == 4) {

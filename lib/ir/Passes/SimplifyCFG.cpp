@@ -107,20 +107,10 @@ private:
   llvm::DenseMap<Block *, Block *> parent;
 };
 
-class CFGReach : public FuncPass {
-public:
-  void init(Module *, Function *) override { visited.clear(); }
-  PassResult run(Module *module, Function *fun) override;
-
-  llvm::StringRef getPassArgument() const override { return "cfg-reach"; }
-
-private:
-  void dfs(Module *module, Block *block);
-
-  llvm::DenseSet<Block *> visited;
-};
-
 PassResult CFGConstantPropagation::run(Module *module, Function *fun) {
+  if (!fun->hasDefinition())
+    return PassResult::skip();
+
   bool changed = false;
   for (Block *block : *fun) {
     changed |= module->replaceExit(
@@ -247,6 +237,9 @@ void CFGEmpty::connectJump(Module *module, Block *pred, Block *succ) const {
 }
 
 PassResult CFGEmpty::run(Module *module, Function *fun) {
+  if (!fun->hasDefinition())
+    return PassResult::skip();
+
   llvm::DenseSet<Block *> candidate;
   for (Block *block : *fun) {
     if (candidateCondition(module, block))
@@ -330,6 +323,9 @@ void CFGMerge::merge(Module *module, Block *child, Block *parent) const {
 }
 
 PassResult CFGMerge::run(Module *module, Function *fun) {
+  if (!fun->hasDefinition())
+    return PassResult::skip();
+
   for (Block *block : *fun) {
     parent[block] = block;
   }
@@ -382,6 +378,9 @@ void CFGReach::dfs(Module *module, Block *block) {
 }
 
 PassResult CFGReach::run(Module *module, Function *fun) {
+  if (!fun->hasDefinition())
+    return PassResult::skip();
+
   dfs(module, fun->getEntryBlock());
 
   llvm::DenseSet<Block *> unreachableBlock;
@@ -404,4 +403,5 @@ void registerSimplifyCFGPass() {
   registerPass<CFGMerge>();
   registerPass<CFGReach>();
 }
+
 } // namespace kecc::ir

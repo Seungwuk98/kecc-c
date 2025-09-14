@@ -40,6 +40,8 @@ public:
 
   void dumpInterferenceGraph(llvm::raw_ostream &os) const;
 
+  void insertSpillInfo(const SpillInfo &info) { spillInfo.insert(info); }
+
 private:
   SpillAnalysis(ir::Module *module, TranslateContext *translateContext,
                 llvm::DenseMap<ir::Function *,

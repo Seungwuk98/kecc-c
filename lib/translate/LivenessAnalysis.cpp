@@ -3,6 +3,7 @@
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/Value.h"
 #include "kecc/translate/LiveRangeAnalyses.h"
+#include "kecc/translate/SpillAnalysis.h"
 
 DEFINE_KECC_TYPE_ID(kecc::LivenessAnalysis)
 
@@ -177,11 +178,14 @@ void LivenessAnalysis::dump(llvm::raw_ostream &os) const {
 
   auto *liveRangeAnalysis = getModule()->getAnalysis<LiveRangeAnalysis>();
   assert(liveRangeAnalysis && "Liveness analysis requires live range analysis");
-  auto currLRIdMap = liveRangeAnalysis->getCurrLRIdMap();
+
+  auto *spillAnalysis = getModule()->getAnalysis<SpillAnalysis>();
+  auto spill = (spillAnalysis) ? spillAnalysis->getSpillInfo() : SpillInfo();
 
   for (ir::Function *func : *getModule()->getIR()) {
     if (!func->hasDefinition())
       continue;
+    auto currLRIdMap = liveRangeAnalysis->getFuncLRIdMap(func);
     os << "\nFunction: @" << func->getName() << "\n";
     for (ir::Block *block : *func) {
       os << "  block b" << block->getId() << ":";

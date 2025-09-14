@@ -544,6 +544,7 @@ Parser::parseRegisterId(ir::Block *parentBlock) {
   }
 
   reportError(token->getRange(), "Expected a valid register id");
+  assert(false);
   return {};
 }
 
@@ -979,7 +980,7 @@ struct ParserDetail {
     if (peekTok->is<Token::Tok_unknown>()) {
       parser.lexer.rollback(peekTok);
       peekTok = parser.peekRidToken();
-      if (peekTok->is<Token::Tok_unknown>()) {
+      if (peekTok->is<Token::Tok_unknown, Token::Tok_identifier>()) {
         parser.lexer.rollback(peekTok);
         return parser.builder.create<ir::inst::Return>(rh.getRange());
       }

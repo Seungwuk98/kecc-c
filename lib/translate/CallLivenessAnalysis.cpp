@@ -209,16 +209,9 @@ void CallLivenessAnalysis::dump(llvm::raw_ostream &os) const {
     return lRid < rRid;
   });
 
-  llvm::DenseMap<LiveRange, size_t> currLRToId;
   LiveRangeAnalysis *liveRangeAnalysis =
       getModule()->getAnalysis<LiveRangeAnalysis>();
   assert(liveRangeAnalysis);
-  if (auto spillAnalysis = getModule()->getAnalysis<SpillAnalysis>()) {
-    currLRToId =
-        liveRangeAnalysis->getCurrLRIdMap(spillAnalysis->getSpillInfo());
-  } else {
-    currLRToId = liveRangeAnalysis->getCurrLRIdMap();
-  }
 
   ir::Function *prevFunc = nullptr;
   os << "Call Liveness dump:\n";
@@ -229,6 +222,8 @@ void CallLivenessAnalysis::dump(llvm::raw_ostream &os) const {
     }
     const auto liveInVars = liveIn.at(inst);
     llvm::SmallVector<LiveRange> lives(liveInVars.begin(), liveInVars.end());
+
+    auto currLRToId = liveRangeAnalysis->getFuncLRIdMap(prevFunc);
     llvm::sort(lives, [&](auto lr0, auto lr1) {
       return currLRToId.at(lr0) < currLRToId.at(lr1);
     });

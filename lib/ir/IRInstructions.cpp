@@ -309,7 +309,7 @@ void Unary::build(IRBuilder &builder, InstructionState &state, Value value,
 }
 
 void Unary::printer(Unary op, IRPrintContext &context) {
-  op.printAsOperand(context, true);
+  context.printValue(op);
   context.getOS() << " = ";
 
   switch (op.getOpKind()) {

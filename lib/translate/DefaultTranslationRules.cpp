@@ -885,10 +885,14 @@ utils::LogicalResult translateMinus(as::AsmBuilder &builder,
     as::Register rs = translater.getOperandRegister(operand);
 
     auto dataSize = getDataSize(operand->getType());
-    // sub rd, zero, rs
-    builder.create<as::rtype::Sub>(rd, as::Register::zero(), rs, dataSize);
+    if (operand->getType().isa<ir::FloatT>())
+      builder.create<as::pseudo::Fneg>(dataSize, rd, rd);
+    else
+      // sub rd, zero, rs
+      builder.create<as::rtype::Sub>(rd, as::Register::zero(), rs, dataSize);
   }
-  shiftDataByType(builder, operand->getType().cast<ir::IntT>(), rd);
+  if (operand->getType().isa<ir::IntT>())
+    shiftDataByType(builder, operand->getType().cast<ir::IntT>(), rd);
   return utils::LogicalResult::success();
 }
 
@@ -1053,9 +1057,25 @@ public:
       else
         return translater.getRegister(*callee);
     }();
+
+    as::Register calleeReg = reg;
+    if (reg.isArg()) {
+      auto intRegs = translater.getTranslateContext()->getRegistersForAllocate(
+          as::RegisterType::Integer);
+      for (auto intReg : intRegs) {
+        if (intReg.isTemp()) {
+          calleeReg = intReg;
+          break;
+        }
+      }
+    }
+    assert(!calleeReg.isArg() &&
+           "No available temporary register for callee address");
+
+    builder.create<as::pseudo::Mv>(calleeReg, reg);
     callPreparation(builder, translater, inst.getArguments());
 
-    builder.create<as::pseudo::Jalr>(reg);
+    builder.create<as::pseudo::Jalr>(calleeReg);
 
     if (inst->getResultSize() == 1 &&
         inst->getResult(0).getType().isa<ir::UnitT>()) {
@@ -1302,35 +1322,40 @@ public:
         DataSpace::value(as::Register::fa1()),
     };
 
-    llvm::SmallVector<DataSpace> intValueRegisters;
-    llvm::SmallVector<DataSpace> floatValueRegisters;
-    intValueRegisters.reserve(intReturnRegisters.size());
-    floatValueRegisters.reserve(floatReturnRegisters.size());
+    if (inst.getValueSize() == 1 &&
+        inst.getValue(0).getType().isa<ir::UnitT>()) {
+      // void return
+    } else {
+      llvm::SmallVector<DataSpace> intValueRegisters;
+      llvm::SmallVector<DataSpace> floatValueRegisters;
+      intValueRegisters.reserve(intReturnRegisters.size());
+      floatValueRegisters.reserve(floatReturnRegisters.size());
 
-    for (auto idx = 0u; idx < inst.getValueSize(); ++idx) {
-      const auto *value = &inst.getValueAsOperand(idx);
-      as::Register valueReg = translater.getOperandRegister(value);
-      if (value->getType().isa<ir::FloatT>())
-        floatValueRegisters.emplace_back(DataSpace::value(valueReg));
-      else
-        intValueRegisters.emplace_back(DataSpace::value(valueReg));
-    }
+      for (auto idx = 0u; idx < inst.getValueSize(); ++idx) {
+        const auto *value = &inst.getValueAsOperand(idx);
+        as::Register valueReg = translater.getOperandRegister(value);
+        if (value->getType().isa<ir::FloatT>())
+          floatValueRegisters.emplace_back(DataSpace::value(valueReg));
+        else
+          intValueRegisters.emplace_back(DataSpace::value(valueReg));
+      }
 
-    assert(intValueRegisters.size() <= intReturnRegisters.size() &&
-           "Too many integer return values for available registers");
-    assert(floatValueRegisters.size() <= floatReturnRegisters.size() &&
-           "Too many floating point return values for available registers");
+      assert(intValueRegisters.size() <= intReturnRegisters.size() &&
+             "Too many integer return values for available registers");
+      assert(floatValueRegisters.size() <= floatReturnRegisters.size() &&
+             "Too many floating point return values for available registers");
 
-    if (!intValueRegisters.empty()) {
-      translater.moveRegisters(builder, intValueRegisters,
-                               llvm::ArrayRef<DataSpace>(intReturnRegisters)
-                                   .take_front(intValueRegisters.size()));
-    }
+      if (!intValueRegisters.empty()) {
+        translater.moveRegisters(builder, intValueRegisters,
+                                 llvm::ArrayRef<DataSpace>(intReturnRegisters)
+                                     .take_front(intValueRegisters.size()));
+      }
 
-    if (!floatValueRegisters.empty()) {
-      translater.moveRegisters(builder, floatValueRegisters,
-                               llvm::ArrayRef<DataSpace>(floatReturnRegisters)
-                                   .take_front(floatValueRegisters.size()));
+      if (!floatValueRegisters.empty()) {
+        translater.moveRegisters(builder, floatValueRegisters,
+                                 llvm::ArrayRef<DataSpace>(floatReturnRegisters)
+                                     .take_front(floatValueRegisters.size()));
+      }
     }
 
     translater.writeFunctionEnd(builder);
@@ -1432,7 +1457,8 @@ public:
 //===----------------------------------------------------------------------===//
 
 static void castIntToInt(as::AsmBuilder &builder, as::Register rd,
-                         as::Register srcReg, ir::IntT fromT, ir::IntT toT) {
+                         as::Register srcReg, ir::IntT fromT, ir::IntT toT,
+                         int archBitSize) {
   unsigned fromBitWidth = fromT.getBitWidth();
   unsigned toBitWidth = toT.getBitWidth();
   bool fromSigned = fromT.isSigned();
@@ -1444,6 +1470,9 @@ static void castIntToInt(as::AsmBuilder &builder, as::Register rd,
   // higher bit int -> lower unsigned bit : trucate higher bits
   // higher bit int -> lower signed bit : fill signed bit in higher bits
 
+  if (fromBitWidth == 1)
+    return;
+
   if (fromBitWidth == toBitWidth) {
     // mv rd, srcReg
     if (rd != srcReg)
@@ -1451,7 +1480,7 @@ static void castIntToInt(as::AsmBuilder &builder, as::Register rd,
   } else if (fromBitWidth < toBitWidth) {
     if (!fromSigned && toSigned) {
       // fill 0 in higher bits
-      auto bitDiff = toBitWidth - fromBitWidth;
+      auto bitDiff = archBitSize - fromBitWidth;
       builder.create<as::itype::Slli>(rd, srcReg, getImmediate(bitDiff),
                                       as::DataSize::doubleWord());
       builder.create<as::itype::Srli>(rd, rd, getImmediate(bitDiff),
@@ -1461,7 +1490,7 @@ static void castIntToInt(as::AsmBuilder &builder, as::Register rd,
       builder.create<as::pseudo::Mv>(rd, srcReg);
     }
   } else {
-    auto bitDiff = fromBitWidth - toBitWidth;
+    auto bitDiff = archBitSize - toBitWidth;
     // shift left
     builder.create<as::itype::Slli>(rd, srcReg, getImmediate(bitDiff),
                                     as::DataSize::doubleWord());
@@ -1495,14 +1524,14 @@ public:
 
     auto fromDataSize = getDataSize(srcType);
     auto toDataSize = getDataSize(dstType);
+    auto archBitSize =
+        translater.getModule()->getContext()->getArchitectureBitSize();
 
     if (srcType.isa<ir::PointerT>()) {
       if (dstType.isa<ir::IntT>()) {
         castIntToInt(builder, rd, srcReg,
-                     ir::IntT::get(
-                         srcType.getContext(),
-                         srcType.getContext()->getArchitectureBitSize(), false),
-                     dstType.cast<ir::IntT>());
+                     ir::IntT::get(srcType.getContext(), archBitSize, false),
+                     dstType.cast<ir::IntT>(), archBitSize);
         return utils::LogicalResult::success();
       } else if (dstType.isa<ir::PointerT>()) {
         // Pointer to Pointer cast, just move the register
@@ -1513,14 +1542,12 @@ public:
       llvm_unreachable("Unsupported pointer cast type");
     } else if (auto srcIntT = srcType.dyn_cast<ir::IntT>()) {
       if (dstType.isa<ir::PointerT>()) {
-        castIntToInt(
-            builder, rd, srcReg, srcIntT,
-            ir::IntT::get(srcType.getContext(),
-                          srcType.getContext()->getArchitectureBitSize(),
-                          false));
+        castIntToInt(builder, rd, srcReg, srcIntT,
+                     ir::IntT::get(srcType.getContext(), archBitSize, false),
+                     archBitSize);
         return utils::LogicalResult::success();
       } else if (auto dstIntT = dstType.dyn_cast<ir::IntT>()) {
-        castIntToInt(builder, rd, srcReg, srcIntT, dstIntT);
+        castIntToInt(builder, rd, srcReg, srcIntT, dstIntT, archBitSize);
       } else if (auto dstFloatT = dstType.dyn_cast<ir::FloatT>()) {
         // FcvIntToFloat
         builder.create<as::rtype::FcvtIntToFloat>(rd, srcReg, std::nullopt,

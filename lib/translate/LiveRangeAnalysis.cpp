@@ -3,6 +3,7 @@
 #include "kecc/ir/Instruction.h"
 #include "kecc/translate/LiveRange.h"
 #include "kecc/translate/LiveRangeAnalyses.h"
+#include "kecc/translate/SpillAnalysis.h"
 #include "mlir/Support/LLVM.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
@@ -30,15 +31,15 @@ public:
 
   LiveRange getLiveRange(ir::Function *function, ir::Value value) const;
 
-  LiveRange createNewLiveRange(ir::Type type) {
+  LiveRange createNewLiveRange(ir::Function *function, ir::Type type) {
     auto newStorage = new (llvm::safe_malloc(sizeof(LiveRangeStorage)))
-        LiveRangeStorage(type);
+        LiveRangeStorage(type, function);
     LiveRange liveRange(newStorage);
     return liveRange;
   }
 
-  SpillInfo spill(ir::Function *func,
-                  const llvm::DenseSet<LiveRange> &liveRanges);
+  void spill(SpillAnalysis *spillAnalysis, ir::Function *func,
+             const llvm::DenseSet<LiveRange> &liveRanges);
 
   llvm::ArrayRef<std::pair<LiveRange, LiveRange>>
   getCopyMap(ir::Block *block) const {
@@ -48,17 +49,24 @@ public:
     return {};
   }
 
+  void updateLiveRangeIdMap(ir::Module *module, ir::Function *func);
+
 private:
+  friend class LiveRangeAnalysis;
   llvm::DenseMap<ir::Function *, llvm::DenseMap<ir::Value, LiveRange>>
       liveRangeMap;
   llvm::DenseMap<ir::Block *,
                  llvm::SmallVector<std::pair<LiveRange, LiveRange>>>
       copyMap;
   std::vector<const LiveRangeStorage *> liveRangeStorages;
+
+  llvm::DenseMap<ir::Function *, llvm::DenseMap<LiveRange, size_t>>
+      liveRangeFuncIdMap;
 };
 
-SpillInfo LiveRangeAnalysisImpl::spill(
-    ir::Function *func, const llvm::DenseSet<LiveRange> &spilledLiveRanges) {
+void LiveRangeAnalysisImpl::spill(
+    SpillAnalysis *spillAnalysis, ir::Function *func,
+    const llvm::DenseSet<LiveRange> &spilledLiveRanges) {
   assert(func->hasDefinition() && "Function should have a definition");
   auto &lrMap = liveRangeMap[func];
 
@@ -80,7 +88,7 @@ SpillInfo LiveRangeAnalysisImpl::spill(
 
         auto liveRange = lrMap[operand];
         if (spilledLiveRanges.contains(liveRange)) {
-          auto newLiveRange = createNewLiveRange(operand.getType());
+          auto newLiveRange = createNewLiveRange(func, operand.getType());
           restoreMemoryMap[newLiveRange] = liveRange;
           restoreMap[&operand] = newLiveRange;
         }
@@ -89,14 +97,72 @@ SpillInfo LiveRangeAnalysisImpl::spill(
 
     for (auto &[to, from] : copyMap[block]) {
       if (spilledLiveRanges.contains(from)) {
-        auto newLiveRange = createNewLiveRange(from.getType());
+        auto newLiveRange = createNewLiveRange(func, from.getType());
         restoreMemoryMap[newLiveRange] = from;
         from = newLiveRange;
       }
     }
   }
 
-  return {spilledLiveRanges, restoreMap, restoreMemoryMap};
+  spillAnalysis->insertSpillInfo(
+      {spilledLiveRanges, restoreMap, restoreMemoryMap});
+
+  updateLiveRangeIdMap(spillAnalysis->getModule(), func);
+}
+
+void LiveRangeAnalysisImpl::updateLiveRangeIdMap(ir::Module *module,
+                                                 ir::Function *func) {
+  llvm::DenseMap<LiveRange, size_t> &liveRangeIdMap = liveRangeFuncIdMap[func];
+  liveRangeIdMap.clear();
+  assert(func->hasDefinition() && "Function should have a definition");
+  size_t id = 0;
+
+  auto *spillAnalysis = module->getAnalysis<SpillAnalysis>();
+  SpillInfo spillInfo =
+      spillAnalysis ? spillAnalysis->getSpillInfo() : SpillInfo();
+
+  for (ir::InstructionStorage *inst : *func->getAllocationBlock()) {
+    auto localVar = inst->getDefiningInst<ir::inst::LocalVariable>();
+    assert(localVar);
+    auto lr = getLiveRange(func, localVar);
+    assert(!liveRangeIdMap.contains(lr) && "Live range already exists");
+    liveRangeIdMap[lr] = id++;
+  }
+
+  for (ir::Block *block : *func) {
+    for (auto I = block->begin(), E = block->end(); I != E; ++I) {
+      ir::InstructionStorage *inst = *I;
+
+      if (inst->getDefiningInst<ir::BlockExit>()) {
+        for (const auto &[to, from] : getCopyMap(block)) {
+          // `to`'s id must be counted in successor's block
+          if (!liveRangeIdMap.contains(from))
+            liveRangeIdMap[from] = id++;
+        }
+      }
+
+      for (const ir::Operand &operand : inst->getOperands()) {
+        if (operand.isConstant())
+          continue;
+
+        if (auto it = spillInfo.restore.find(&operand);
+            it != spillInfo.restore.end()) {
+          auto lr = it->getSecond();
+          if (liveRangeIdMap.contains(lr))
+            continue;
+          liveRangeIdMap[lr] = id++;
+        }
+      }
+
+      auto results = inst->getResults();
+      for (ir::Value result : results) {
+        auto lr = getLiveRange(func, result);
+        if (liveRangeIdMap.contains(lr))
+          continue;
+        liveRangeIdMap[lr] = id++;
+      }
+    }
+  }
 }
 
 struct LiveRangeAnalysisBuilder {
@@ -106,9 +172,9 @@ struct LiveRangeAnalysisBuilder {
     build();
   }
 
-  LiveRange createLiveRange(ir::Type type) {
+  LiveRange createLiveRange(ir::Function *func, ir::Type type) {
     auto newStorage = new (llvm::safe_malloc(sizeof(LiveRangeStorage)))
-        LiveRangeStorage(type);
+        LiveRangeStorage(type, func);
     LiveRange liveRange(newStorage);
     liveRangeStorages.emplace_back(newStorage);
     return liveRange;
@@ -117,7 +183,7 @@ struct LiveRangeAnalysisBuilder {
   void insertLiveRange(ir::Value value) {
     auto it = liveRangeMap.find(value);
     assert(it == liveRangeMap.end() && "Live range already exists");
-    auto newLiveRange = createLiveRange(value.getType());
+    auto newLiveRange = createLiveRange(function, value.getType());
     liveRangeMap[value] = newLiveRange;
     liveRangeTypeMap[newLiveRange] = value.getType();
   }
@@ -190,6 +256,12 @@ LiveRangeAnalysis::create(ir::Module *module) {
   auto impl = std::make_unique<LiveRangeAnalysisImpl>(
       std::move(liveRangeMap), std::move(copyMap), std::move(liveRangeStorage));
 
+  for (ir::Function *func : *module->getIR()) {
+    if (!func->hasDefinition())
+      continue;
+    impl->updateLiveRangeIdMap(module, func);
+  }
+
   return std::unique_ptr<LiveRangeAnalysis>(
       new LiveRangeAnalysis(module, std::move(impl)));
 }
@@ -249,9 +321,10 @@ using Operand = kecc::ir::Operand;
 
 class LiveRangePrinter : public ir::ValuePrinter {
 public:
-  LiveRangePrinter(const SpillInfo &spillInfo,
-                   const LiveRangeAnalysis *liveRangeAnalysis,
-                   const llvm::DenseMap<LiveRange, size_t> &liveRangeToId)
+  LiveRangePrinter(
+      const SpillInfo &spillInfo, const LiveRangeAnalysis *liveRangeAnalysis,
+      const llvm::DenseMap<ir::Function *, llvm::DenseMap<LiveRange, size_t>>
+          &liveRangeToId)
       : spillInfo(spillInfo), liveRangeAnalysis(liveRangeAnalysis),
         liveRangeToId((liveRangeToId)) {}
 
@@ -264,7 +337,7 @@ public:
 
     auto lr = liveRangeAnalysis->getLiveRange(
         value.getInstruction()->getParentBlock()->getParentFunction(), value);
-    size_t id = liveRangeToId.at(lr);
+    size_t id = liveRangeToId.at(lr.getFunction()).at(lr);
     context.getOS() << "L" << id << ":" << lr.getType();
     if (printName && !value.getValueName().empty())
       context.getOS() << ":" << value.getValueName();
@@ -285,7 +358,7 @@ public:
       lr = liveRangeAnalysis->getLiveRange(operand);
     }
 
-    size_t id = liveRangeToId.at(lr);
+    size_t id = liveRangeToId.at(lr.getFunction()).at(lr);
     context.getOS() << 'L' << id << ':' << lr.getType();
   }
 
@@ -297,7 +370,8 @@ public:
 private:
   const SpillInfo &spillInfo;
   const LiveRangeAnalysis *liveRangeAnalysis;
-  const llvm::DenseMap<LiveRange, size_t> &liveRangeToId;
+  const llvm::DenseMap<ir::Function *, llvm::DenseMap<LiveRange, size_t>>
+      &liveRangeToId;
 };
 
 } // namespace print
@@ -311,42 +385,9 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
       os << ' ';
   };
 
-  llvm::DenseMap<LiveRange, size_t> liveRangeToId = getCurrLRIdMap(spillInfo);
-  auto printSpill = [&](llvm::ArrayRef<ir::Value> results, size_t indent) {
-    llvm::SmallVector<LiveRange> spills;
-    llvm::for_each(results, [&](ir::Value value) {
-      auto lr = getLiveRange(value);
-      if (spillInfo.spilled.contains(lr))
-        spills.emplace_back(lr);
-    });
-    if (spills.empty())
-      return;
-
-    printIndent(indent);
-    os << "spill ";
-    for (size_t i = 0; i < spills.size(); ++i) {
-      if (i > 0)
-        os << ", ";
-      os << 'L' << liveRangeToId.at(spills[i]);
-    }
-    os << '\n';
-  };
-
-  auto printRestore = [&](llvm::ArrayRef<ir::Operand> operands, size_t indent) {
-    for (const ir::Operand &operand : operands) {
-      if (auto it = spillInfo.restore.find(&operand);
-          it != spillInfo.restore.end()) {
-        auto originalLR = getLiveRange(operand);
-        auto newLR = it->getSecond();
-        printIndent(indent);
-        os << "restore L" << liveRangeToId.at(newLR)
-           << " from spill memory of L" << liveRangeToId.at(originalLR) << '\n';
-      }
-    }
-  };
-
   ir::IRPrintContext printContext(os, std::make_unique<print::LiveRangePrinter>(
-                                          spillInfo, this, liveRangeToId));
+                                          spillInfo, this, getLRIdMap()));
+  ir::IRPrintContext::AddIndent addIndent(printContext);
 
   bool first = true;
   size_t indent = 0;
@@ -378,6 +419,42 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
       os << '\n';
       continue;
     }
+
+    llvm::DenseMap<LiveRange, size_t> liveRangeToId = getFuncLRIdMap(func);
+    auto printSpill = [&](llvm::ArrayRef<ir::Value> results, size_t indent) {
+      llvm::SmallVector<LiveRange> spills;
+      llvm::for_each(results, [&](ir::Value value) {
+        auto lr = getLiveRange(value);
+        if (spillInfo.spilled.contains(lr))
+          spills.emplace_back(lr);
+      });
+      if (spills.empty())
+        return;
+
+      printIndent(indent);
+      os << "spill ";
+      for (size_t i = 0; i < spills.size(); ++i) {
+        if (i > 0)
+          os << ", ";
+        os << 'L' << liveRangeToId.at(spills[i]);
+      }
+      os << '\n';
+    };
+
+    auto printRestore = [&](llvm::ArrayRef<ir::Operand> operands,
+                            size_t indent) {
+      for (const ir::Operand &operand : operands) {
+        if (auto it = spillInfo.restore.find(&operand);
+            it != spillInfo.restore.end()) {
+          auto originalLR = getLiveRange(operand);
+          auto newLR = it->getSecond();
+          printIndent(indent);
+          os << "restore L" << liveRangeToId.at(newLR)
+             << " from spill memory of L" << liveRangeToId.at(originalLR)
+             << '\n';
+        }
+      }
+    };
 
     os << " {\n";
 
@@ -458,72 +535,14 @@ void LiveRangeAnalysis::dump(llvm::raw_ostream &os,
   }
 }
 
-void LiveRangeAnalysis::print(LiveRange liveRange,
-                              llvm::raw_ostream &os) const {
-  llvm::DenseMap<LiveRange, size_t> currLRIdMap = getCurrLRIdMap();
-  print(liveRange, os, currLRIdMap);
+const llvm::DenseMap<LiveRange, size_t> &
+LiveRangeAnalysis::getFuncLRIdMap(ir::Function *func) const {
+  return impl->liveRangeFuncIdMap.at(func);
 }
 
-void LiveRangeAnalysis::print(
-    LiveRange liveRange, llvm::raw_ostream &os,
-    const llvm::DenseMap<LiveRange, size_t> &currLRIdMap) const {
-  os << "L" << currLRIdMap.at(liveRange);
-}
-
-llvm::DenseMap<LiveRange, size_t>
-LiveRangeAnalysis::getCurrLRIdMap(const SpillInfo &spillInfo) const {
-  llvm::DenseMap<LiveRange, size_t> currLRIdMap;
-
-  for (ir::Function *func : *getModule()->getIR()) {
-    if (!func->hasDefinition())
-      continue;
-    size_t id = 0;
-
-    for (ir::InstructionStorage *inst : *func->getAllocationBlock()) {
-      auto localVar = inst->getDefiningInst<ir::inst::LocalVariable>();
-      assert(localVar);
-      auto lr = getLiveRange(func, localVar);
-      assert(!currLRIdMap.contains(lr) && "Live range already exists");
-      currLRIdMap[lr] = id++;
-    }
-
-    for (ir::Block *block : *func) {
-      for (auto I = block->begin(), E = block->end(); I != E; ++I) {
-        ir::InstructionStorage *inst = *I;
-
-        if (inst->getDefiningInst<ir::BlockExit>()) {
-          for (const auto &[to, from] : impl->getCopyMap(block)) {
-            // `to`'s id must be counted in successor's block
-            if (!currLRIdMap.contains(from))
-              currLRIdMap[from] = id++;
-          }
-        }
-
-        for (const ir::Operand &operand : inst->getOperands()) {
-          if (operand.isConstant())
-            continue;
-
-          if (auto it = spillInfo.restore.find(&operand);
-              it != spillInfo.restore.end()) {
-            auto lr = it->getSecond();
-            if (currLRIdMap.contains(lr))
-              continue;
-            currLRIdMap[lr] = id++;
-          }
-        }
-
-        auto results = inst->getResults();
-        for (ir::Value result : results) {
-          auto lr = getLiveRange(func, result);
-          if (currLRIdMap.contains(lr))
-            continue;
-          currLRIdMap[lr] = id++;
-        }
-      }
-    }
-  }
-
-  return currLRIdMap;
+const llvm::DenseMap<ir::Function *, llvm::DenseMap<LiveRange, size_t>> &
+LiveRangeAnalysis::getLRIdMap() const {
+  return impl->liveRangeFuncIdMap;
 }
 
 llvm::ArrayRef<std::pair<LiveRange, LiveRange>>
@@ -531,10 +550,9 @@ LiveRangeAnalysis::getCopyMap(ir::Block *block) const {
   return impl->getCopyMap(block);
 }
 
-SpillInfo
-LiveRangeAnalysis::spill(ir::Function *func,
-                         const llvm::DenseSet<LiveRange> &liveRanges) {
-  return impl->spill(func, liveRanges);
+void LiveRangeAnalysis::spill(SpillAnalysis *spillAnalysis, ir::Function *func,
+                              const llvm::DenseSet<LiveRange> &liveRanges) {
+  impl->spill(spillAnalysis, func, liveRanges);
 }
 
 } // namespace kecc

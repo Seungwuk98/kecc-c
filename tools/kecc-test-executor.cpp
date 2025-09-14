@@ -25,6 +25,14 @@ static llvm::cl::opt<int>
 
 static llvm::cl::opt<std::string>
     arg("arg", llvm::cl::desc("Argument for the program"));
+
+static llvm::cl::opt<int>
+    expectedReturnValue("test-return-value", llvm::cl::init(0),
+                        llvm::cl::desc("Expected return value"));
+
+static llvm::cl::opt<bool>
+    printReturnValue("print-return-value", llvm::cl::init(false),
+                     llvm::cl::desc("Print the return value of the program"));
 } // namespace cl
 
 struct TempDirectory {
@@ -276,6 +284,18 @@ int keccTestExecutorMain() {
 
   // run executable with qemu
   returnCode = llvm::sys::ExecuteAndWait(QEMU_RISCV64_STATIC, exeArgs);
+  if (cl::printReturnValue)
+    llvm::outs() << "return value: " << returnCode << '\n';
+
+  if (cl::expectedReturnValue.getNumOccurrences() > 0 &&
+      returnCode != cl::expectedReturnValue) {
+    llvm::errs() << "Error: return value " << returnCode
+                 << " does not match expected return value "
+                 << cl::expectedReturnValue << '\n';
+    return 1;
+  } else {
+    return 0;
+  }
 
   if (returnCode != 0) {
     llvm::errs() << "Error: execution failed with return code " << returnCode

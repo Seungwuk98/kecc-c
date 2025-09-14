@@ -36,6 +36,23 @@ public:
   }
 };
 
+class CFGReach : public FuncPass {
+public:
+  void init(Module *, Function *) override { visited.clear(); }
+  PassResult run(Module *module, Function *fun) override;
+
+  static llvm::StringRef getPassName() { return "cfg-reach"; }
+  llvm::StringRef getPassArgument() const override { return getPassName(); }
+  llvm::StringRef getDescription() const override {
+    return "remove unreachable blocks in the control flow graph.";
+  }
+
+private:
+  void dfs(Module *module, Block *block);
+
+  llvm::DenseSet<Block *> visited;
+};
+
 void registerSimplifyCFGPass();
 
 class Mem2RegImpl;

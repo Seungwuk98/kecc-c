@@ -2,6 +2,7 @@
 #define KECC_TRANSLATE_LIVE_RANGE_H
 
 #include "kecc/ir/Analysis.h"
+#include "kecc/ir/IR.h"
 #include "kecc/ir/Type.h"
 #include "llvm/ADT/DenseMap.h"
 #include <memory>
@@ -10,11 +11,15 @@ namespace kecc {
 
 class LiveRangeStorage {
 public:
-  LiveRangeStorage(ir::Type type) : type(type) {}
+  LiveRangeStorage(ir::Type type, ir::Function *func)
+      : type(type), func(func) {}
+
   ir::Type getType() const { return type; }
+  ir::Function *getFunction() const { return func; }
 
 private:
   ir::Type type;
+  ir::Function *func;
 };
 
 class LiveRange {
@@ -37,6 +42,11 @@ public:
   operator bool() const { return storage != nullptr; }
 
   ir::Type getType() const { return storage->getType(); }
+  ir::Function *getFunction() const { return storage->getFunction(); }
+
+  friend llvm::hash_code hash_value(const LiveRange &lr) {
+    return llvm::DenseMapInfo<const void *>::getHashValue(lr.getAsVoidPtr());
+  }
 
 private:
   const LiveRangeStorage *storage;
@@ -58,7 +68,7 @@ template <> struct DenseMapInfo<kecc::LiveRange> {
   }
 
   static unsigned getHashValue(const kecc::LiveRange &lr) {
-    return llvm::DenseMapInfo<const void *>::getHashValue(lr.getAsVoidPtr());
+    return hash_value(lr);
   }
 
   static bool isEqual(const kecc::LiveRange &l, const kecc::LiveRange &r) {

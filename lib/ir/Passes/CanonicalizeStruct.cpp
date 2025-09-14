@@ -912,7 +912,7 @@ void CanonicalizeStructImpl::processBigValue(Value value) {
       }
     }
 #else
-    for (unisgned i = 0u; i < call->getResultSize(); ++i) {
+    for (unsigned i = 0u; i < call->getResultSize(); ++i) {
       if (call.getResult(i) != value)
         newReturnTypes.emplace_back(call.getResult(i).getType());
     }

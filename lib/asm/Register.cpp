@@ -376,6 +376,8 @@ bool Register::isFloatingPoint() const {
 }
 int Register::getABIIndex() const { return impl->getABIIndex(); }
 bool Register::isArg() const { return impl->getABIKind() == ABIKind::Arg; }
+bool Register::isTemp() const { return impl->getABIKind() == ABIKind::Temp; }
+bool Register::isSaved() const { return impl->getABIKind() == ABIKind::Saved; }
 
 std::optional<std::pair<RegisterType, std::size_t>> Register::getTemp() const {
   if (impl->getABIKind() != ABIKind::Temp)
