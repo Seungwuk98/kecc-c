@@ -13,6 +13,7 @@ add_library(
   FunctionStack.cpp
   DefaultTranslationRules.cpp
   IntermediateInsts.cpp
+  TranslatePasses.cpp
 )
 
 target_link_libraries(KeccTranslate

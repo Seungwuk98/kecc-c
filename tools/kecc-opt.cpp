@@ -222,6 +222,21 @@ int main(int argc, const char **argv) {
   kecc::ir::registerSimplifyCFGPass();
   kecc::ir::registerCanonicalizeStructPasses();
   kecc::cl::registerPMOption();
+
+  kecc::ir::registerPass<kecc::ir::CanonicalizeConstant>();
+  kecc::ir::registerPass<kecc::ir::Mem2Reg>();
+  kecc::ir::registerPass<kecc::ir::GVN>();
+  kecc::ir::registerPass<kecc::ir::DeadCode>();
+  kecc::ir::registerPass<kecc::ir::OutlineConstantPass>();
+  kecc::ir::registerPass<kecc::ir::InstructionFold>();
+  kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
+  kecc::ir::registerPass<kecc::ir::InlineCallPass>();
+  kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
+  kecc::ir::registerPass<kecc::translate::ConversionToCopyPass>();
+  kecc::ir::registerPass<kecc::translate::InlineMemoryInstPass>();
+  kecc::ir::registerSimplifyCFGPass();
+  kecc::ir::registerCanonicalizeStructPasses();
+  kecc::cl::registerPMOption();
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "Kecc IR Optimization Compiler\n");
   return kecc::keccOptMain();

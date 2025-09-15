@@ -1,0 +1,96 @@
+// RUN: kecc-test-executor %s | FileCheck %s --check-prefix=RESULT 
+
+struct X : {a:i32, b:i32, c:i32}
+struct Y : {a:struct X, b: struct X, c: struct X}
+struct Z : {a:struct Y, b: struct Y, c: struct Y}
+
+var struct Z @global_var = {
+  {
+    {1, 2, 3}, {4, 5, 6}, {7, 8, 9}
+  }, 
+  {
+    {10, 11, 12}, {13, 14, 15}, {16, 17, 18}
+  }, 
+  {
+    {19, 20, 21}, {22, 23, 24}, {25, 26, 27}
+  }
+}
+
+fun unit @change_global_var () {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:i0:struct Y* = getelementptr @global_var:struct Z* offset 0:i64
+  %b0:i1:struct X* = getelementptr %b0:i0:struct Y* offset 0:i64
+  %b0:i2:i32* = getelementptr %b0:i1:struct X* offset 0:i64
+  %b0:i3:i32 = load %b0:i2:i32*
+  %b0:i4:i32 = add %b0:i3:i32 10:i32
+
+  %b0:i5:struct Y* = getelementptr @global_var:struct Z* offset 36:i64
+  %b0:i6:struct X* = getelementptr %b0:i5:struct Y* offset 24:i64
+  %b0:i7:i32* = getelementptr %b0:i6:struct X* offset 4:i64
+
+  %b0:i8:unit = store %b0:i4:i32 %b0:i7:i32*
+  ret
+}
+
+fun i32 @get_global_var_val(i32, i32, i32) {
+init:
+  bid: b0
+  allocations:
+
+block b0:
+  %b0:p0:i32:x 
+  %b0:p1:i32:y
+  %b0:p2:i32:z
+
+  %b0:i0:i64 = typecast %b0:p0:i32 to i64
+  %b0:i1:i64 = mul %b0:i0:i64 36:i64
+  %b0:i2:struct Y* = getelementptr @global_var:struct Z* offset %b0:i1:i64
+
+  %b0:i3:i64 = typecast %b0:p1:i32 to i64
+  %b0:i4:i64 = mul %b0:i3:i64 12:i64
+  %b0:i5:struct X* = getelementptr %b0:i2:struct Y* offset %b0:i4:i64
+
+  %b0:i6:i64 = typecast %b0:p2:i32 to i64
+  %b0:i7:i64 = mul %b0:i6:i64 4:i64
+  %b0:i8:i32* = getelementptr %b0:i5:struct X* offset %b0:i7:i64
+
+  %b0:i9:i32 = load %b0:i8:i32*
+  ret %b0:i9:i32
+}
+
+
+/// main.c 
+
+#include <stdio.h>
+
+extern void change_global_var(); 
+
+extern int get_global_var_val(int x, int y, int z);
+
+int main() {
+  change_global_var();
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      if (j != 0)
+        printf(" ");
+      printf("{");
+      for (int k = 0; k < 3; ++k) {
+        if (k != 0)
+          printf(" ");
+        printf("%d", get_global_var_val(i, j, k));
+      }
+      printf("}");
+    }
+    printf("\n");
+  }
+}
+
+// RESULT: {1 2 3} {4 5 6} {7 8 9}
+// RESULT: {10 11 12} {13 14 15} {16 11 18}
+// RESULT: {19 20 21} {22 23 24} {25 26 27}
+
+

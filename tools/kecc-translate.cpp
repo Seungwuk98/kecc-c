@@ -56,6 +56,23 @@ static llvm::cl::opt<std::string> registerForAllocation(
     "reg-for-alloc",
     llvm::cl::desc("Declare registers for register allocation"));
 
+struct CLOptions {
+
+  std::function<void(ir::PassManager &)> passCallback;
+
+  CLOptions() {
+    static ir::PassPipelineParser pipelineParser("", "Passes to run\n");
+
+    passCallback = [&](ir::PassManager &pm) {
+      pipelineParser.addToPassManager(pm);
+    };
+  }
+};
+
+llvm::ManagedStatic<CLOptions> pmOption;
+
+void registerPMOption() { *pmOption; }
+
 } // namespace kecc::cl
 
 namespace kecc {
@@ -89,10 +106,13 @@ std::unique_ptr<ir::Module> parseAndBuildModule(ir::IRContext &context) {
 ir::PassResult runPasses(ir::Module *module) {
   ir::PassManager pm;
 
+  cl::pmOption->passCallback(pm);
+
   pm.addPass<ir::CFGReach>();
   pm.addPass<ir::CanonicalizeStruct>();
   pm.addPass<ir::FoldTypeCast>();
   pm.addPass<ir::InlineCallPass>();
+  pm.addPass<ir::CanonicalizeConstant>();
   pm.addPass<translate::ConversionToCopyPass>();
   pm.addPass<ir::OutlineConstantPass>();
 
@@ -224,15 +244,20 @@ int keccTranslateMain() {
 int main(int argc, const char **argv) {
   llvm::InitLLVM x(argc, argv);
 
-  kecc::ir::registerPass<kecc::ir::CFGReach>();
   kecc::ir::registerPass<kecc::ir::CanonicalizeConstant>();
+  kecc::ir::registerPass<kecc::ir::Mem2Reg>();
+  kecc::ir::registerPass<kecc::ir::GVN>();
+  kecc::ir::registerPass<kecc::ir::DeadCode>();
   kecc::ir::registerPass<kecc::ir::OutlineConstantPass>();
-  kecc::ir::registerPass<kecc::ir::InlineCallPass>();
-  kecc::ir::registerPass<kecc::ir::CanonicalizeStruct>();
+  kecc::ir::registerPass<kecc::ir::InstructionFold>();
   kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
+  kecc::ir::registerPass<kecc::ir::InlineCallPass>();
   kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
   kecc::ir::registerPass<kecc::translate::ConversionToCopyPass>();
-  kecc::ir::registerPass<kecc::ir::FoldTypeCast>();
+  kecc::ir::registerPass<kecc::translate::InlineMemoryInstPass>();
+  kecc::ir::registerSimplifyCFGPass();
+  kecc::ir::registerCanonicalizeStructPasses();
+  kecc::cl::registerPMOption();
 
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "Kecc IR Translation Compiler\n");

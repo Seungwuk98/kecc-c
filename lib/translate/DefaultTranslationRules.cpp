@@ -1580,6 +1580,18 @@ public:
   }
 };
 
+class NopTranslationRule : public InstructionTranslationRule<ir::inst::Nop> {
+public:
+  NopTranslationRule() {}
+
+  utils::LogicalResult translate(as::AsmBuilder &builder,
+                                 FunctionTranslater &translater,
+                                 ir::inst::Nop inst) override {
+    // Do nothing for Nop
+    return utils::LogicalResult::success();
+  }
+};
+
 class FunctionArgTranslationRule
     : public InstructionTranslationRule<ir::inst::FunctionArgument> {
 public:
@@ -1613,6 +1625,50 @@ public:
   }
 };
 
+class LoadOffsetTranslationRule
+    : public InstructionTranslationRule<translate::inst::LoadOffset> {
+public:
+  LoadOffsetTranslationRule() {}
+
+  utils::LogicalResult
+  translate(as::AsmBuilder &builder, FunctionTranslater &translater,
+            translate::inst::LoadOffset loadOffset) override {
+    const auto *ptr = &loadOffset.getPointerAsOperand();
+    auto dataSize = getDataSize(loadOffset.getType());
+    auto ptrReg = translater.getOperandRegister(ptr);
+    auto rd = translater.getRegister(loadOffset.getResult());
+    auto offsetImm = getImmediate(loadOffset.getOffset());
+    assert(offsetImm && "Expected a constant immediate for offset");
+    bool isSigned = true;
+    if (auto intT = loadOffset.getType().dyn_cast<ir::IntT>()) {
+      isSigned = intT.isSigned();
+    }
+    builder.create<as::itype::Load>(rd, ptrReg, offsetImm, dataSize, isSigned);
+    return utils::LogicalResult::success();
+  }
+};
+
+class StoreOffsetTranslationRule
+    : public InstructionTranslationRule<translate::inst::StoreOffset> {
+public:
+  StoreOffsetTranslationRule() {}
+
+  utils::LogicalResult
+  translate(as::AsmBuilder &builder, FunctionTranslater &translater,
+            translate::inst::StoreOffset storeOffset) override {
+    const auto *value = &storeOffset.getValueAsOperand();
+    const auto *ptr = &storeOffset.getPointerAsOperand();
+    auto valueType = value->getType();
+    auto dataSize = getDataSize(valueType);
+    auto valueReg = translater.getOperandRegister(value);
+    auto ptrReg = translater.getOperandRegister(ptr);
+    auto offsetImm = getImmediate(storeOffset.getOffset());
+    assert(offsetImm && "Expected a constant immediate for offset");
+    builder.create<as::stype::Store>(ptrReg, valueReg, offsetImm, dataSize);
+    return utils::LogicalResult::success();
+  }
+};
+
 void registerDefaultTranslationRules(TranslateContext *context) {
   registerTranslationRule<BinaryTranslationRule>(context);
   registerTranslationRule<UnaryTranslationRule>(context);
@@ -1626,11 +1682,14 @@ void registerDefaultTranslationRules(TranslateContext *context) {
   registerTranslationRule<LoadTranslationRule>(context);
   registerTranslationRule<GepTranslationRule>(context);
   registerTranslationRule<TypeCastTranslationRule>(context);
+  registerTranslationRule<NopTranslationRule>(context);
   registerTranslationRule<CallTranslationRule>(context);
   registerTranslationRule<InlineCallTranslationRule>(context);
   registerTranslationRule<MemcpyTranslationRule>(context);
   registerTranslationRule<FunctionArgTranslationRule>(context);
   registerTranslationRule<CopyTranslationRule>(context);
+  registerTranslationRule<LoadOffsetTranslationRule>(context);
+  registerTranslationRule<StoreOffsetTranslationRule>(context);
 }
 
 } // namespace kecc

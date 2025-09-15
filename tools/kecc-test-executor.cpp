@@ -33,6 +33,10 @@ static llvm::cl::opt<int>
 static llvm::cl::opt<bool>
     printReturnValue("print-return-value", llvm::cl::init(false),
                      llvm::cl::desc("Print the return value of the program"));
+static llvm::cl::opt<std::string>
+    translatePasses("translate-passes",
+                    llvm::cl::desc("Passes to run in kecc-translate"));
+
 } // namespace cl
 
 struct TempDirectory {
@@ -229,17 +233,27 @@ int keccTestExecutorMain() {
     os << source;
   }
 
+  // run kecc-translate
   // compile ir to assembly
   auto irPath = tempFileNames[0];
   auto asmPath = irPath;
   llvm::sys::path::replace_extension(asmPath, "s");
-  auto returnCode = llvm::sys::ExecuteAndWait(
-      KECC_TRANSLATE_DIR, {
-                              KECC_TRANSLATE_DIR,
-                              llvm::StringRef{irPath.data(), irPath.size()},
-                              "-o",
-                              llvm::StringRef{asmPath.data(), asmPath.size()},
-                          });
+
+  llvm::SmallVector<llvm::StringRef> translateArgs = {
+      KECC_TRANSLATE_DIR,
+      llvm::StringRef{irPath.data(), irPath.size()},
+      "-o",
+      llvm::StringRef{asmPath.data(), asmPath.size()},
+  };
+
+  if (cl::translatePasses.getNumOccurrences() > 0) {
+    auto passes = llvm::split(cl::translatePasses, ' ');
+    for (const auto &pass : passes)
+      translateArgs.emplace_back(pass);
+  }
+
+  auto returnCode =
+      llvm::sys::ExecuteAndWait(KECC_TRANSLATE_DIR, translateArgs);
 
   if (returnCode != 0) {
     llvm::errs() << "Error: kecc-translate failed with return code "
@@ -280,7 +294,7 @@ int keccTestExecutorMain() {
       llvm::StringRef{exePath.data(), exePath.size()},
   };
   auto args = llvm::split(cl::arg, ' ');
-  exeArgs.append(args.begin(), args.end());
+  exeArgs.append(translateArgs.begin(), translateArgs.end());
 
   // run executable with qemu
   returnCode = llvm::sys::ExecuteAndWait(QEMU_RISCV64_STATIC, exeArgs);

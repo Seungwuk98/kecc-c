@@ -96,7 +96,6 @@ public:
     };
     switch (binary.getOpKind()) {
     case inst::Binary::Add:
-    case inst::Binary::Sub:
     case inst::Binary::BitAnd:
     case inst::Binary::BitOr:
     case inst::Binary::BitXor:
@@ -110,14 +109,24 @@ public:
         if (!lhsCS.isNonConstant())
           createOutlineAndMatch(lhs, lhsSetter);
         if (!rhsCS.isNonConstant())
-          createOutlineAndMatch(rhs, lhsSetter);
+          createOutlineAndMatch(rhs, rhsSetter);
       }
       break;
+    case inst::Binary::Sub:
+      if (!lhsCS.isNonConstant())
+        createOutlineAndMatch(lhs, lhsSetter);
+      if (rhsCS.isOutline())
+        createOutlineAndMatch(rhs, rhsSetter);
+      break;
+
     case inst::Binary::Shl:
     case inst::Binary::Shr:
+      if (!lhsCS.isNonConstant())
+        createOutlineAndMatch(lhs, lhsSetter);
       if (rhsCS.isOutline()) {
         createOutlineAndMatch(rhs, rhsSetter);
       }
+      break;
     case inst::Binary::Mul:
     case inst::Binary::Div:
     case inst::Binary::Mod:

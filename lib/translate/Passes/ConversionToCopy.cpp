@@ -31,9 +31,14 @@ public:
     auto rewriteAdd = [&](ir::inst::Constant constant,
                           ir::Value other) -> bool {
       if (type.isa<ir::FloatT>()) {
-        auto value =
+        auto value = constant.getValue();
+        assert(
+            value.isa<ir::ConstantFloatAttr>() &&
+            "Expected float constant. Use `CanonicalizeConstant` pass first");
+
+        auto floatValue =
             constant.getValue().cast<ir::ConstantFloatAttr>().getValue();
-        if (value.isZero()) {
+        if (floatValue.isZero()) {
           rewriter.replaceInst(binary.getStorage(), other);
           return true;
         }

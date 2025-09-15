@@ -1,3 +1,4 @@
+// RUN: kecc-test-executor %s --test-return-value=1
 // RUN: kecc-opt %s --mem2reg | FileCheck %s
 
 

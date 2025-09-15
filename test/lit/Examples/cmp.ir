@@ -1,5 +1,5 @@
 // RUN: kecc-test-executor %s --test-return-value=1
-// TODO: The output of cmp.c is 0 but this ir is must be 1
+// TODO: The output of cmp.c is 0 but this ir must be 1
 //       There are difference between x86(=1) and riscv(=0)
 
 fun i32 @char_greater_than (i8, u8) {

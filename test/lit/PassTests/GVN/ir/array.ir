@@ -1,5 +1,5 @@
+// RUN: kecc-test-executor %s --test-return-value=1
 // RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
-
 
 fun i32 @main () {
 init:
@@ -120,3 +120,5 @@ block b5:
 // CHECK-LABEL: block b5:
 // CHECK-NEXT:   ret %b2:p0:i32
 // CHECK-NEXT: }
+
+

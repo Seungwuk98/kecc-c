@@ -182,6 +182,9 @@ public:
 
   std::optional<DataSpace> getSpillData(ir::Value value) const {
     auto liveRange = liveRangeAnalysis->getLiveRange(value);
+    return getSpillData(liveRange);
+  }
+  std::optional<DataSpace> getSpillData(LiveRange liveRange) const {
     auto it = spillMemories.find(liveRange);
     if (it != spillMemories.end())
       return it->second;
@@ -207,6 +210,13 @@ public:
                                   bool isSigned);
 
   bool hasMultipleReturn() const { return multipleReturn; }
+  const std::tuple<StackPoint, std::optional<as::DataSize>, bool> &
+  getAnonymousRegisterStackPoint(as::Register reg) const {
+    assert(reg.isAnonymous() && "Register is not anonymous");
+    auto it = anonymousRegisterToSp.find(reg);
+    assert(it != anonymousRegisterToSp.end() && "Anonymous register not found");
+    return it->second;
+  }
 
 private:
   void init();

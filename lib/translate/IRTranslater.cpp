@@ -749,6 +749,59 @@ translateCallLikeInstruction(as::AsmBuilder &builder, TranslationRule *rule,
   return utils::LogicalResult::success();
 }
 
+void translateCopyMap(as::AsmBuilder &builder, FunctionTranslater &translater,
+                      llvm::ArrayRef<std::pair<LiveRange, LiveRange>> copies) {
+  const SpillInfo &spillInfo = translater.getSpillAnalysis()->getSpillInfo();
+
+  for (const auto &[dst, src] : copies) {
+    auto toSpilled = spillInfo.spilled.contains(dst);
+    auto fromRestored = spillInfo.restoreMemory.contains(src);
+    if (toSpilled && !fromRestored) {
+      auto dstData = translater.getSpillData(dst);
+      assert(dstData->isMemory() && "Spilled memory must have a register");
+      auto dstMemoryReg = dstData->getRegister();
+      const auto &[sp, dataSize, isSigned] =
+          translater.getAnonymousRegisterStackPoint(dstMemoryReg);
+      assert(dataSize && "Spilled memory must have a data size");
+      auto srcReg = translater.getRegister(src);
+
+      storeData(builder, translater, dstMemoryReg, srcReg, *dataSize, 0);
+    } else if (fromRestored) {
+      auto restoreMemory = spillInfo.restoreMemory.lookup(src);
+      auto restoreData = translater.getSpillData(restoreMemory);
+      assert(restoreData->isMemory() && "Restored memory must have a register");
+      auto restoreMemoryReg = restoreData->getRegister();
+      const auto &[sp, dataSize, isSigned] =
+          translater.getAnonymousRegisterStackPoint(restoreMemoryReg);
+      assert(dataSize && "Restored memory must have a data size");
+
+      if (toSpilled) {
+        auto tempReg = translater.getTranslateContext()->getTempRegisters()[0];
+        loadData(builder, translater, tempReg, restoreMemoryReg, *dataSize, 0,
+                 isSigned);
+        auto dstData = translater.getSpillData(dst);
+        assert(dstData->isMemory() && "Spilled memory must have a register");
+        auto dstMemoryReg = dstData->getRegister();
+        storeData(builder, translater, dstMemoryReg, tempReg, *dataSize, 0);
+      } else {
+        auto dstReg = translater.getRegister(dst);
+        loadData(builder, translater, dstReg, restoreMemoryReg, *dataSize, 0,
+                 isSigned);
+      }
+    } else {
+      auto dataSize = getDataSize(dst.getType());
+      auto srcReg = translater.getRegister(src);
+      auto dstReg = translater.getRegister(dst);
+      if (srcReg != dstReg) {
+        if (dataSize.isFloat())
+          builder.create<as::pseudo::Fmv>(dataSize, dstReg, srcReg);
+        else
+          builder.create<as::pseudo::Mv>(dstReg, srcReg);
+      }
+    }
+  }
+}
+
 utils::LogicalResult translateInstruction(as::AsmBuilder &builder,
                                           FunctionTranslater &translater,
                                           ir::InstructionStorage *inst) {
@@ -774,6 +827,12 @@ utils::LogicalResult translateInstruction(as::AsmBuilder &builder,
     if (!result.succeeded())
       return result;
   } else {
+    if (inst->getDefiningInst<ir::BlockExit>()) {
+      auto copies =
+          translater.getLiveRangeAnalysis()->getCopyMap(inst->getParentBlock());
+      translateCopyMap(builder, translater, copies);
+    }
+
     auto result = rule->translate(builder, translater, inst);
     if (!result.succeeded())
       return result;
@@ -880,10 +939,12 @@ void FunctionTranslater::writeFunctionStart(as::AsmBuilder &builder) {
                        "allocation block");
     auto liveRange = liveRangeAnalysis->getLiveRange(function, localVar);
 
-    auto rd = getRegister(localVar);
-    builder.create<as::pseudo::Mv>(rd, localVariablesInfo[localVarIdx++]);
-    if (isSpilled(liveRange)) {
-      spillRegister(builder, liveRange);
+    if (localVar.getResult().hasUses()) {
+      auto rd = getRegister(localVar);
+      builder.create<as::pseudo::Mv>(rd, localVariablesInfo[localVarIdx++]);
+      if (isSpilled(liveRange)) {
+        spillRegister(builder, liveRange);
+      }
     }
   }
 
@@ -1270,7 +1331,6 @@ as::Immediate *getImmediate(int64_t value) {
 }
 as::Immediate *getImmediate(ir::ConstantAttr constAttr) {
   auto intConst = constAttr.dyn_cast<ir::ConstantIntAttr>();
-  assert(intConst && "Only ConstantIntAttr is supported");
   return getImmediate(intConst.getValue());
 }
 as::Immediate *getImmediate(ir::inst::Constant constant) {
