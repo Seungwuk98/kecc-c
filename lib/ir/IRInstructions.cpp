@@ -747,7 +747,7 @@ void Unresolved::build(IRBuilder &builder, InstructionState &state, Type type) {
 
 void Unresolved::printer(Unresolved op, IRPrintContext &context) {
   context.printValue(op, true);
-  context.getOS() << "= unresolved";
+  context.getOS() << " = unresolved";
 }
 
 //============================================================================//
