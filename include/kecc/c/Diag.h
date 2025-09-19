@@ -2,7 +2,9 @@
 #define KECC_C_DIAG_H
 
 #include "kecc/c/Clang.h"
+#include "clang/AST/ASTContext.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Frontend/ASTUnit.h"
 #include "llvm/ADT/DenseMap.h"
 
 namespace kecc::c {
@@ -22,10 +24,15 @@ public:
     unsupported_qualifier,
     ext_param_info,
     variadic_param,
+    unsupported_cast_kind,
+    unsupported_cast_fp_features,
     DIAG_ID_COUNT
   };
 
-  ClangDiagManager(DiagnosticsEngine *diags) : diags(diags) {
+  ClangDiagManager(DiagnosticsEngine *diags, clang::ASTUnit *ast)
+      : diags(diags) {
+    diags->getClient()->BeginSourceFile(ast->getLangOpts(),
+                                        &ast->getPreprocessor());
     // clang-format off
     diagToClangDiagMap[unsupported_operator]      = diags->getCustomDiagID(DiagnosticsEngine::Error, "unsupported operator(%0)");
     diagToClangDiagMap[unsupported_expr]          = diags->getCustomDiagID(DiagnosticsEngine::Error, "unsupported expr : %0");
@@ -39,8 +46,12 @@ public:
     diagToClangDiagMap[unsupported_qualifier]     = diags->getCustomDiagID(DiagnosticsEngine::Error, "unsupported qualifier : %0");
     diagToClangDiagMap[ext_param_info]            = diags->getCustomDiagID(DiagnosticsEngine::Error, "additional parameter information");
     diagToClangDiagMap[variadic_param]            = diags->getCustomDiagID(DiagnosticsEngine::Error, "variadic arguments is not supported");
+    diagToClangDiagMap[unsupported_cast_kind]     = diags->getCustomDiagID(DiagnosticsEngine::Error, "unsupported cast kind : %0");
+    diagToClangDiagMap[unsupported_cast_fp_features]  = diags->getCustomDiagID(DiagnosticsEngine::Error, "casting with floating-point environment is not supported");
     // clang-format on
   }
+
+  ~ClangDiagManager() { diags->getClient()->EndSourceFile(); }
 
   DiagnosticBuilder report(SourceLocation loc, DiagID id) {
     assert(id < DIAG_ID_COUNT);

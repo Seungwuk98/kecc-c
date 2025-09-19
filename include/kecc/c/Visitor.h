@@ -84,7 +84,7 @@ public:
 #include "clang/AST/StmtNodes.inc"
 
   RetTy VisitStmt(const Stmt *S) {
-    report(S->getBeginLoc(), ClangDiagManager::unsupported_stmt)
+    report(S->getSourceRange().getBegin(), ClangDiagManager::unsupported_stmt)
         << S->getStmtClassName();
     return RetTy();
   }
@@ -117,7 +117,7 @@ public:
 #include "clang/AST/DeclNodes.inc"
 
   RetTy VisitDecl(const Decl *D) {
-    report(D->getBeginLoc(), ClangDiagManager::unsupported_decl)
+    report(D->getLocation(), ClangDiagManager::unsupported_decl)
         << D->getDeclKindName();
     return RetTy();
   }

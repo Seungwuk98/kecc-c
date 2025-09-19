@@ -24,4 +24,18 @@ add_subdirectory(tools)
 add_subdirectory(third-party)
 add_subdirectory(test)
 
+if (KECC_USE_MOLD)
+  find_program(MOLD mold REQUIRED)
 
+  set(CMAKE_EXE_LINKER_FLAGS 
+    ${CMAKE_EXE_LINKER_FLAGS} "-fuse-ld=mold"
+  )
+  set(CMAKE_STATIC_LINKER_FLAGS 
+    ${CMAKE_STATIC_LINKER_FLAGS} "-fuse-ld=mold"
+  )
+  set(CMAKE_SHARED_LINKER_FLAGS 
+    ${CMAKE_SHARED_LINKER_FLAGS} 
+    "-fuse-ld=mold"
+  )
+  message(STATUS "Using mold as the linker")      
+endif()

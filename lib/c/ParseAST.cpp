@@ -1,17 +1,42 @@
 #include "kecc/c/ParseAST.h"
 #include "kecc/c/Diag.h"
+#include "kecc/utils/LogicalResult.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/PrettyPrinter.h"
 #include "clang/AST/StmtVisitor.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/TypeTraits.h"
+#include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Tooling/Tooling.h"
 
 namespace kecc::c {
 
-void ParseAST::parse() {
-  astUnit = clang::tooling::buildASTFromCode(source, filename);
+utils::LogicalResult ParseAST::parse() {
+  std::vector<std::string> args{"--target=riscv64-unknown-linux-gnu"};
+  if (ignoreWarnings) {
+    args.push_back("-w");
+  }
+
+  auto astUnit =
+      clang::tooling::buildASTFromCodeWithArgs(source, args, filename);
+  if (astUnit->getDiagnostics().hasErrorOccurred()) {
+    return utils::LogicalResult::error();
+  }
+
+  astUnit->getDiagnostics().setClient(new clang::TextDiagnosticPrinter(
+      *diagOS, &astUnit->getDiagnostics().getDiagnosticOptions()));
+  ClangDiagManager diagManager(&astUnit->getDiagnostics(), astUnit.get());
+  AssertImpl assertImpl(&diagManager, astUnit->getLangOpts());
+  assertImpl.Visit(astUnit->getASTContext().getTranslationUnitDecl());
+
+  if (diagManager.hasError()) {
+    return utils::LogicalResult::error();
+  }
+
+  this->astUnit = std::move(astUnit);
+  return utils::LogicalResult::success();
 }
 
 void ParseAST::dump() const {
@@ -23,6 +48,14 @@ void ParseAST::dump() const {
 AssertImpl::AssertImpl(ClangDiagManager *diag, const clang::LangOptions &opt)
     : diag(diag), opt(opt), TypeVisitor(diag), StmtVisitor(diag),
       DeclVisitor(diag) {}
+
+void AssertImpl::Visit(const Type *type, const SourceLocation &loc) {
+  TypeVisitor::Visit(type, loc);
+}
+
+void AssertImpl::Visit(const Stmt *stmt) { StmtVisitor::Visit(stmt); }
+
+void AssertImpl::Visit(const Decl *decl) { DeclVisitor::Visit(decl); }
 
 void AssertImpl::VisitBinaryOperator(const BinaryOperator *expr) {
   auto opKind = expr->getOpcode();
@@ -72,13 +105,6 @@ void AssertImpl::VisitUnaryOperator(const UnaryOperator *expr) {
   auto opKind = expr->getOpcode();
 
   switch (opKind) {
-  case clang::UO_Real:
-  case clang::UO_Imag:
-  case clang::UO_Extension:
-  case clang::UO_Coawait:
-    report(expr->getOperatorLoc(), DiagID::unsupported_operator)
-        << expr->getOpcodeStr(expr->getOpcode());
-    break;
   case clang::UO_PostInc:
   case clang::UO_PostDec:
   case clang::UO_PreInc:
@@ -89,6 +115,10 @@ void AssertImpl::VisitUnaryOperator(const UnaryOperator *expr) {
   case clang::UO_Minus:
   case clang::UO_Not:
   case clang::UO_LNot:
+    break;
+  default:
+    report(expr->getOperatorLoc(), DiagID::unsupported_operator)
+        << expr->getOpcodeStr(expr->getOpcode());
     break;
   }
 }
@@ -115,14 +145,49 @@ void AssertImpl::VisitFloatingLiteral(const FloatingLiteral *expr) {}
 void AssertImpl::VisitParenExpr(const ParenExpr *expr) {
   StmtVisitor::Visit(expr->getSubExpr());
 }
-void AssertImpl::VisitImplicitCastExpr(const ImplicitCastExpr *expr) {
+void AssertImpl::VisitCastExpr(const CastExpr *expr) {
+  switch (expr->getCastKind()) {
+  case clang::CK_LValueToRValue:
+  case clang::CK_IntegralCast:
+  case clang::CK_IntegralToBoolean:
+  case clang::CK_IntegralToFloating:
+  case clang::CK_BitCast:
+  case clang::CK_NoOp:
+  case clang::CK_ArrayToPointerDecay:
+  case clang::CK_FunctionToPointerDecay:
+  case clang::CK_NullToPointer:
+  case clang::CK_IntegralToPointer:
+  case clang::CK_PointerToIntegral:
+  case clang::CK_PointerToBoolean:
+  case clang::CK_ToVoid:
+  case clang::CK_FloatingToIntegral:
+  case clang::CK_FloatingToBoolean:
+  case clang::CK_BooleanToSignedIntegral:
+  case clang::CK_FloatingCast:
+    break;
+  default:
+    report(expr->getExprLoc(), DiagID::unsupported_cast_kind)
+        << clang::CastExpr::getCastKindName(expr->getCastKind());
+    break;
+  }
+
+  // c doesn't support cast path
+  assert(expr->path_empty() && "cast path is not supported");
+
+  if (expr->hasStoredFPFeatures())
+    report(expr->getExprLoc(), DiagID::unsupported_cast_fp_features);
+}
+void AssertImpl::VisitImplicitCastExpr(const clang::ImplicitCastExpr *expr) {
   StmtVisitor::Visit(expr->getSubExpr());
   VisitQualType(expr->getType(), expr->getExprLoc());
+  VisitCastExpr(expr);
 }
-void AssertImpl::VisitExplicitCastExpr(const ExplicitCastExpr *expr) {
+void AssertImpl::VisitCStyleCastExpr(const CStyleCastExpr *expr) {
   StmtVisitor::Visit(expr->getSubExpr());
   VisitQualType(expr->getType(), expr->getExprLoc());
+  VisitCastExpr(expr);
 }
+
 void AssertImpl::VisitInitListExpr(const InitListExpr *expr) {
   for (const auto *init : expr->inits()) {
     StmtVisitor::Visit(init);
@@ -139,16 +204,29 @@ void AssertImpl::VisitConditionalOperator(const ConditionalOperator *expr) {
   StmtVisitor::Visit(expr->getTrueExpr());
   StmtVisitor::Visit(expr->getFalseExpr());
 }
+void AssertImpl::VisitCallExpr(const CallExpr *expr) {
+  StmtVisitor::Visit(expr->getCallee());
+  for (const auto *arg : expr->arguments()) {
+    StmtVisitor::Visit(arg);
+  }
+}
+void AssertImpl::VisitDeclRefExpr(const DeclRefExpr *expr) {}
 
-void AssertImpl::VisitVarDecl(const VarDecl *decl) {
-  VisitQualType(decl->getType(), decl->getLocation());
-  if (decl->hasInit()) {
-    StmtVisitor::Visit(decl->getInit());
+void AssertImpl::VisitTranslationUnitDecl(const TranslationUnitDecl *decl) {
+  for (auto I = decl->decls_begin(), E = decl->decls_end(); I != E; ++I) {
+    if (const auto *typedefDecl = llvm::dyn_cast<TypedefDecl>(*I)) {
+      if (typedefDecl->isImplicit())
+        continue;
+    }
+    DeclVisitor::Visit(*I);
   }
 }
 
-void AssertImpl::VisitValueDecl(const ValueDecl *decl) {
-  VisitQualType(decl->getType(), decl->getLocation());
+void AssertImpl::VisitVarDecl(const VarDecl *decl) {
+  VisitQualType(decl->getType(), decl->getTypeSpecStartLoc());
+  if (decl->hasInit()) {
+    StmtVisitor::Visit(decl->getInit());
+  }
 }
 
 void AssertImpl::VisitFunctionDecl(const FunctionDecl *decl) {
@@ -192,6 +270,11 @@ void AssertImpl::VisitTypedefDecl(const TypedefDecl *decl) {
   VisitQualType(decl->getUnderlyingType(), decl->getLocation());
 }
 
+void AssertImpl::VisitDeclStmt(const DeclStmt *stmt) {
+  for (const auto *decl : stmt->decls()) {
+    DeclVisitor::Visit(decl);
+  }
+}
 void AssertImpl::VisitBreakStmt(const BreakStmt *stmt) {}
 void AssertImpl::VisitContinueStmt(const ContinueStmt *stmt) {}
 void AssertImpl::VisitCompoundStmt(const CompoundStmt *stmt) {
@@ -257,6 +340,12 @@ void AssertImpl::VisitIfStmt(const IfStmt *stmt) {
   }
 }
 
+void AssertImpl::VisitReturnStmt(const ReturnStmt *stmt) {
+  if (stmt->getRetValue()) {
+    StmtVisitor::Visit(stmt->getRetValue());
+  }
+}
+
 void AssertImpl::VisitQualType(QualType qt, const SourceLocation &loc) {
   if (qt.hasQualifiers()) {
     if (qt.isVolatileQualified())
@@ -295,6 +384,10 @@ void AssertImpl::VisitRecordType(const RecordType *T,
                                  const SourceLocation &loc) {
   // Do nothing
 }
+void AssertImpl::VisitElaboratedType(const ElaboratedType *T,
+                                     const SourceLocation &loc) {
+  VisitQualType(T->getNamedType(), loc);
+}
 
 void AssertImpl::VisitTypedefType(const TypedefType *T,
                                   const SourceLocation &loc) {
@@ -308,11 +401,6 @@ void AssertImpl::VisitPointerType(const clang::PointerType *T,
 
 void AssertImpl::VisitFunctionType(const clang::FunctionType *T,
                                    const SourceLocation &loc) {
-  if (T->isFunctionNoProtoType()) {
-    report(loc, DiagID::unsupported_type) << "no proto type function";
-    return;
-  }
-
   VisitQualType(T->getReturnType(), loc);
   const FunctionProtoType *proto = T->getAs<FunctionProtoType>();
   assert(proto);
@@ -352,6 +440,11 @@ void AssertImpl::VisitBuiltinType(const BuiltinType *T,
     report(loc, DiagID::unsupported_type) << T->getName(policy);
   }
   }
+}
+
+void AssertImpl::VisitParenType(const clang::ParenType *T,
+                                const SourceLocation &loc) {
+  VisitQualType(T->getInnerType(), loc);
 }
 
 } // namespace kecc::c

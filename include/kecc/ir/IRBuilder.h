@@ -82,6 +82,8 @@ public:
   void setInsertionPointAfterInst(InstructionStorage *inst);
   void setInsertionPointBeforeInst(InstructionStorage *inst);
 
+  Block *getCurrentBlock() const { return insertionPoint.getBlock(); }
+
 private:
   Block::InsertionPoint insertionPoint;
   IRContext *context;

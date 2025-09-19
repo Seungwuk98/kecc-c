@@ -643,7 +643,8 @@ void GlobalVariableDefinition::build(IRBuilder &builder,
                                      InitializerAttr initializer) {
   state.pushAttribute(StringAttr::get(builder.getContext(), name));
   state.pushAttribute(TypeAttr::get(builder.getContext(), type));
-  state.pushAttribute(initializer);
+  if (initializer)
+    state.pushAttribute(initializer);
 }
 
 static void printInterpretedInitailier(Attribute attr,

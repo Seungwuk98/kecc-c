@@ -237,6 +237,9 @@ private:
 };
 
 PointerT PointerT::get(IRContext *context, Type pointeeType, bool isConst) {
+  if (auto constQ = pointeeType.dyn_cast<ir::ConstQualifier>()) {
+    return Base::get(context, constQ.getType(), true);
+  }
   return Base::get(context, pointeeType, isConst);
 }
 
