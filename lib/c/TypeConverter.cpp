@@ -68,13 +68,15 @@ ir::Type TypeConverter::VisitFunctionType(const FunctionType *T,
   return ir::FunctionT::get(ctx, retType, paramTypes);
 }
 
-ir::Type TypeConverter::VisitBuiltinType(const BuiltinType *T,
+ir::Type TypeConverter::VisitBuiltinType(const clang::BuiltinType *T,
                                          const SourceLocation &loc) {
   switch (T->getKind()) {
   case BuiltinType::Void:
     return ir::UnitT::get(ctx);
   case BuiltinType::Bool:
     return ir::IntT::get(ctx, 1, false);
+  case BuiltinType::Char_U:
+    return ir::IntT::get(ctx, 8, false);
   case BuiltinType::UChar:
     return ir::IntT::get(ctx, 8, false);
   case BuiltinType::UShort:

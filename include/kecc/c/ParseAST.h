@@ -49,7 +49,9 @@ public:
   void VisitUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *expr);
   void VisitIntegerLiteral(const IntegerLiteral *expr);
   void VisitFloatingLiteral(const FloatingLiteral *expr);
+  void VisitCharacterLiteral(const CharacterLiteral *expr);
   void VisitParenExpr(const ParenExpr *expr);
+  void VisitArraySubscriptExpr(const ArraySubscriptExpr *expr);
 
   void VisitCastExpr(const CastExpr *expr);
   void VisitImplicitCastExpr(const ImplicitCastExpr *expr);
@@ -81,6 +83,7 @@ public:
   void VisitDefaultStmt(const DefaultStmt *stmt);
   void VisitIfStmt(const IfStmt *stmt);
   void VisitReturnStmt(const ReturnStmt *stmt);
+  void VisitNullStmt(const NullStmt *stmt);
 
   void VisitQualType(QualType qt, const SourceLocation &loc);
   void VisitArrayType(const ArrayType *T, const SourceLocation &loc);

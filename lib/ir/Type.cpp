@@ -56,5 +56,10 @@ bool Type::isSignedInt() const {
     return intType.isSigned();
   return false;
 }
+bool Type::isBoolean() const {
+  if (auto intType = dyn_cast<IntT>())
+    return intType.getBitWidth() == 1;
+  return false;
+}
 
 } // namespace kecc::ir

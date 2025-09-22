@@ -243,7 +243,12 @@ PointerT PointerT::get(IRContext *context, Type pointeeType, bool isConst) {
   return Base::get(context, pointeeType, isConst);
 }
 
-Type PointerT::getPointeeType() const { return getImpl()->getPointeeType(); }
+Type PointerT::getPointeeType() const {
+  auto pointee = getImpl()->getPointeeType();
+  if (isConst())
+    return ConstQualifier::get(getContext(), pointee);
+  return pointee;
+}
 bool PointerT::isConst() const { return getImpl()->isConst(); }
 
 void PointerT::printer(PointerT type, llvm::raw_ostream &os) {

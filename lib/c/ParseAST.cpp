@@ -141,10 +141,16 @@ void AssertImpl::VisitUnaryExprOrTypeTraitExpr(
 }
 
 void AssertImpl::VisitIntegerLiteral(const IntegerLiteral *expr) {}
+void AssertImpl::VisitCharacterLiteral(const CharacterLiteral *expr) {}
 void AssertImpl::VisitFloatingLiteral(const FloatingLiteral *expr) {}
 void AssertImpl::VisitParenExpr(const ParenExpr *expr) {
   StmtVisitor::Visit(expr->getSubExpr());
 }
+void AssertImpl::VisitArraySubscriptExpr(const ArraySubscriptExpr *expr) {
+  StmtVisitor::Visit(expr->getBase());
+  StmtVisitor::Visit(expr->getIdx());
+}
+
 void AssertImpl::VisitCastExpr(const CastExpr *expr) {
   switch (expr->getCastKind()) {
   case clang::CK_LValueToRValue:
@@ -210,7 +216,28 @@ void AssertImpl::VisitCallExpr(const CallExpr *expr) {
     StmtVisitor::Visit(arg);
   }
 }
-void AssertImpl::VisitDeclRefExpr(const DeclRefExpr *expr) {}
+void AssertImpl::VisitDeclRefExpr(const DeclRefExpr *expr) {
+  if (expr->hasQualifier()) {
+    report(expr->getExprLoc(), DiagID::unsupported_qualifier)
+        << "nested name specifier";
+  }
+
+  if (expr->hasTemplateKeyword()) {
+    report(expr->getExprLoc(), DiagID::unsupported_qualifier)
+        << "template keyword";
+  }
+
+  if (expr->hasExplicitTemplateArgs()) {
+    report(expr->getExprLoc(), DiagID::unsupported_qualifier)
+        << "explicit template arguments";
+  }
+
+  auto name = expr->getNameInfo().getName();
+  if (!name.isIdentifier()) {
+    report(expr->getExprLoc(), DiagID::unsupported_expr)
+        << "non-identifier name";
+  }
+}
 
 void AssertImpl::VisitTranslationUnitDecl(const TranslationUnitDecl *decl) {
   for (auto I = decl->decls_begin(), E = decl->decls_end(); I != E; ++I) {
@@ -345,6 +372,7 @@ void AssertImpl::VisitReturnStmt(const ReturnStmt *stmt) {
     StmtVisitor::Visit(stmt->getRetValue());
   }
 }
+void AssertImpl::VisitNullStmt(const NullStmt *stmt) {}
 
 void AssertImpl::VisitQualType(QualType qt, const SourceLocation &loc) {
   if (qt.hasQualifiers()) {
@@ -422,6 +450,7 @@ void AssertImpl::VisitBuiltinType(const BuiltinType *T,
   switch (T->getKind()) {
   case clang::BuiltinType::Void:
   case clang::BuiltinType::Bool:
+  case clang::BuiltinType::Char_U:
   case clang::BuiltinType::UChar:
   case clang::BuiltinType::UShort:
   case clang::BuiltinType::UInt:
