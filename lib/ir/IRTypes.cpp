@@ -237,23 +237,14 @@ private:
 };
 
 PointerT PointerT::get(IRContext *context, Type pointeeType, bool isConst) {
-  if (auto constQ = pointeeType.dyn_cast<ir::ConstQualifier>()) {
-    return Base::get(context, constQ.getType(), true);
-  }
   return Base::get(context, pointeeType, isConst);
 }
 
-Type PointerT::getPointeeType() const {
-  auto pointee = getImpl()->getPointeeType();
-  if (isConst())
-    return ConstQualifier::get(getContext(), pointee);
-  return pointee;
-}
+Type PointerT::getPointeeType() const { return getImpl()->getPointeeType(); }
 bool PointerT::isConst() const { return getImpl()->isConst(); }
 
 void PointerT::printer(PointerT type, llvm::raw_ostream &os) {
-  os << type.getPointeeType().toString() << "*"
-     << (type.isConst() ? "const" : "");
+  os << type.getPointeeType() << "*" << (type.isConst() ? "const" : "");
 }
 
 std::pair<size_t, size_t>

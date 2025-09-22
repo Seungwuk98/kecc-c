@@ -294,7 +294,7 @@ int keccTestExecutorMain() {
       llvm::StringRef{exePath.data(), exePath.size()},
   };
   auto args = llvm::split(cl::arg, ' ');
-  exeArgs.append(translateArgs.begin(), translateArgs.end());
+  exeArgs.append(args.begin(), args.end());
 
   // run executable with qemu
   returnCode = llvm::sys::ExecuteAndWait(QEMU_RISCV64_STATIC, exeArgs);

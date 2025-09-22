@@ -272,6 +272,31 @@ private:
   llvm::StringRef outputFileName;
 };
 
+class PrintAction : public Action {
+public:
+  PrintAction(Compilation *compilation, llvm::raw_ostream &os)
+      : Action(compilation), os(&os) {}
+
+  static llvm::StringRef getNameStr() { return "Print Action"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData>
+  execute(std::unique_ptr<ActionData> arg) override {
+    if (AsmArg *asmArg = llvm::dyn_cast<AsmArg>(arg.get())) {
+      asmArg->getAsm()->print(*os);
+    } else if (OptArg *optArg = llvm::dyn_cast<OptArg>(arg.get())) {
+      ir::IRPrintContext printContext(*os);
+      optArg->getModule()->getIR()->print(printContext);
+    } else {
+      llvm_unreachable("Argument is neither OptArg nor AsmArg");
+    }
+    return std::make_unique<ActionData>(utils::LogicalResult::success());
+  }
+
+private:
+  llvm::raw_ostream *os;
+};
+
 class ClangExecutor {
 public:
   ClangExecutor() { arguments.emplace_back(CLANG_DIR); }
@@ -411,19 +436,24 @@ int Compilation::compile() {
   }
 
   llvm::SmallVector<char> outputFileBuffer;
-  if (opt.outputFormat > OutputFormat::Assembly) {
-    if (!tempDirectory)
-      createTempDirectory();
-    llvm::StringRef tempDir = tempDirectory->getDirectory();
-    auto intputFileStem = llvm::sys::path::stem(inputFileName);
-    llvm::sys::path::append(outputFileBuffer, tempDir, intputFileStem);
-    llvm::sys::path::replace_extension(outputFileBuffer, ".s");
+  if (opt.printStdOut) {
+    mainInvocation.addAction<PrintAction>(this, llvm::outs());
   } else {
-    outputFileBuffer.append(outputFileName.begin(), outputFileName.end());
-  }
+    if (opt.outputFormat > OutputFormat::Assembly) {
+      if (!tempDirectory)
+        createTempDirectory();
+      llvm::StringRef tempDir = tempDirectory->getDirectory();
+      auto intputFileStem = llvm::sys::path::stem(inputFileName);
+      llvm::sys::path::append(outputFileBuffer, tempDir, intputFileStem);
+      llvm::sys::path::replace_extension(outputFileBuffer, ".s");
+    } else {
+      outputFileBuffer.append(outputFileName.begin(), outputFileName.end());
+    }
 
-  mainInvocation.addAction<OutputAction>(
-      this, llvm::StringRef(outputFileBuffer.data(), outputFileBuffer.size()));
+    mainInvocation.addAction<OutputAction>(
+        this,
+        llvm::StringRef(outputFileBuffer.data(), outputFileBuffer.size()));
+  }
 
   if (opt.outputFormat == OutputFormat::Object) {
     mainInvocation.addAction<CompileToObjAction>(

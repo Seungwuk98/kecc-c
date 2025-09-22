@@ -8,8 +8,12 @@ namespace kecc::c {
 ir::Type TypeConverter::VisitQualType(QualType qt, const SourceLocation &loc) {
   auto T = TypeVisitor::Visit(qt.getTypePtr(), loc);
   assert(T && "Type conversion failed");
-  if (qt.isConstQualified())
-    T = ir::ConstQualifier::get(ctx, T);
+  if (qt.isConstQualified()) {
+    if (ir::PointerT ptrT = T.dyn_cast<ir::PointerT>())
+      T = ir::PointerT::get(ctx, ptrT.getPointeeType(), true);
+    else
+      T = ir::ConstQualifier::get(ctx, T);
+  }
   return T;
 }
 

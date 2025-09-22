@@ -31,7 +31,7 @@ class CompileOptTable {
 public:
   CompileOptTable()
       : optLevel(O0), inputFormat(InputFormat::C),
-        outputFormat(OutputFormat::Executable) {}
+        outputFormat(OutputFormat::Executable), printStdOut(false) {}
 
   OptLevel getOptLevel() const { return optLevel; }
   void setOptLevel(OptLevel level) { optLevel = level; }
@@ -42,11 +42,15 @@ public:
   OutputFormat getOutputFormat() const { return outputFormat; }
   void setOutputFormat(OutputFormat format) { outputFormat = format; }
 
+  bool getPrintStdOut() const { return printStdOut; }
+  void setPrintStdOut(bool print) { printStdOut = print; }
+
 private:
   friend class Compilation;
   OptLevel optLevel;
   InputFormat inputFormat;
   OutputFormat outputFormat;
+  bool printStdOut;
 };
 
 struct TempDirectory {

@@ -76,9 +76,8 @@ void IRGenerator::VisitVarDecl(const VarDecl *D) {
       typeConverter.VisitQualType(D->getType(), D->getTypeSpecStartLoc());
   assert(type && "Variable type conversion failed");
 
-  ir::IRBuilder::InsertionGuard guard(builder);
-
   if (env.isGlobalScope()) {
+    ir::IRBuilder::InsertionGuard guard(builder);
     builder.setInsertionPoint(ir->getGlobalBlock());
     ir::InitializerAttr init;
     if (D->hasInit()) {
@@ -103,11 +102,15 @@ void IRGenerator::VisitVarDecl(const VarDecl *D) {
     auto name = D->getName();
     assert(!name.empty() && "Unnamed local variable");
 
-    auto *currBlock = builder.getCurrentBlock();
-    builder.setInsertionPoint(
-        currBlock->getParentFunction()->getAllocationBlock());
-    auto localVar = builder.create<ir::inst::LocalVariable>(
-        convertRange(D->getSourceRange()), ir::PointerT::get(ctx, type));
+    ir::Value localVar;
+    {
+      ir::IRBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPoint(
+          currentFunctionData->function->getAllocationBlock());
+      localVar = builder.create<ir::inst::LocalVariable>(
+          convertRange(D->getSourceRange()), ir::PointerT::get(ctx, type));
+    }
+
     env.insert(name, localVar);
     if (D->hasInit()) {
       LocalInitGenerator initGen(this, builder, localVar);
@@ -146,13 +149,12 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
   if (!D->hasBody())
     return;
 
+  assert(!func->hasDefinition() && "Function redefinition");
   currentFunctionData = std::make_unique<FunctionData>(func, D);
 
   ir::Block *entryBlock = createNewBlock();
   func->setEntryBlock(entryBlock->getId());
   ir::IRBuilder::InsertionGuard guard(builder);
-
-  assert(!func->hasDefinition() && "Function redefinition");
 
   llvm::ArrayRef<ParmVarDecl *> funcParams = D->parameters();
   IRGenEnv::Scope scope(env); // function scope
@@ -166,7 +168,9 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
     auto localVar = builder.create<ir::inst::LocalVariable>(
         convertRange(param->getSourceRange()),
         ir::PointerT::get(ctx, paramType));
+
     localVar.setValueName(paramName);
+
     builder.setInsertionPoint(entryBlock);
     auto phi = builder.create<ir::Phi>(convertRange(param->getSourceRange()),
                                        paramType.constCanonicalize());
@@ -178,10 +182,9 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
     }
   }
 
-  for (const auto &[localVar, phi] : paramValues) {
-    builder.setInsertionPoint(entryBlock);
+  builder.setInsertionPoint(entryBlock);
+  for (const auto &[localVar, phi] : paramValues)
     builder.create<ir::inst::Store>(localVar->getRange(), phi, localVar);
-  }
 
   StmtVisitor::Visit(D->getBody());
 
@@ -225,7 +228,7 @@ void IRGenerator::VisitCompoundStmt(const CompoundStmt *S) {
   }
 }
 
-void IRGenerator::VisitDeclStmt(const clang::DeclStmt *S) {
+void IRGenerator::VisitDeclStmt(const DeclStmt *S) {
   for (const auto *decl : S->decls()) {
     DeclVisitor::Visit(decl);
   }
@@ -236,6 +239,14 @@ void IRGenerator::VisitReturnStmt(const ReturnStmt *S) {
   if (const Expr *returnExpr = S->getRetValue()) {
     value = EvaluateExpr(returnExpr);
     assert(value && "Return expression generation failed");
+
+    ir::Type returnType = currentFunctionData->function->getFunctionType()
+                              .cast<ir::FunctionT>()
+                              .getReturnTypes()[0];
+    if (value.getType() != returnType) {
+      value = builder.create<ir::inst::TypeCast>(
+          convertRange(returnExpr->getEndLoc()), value, returnType);
+    }
   } else {
     ir::IRBuilder::InsertionGuard guard(builder);
     builder.setInsertionPoint(ir->getConstantBlock());
@@ -494,8 +505,8 @@ void LocalInitGenerator::Visit(const Expr *expr) {
     VisitInitListExpr(initExpr);
   } else {
     ir::Value value = irgen->EvaluateExpr(expr);
-    assert(value && "Expression evaluation failed");
-    if (value.getType() != memoryInnerT) {
+    if (value.getType().constCanonicalize() !=
+        memoryInnerT.constCanonicalize()) {
       value = builder.create<ir::inst::TypeCast>(
           irgen->convertRange(expr->getEndLoc()), value, memoryInnerT);
     }
@@ -1630,8 +1641,9 @@ ir::Value ExprEvaluator::VisitUnDerefOp(const UnaryOperator *expr) {
   assert(subV && "Sub-expression in dereference is invalid");
   assert(subV.getType().isa<ir::PointerT>() &&
          "Operand of dereference must be a pointer");
-  return builder.create<ir::inst::Load>(
-      irgen->convertRange(expr->getSourceRange()), subV);
+  // Just return the pointer.
+  // LValueToRValue conversion will load the value.
+  return subV;
 }
 
 ir::Value ExprEvaluator::VisitUnaryExprOrTypeTraitExpr(
@@ -1651,6 +1663,7 @@ ir::Value ExprEvaluator::VisitUnaryExprOrTypeTraitExpr(
     }
     assert(type && "Type conversion failed in sizeof");
     value = type.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap()).first;
+    break;
   }
   case clang::UETT_AlignOf: {
     ir::Type type;
@@ -1666,6 +1679,7 @@ ir::Value ExprEvaluator::VisitUnaryExprOrTypeTraitExpr(
     assert(type && "Type conversion failed in alignof");
     value =
         type.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap()).second;
+    break;
   }
   default:
     llvm_unreachable("Unsupported unary expr or type trait in IR generation");
@@ -1793,10 +1807,11 @@ ir::Value ExprEvaluator::VisitCastExpr(const CastExpr *expr) {
     assert(subV.getType().isa<ir::PointerT>() &&
            "LValue to RValue cast source must be a pointer");
     ir::Type pointeeType = subV.getType().cast<ir::PointerT>().getPointeeType();
-    assert(pointeeType == destT &&
+    assert(pointeeType.constCanonicalize() == destT.constCanonicalize() &&
            "LValue to RValue cast source and destination type must match");
-    return builder.create<ir::inst::Load>(
+    auto load = builder.create<ir::inst::Load>(
         irgen->convertRange(expr->getEndLoc()), subV);
+    return load;
   }
   case clang::CK_NoOp: {
     return subV;

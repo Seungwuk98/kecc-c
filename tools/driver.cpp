@@ -20,6 +20,11 @@ static llvm::cl::opt<std::string> output("o",
                                          llvm::cl::value_desc("filename"),
                                          llvm::cl::init("-"));
 
+static llvm::cl::opt<bool>
+    printStdOut("print-stdout",
+                llvm::cl::desc("Print the output to stdout instead of a file"),
+                llvm::cl::init(false));
+
 static llvm::cl::opt<bool> emitAssembly("S", llvm::cl::desc("Emit assembly"),
                                         llvm::cl::init(false));
 
@@ -119,7 +124,19 @@ int keccMain() {
   }
 
   llvm::SmallVector<char> outputFileNameBuffer;
-  if (cl::output == "-") {
+  if (cl::printStdOut) {
+    if (cl::output != "-") {
+      llvm::errs() << "Warning: --print-stdout is ignored when -o is given "
+                      "with a file\n";
+    }
+    if (outputFormat >= OutputFormat::Object) {
+      llvm::errs() << "Error: cannot print object or executable to stdout\n";
+      return 1;
+    }
+
+    compileOpts.setPrintStdOut(true);
+    outputFileNameBuffer.emplace_back('-');
+  } else if (cl::output == "-") {
     auto ec = llvm::sys::fs::current_path(outputFileNameBuffer);
     if (ec) {
       llvm::errs() << "Error: cannot get current path: " << ec.message()

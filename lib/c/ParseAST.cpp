@@ -430,19 +430,19 @@ void AssertImpl::VisitPointerType(const clang::PointerType *T,
 void AssertImpl::VisitFunctionType(const clang::FunctionType *T,
                                    const SourceLocation &loc) {
   VisitQualType(T->getReturnType(), loc);
-  const FunctionProtoType *proto = T->getAs<FunctionProtoType>();
-  assert(proto);
 
-  for (unsigned idx = 0; idx < proto->getNumParams(); ++idx) {
-    auto EPI = proto->getExtParameterInfo(idx);
-    if (EPI.getOpaqueValue() != (unsigned char)0)
-      report(loc, DiagID::ext_param_info);
+  if (const FunctionProtoType *proto = T->getAs<FunctionProtoType>()) {
+    for (unsigned idx = 0; idx < proto->getNumParams(); ++idx) {
+      auto EPI = proto->getExtParameterInfo(idx);
+      if (EPI.getOpaqueValue() != (unsigned char)0)
+        report(loc, DiagID::ext_param_info);
 
-    VisitQualType(proto->getParamType(idx), loc);
+      VisitQualType(proto->getParamType(idx), loc);
+    }
+
+    if (proto->isVariadic())
+      report(loc, DiagID::variadic_param);
   }
-
-  if (proto->isVariadic())
-    report(loc, DiagID::variadic_param);
 }
 
 void AssertImpl::VisitBuiltinType(const BuiltinType *T,

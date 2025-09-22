@@ -25,7 +25,7 @@ TypeID Type::getId() const { return impl->getId(); }
 
 Type Type::constCanonicalize() const {
   if (auto constQual = dyn_cast<ConstQualifier>())
-    return constQual.getType();
+    return constQual.getType().constCanonicalize();
 
   if (auto pointer = dyn_cast<PointerT>())
     return PointerT::get(getContext(), pointer.getPointeeType(), false);

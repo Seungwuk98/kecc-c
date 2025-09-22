@@ -212,6 +212,8 @@ public:
   }
   bool hasTrait(TypeID traitId) const;
 
+  llvm::StringRef getInstName() const;
+
 private:
   friend class IRBuilder;
   InstructionStorage(std::uint8_t resultSize, std::size_t operandSize,
@@ -260,25 +262,31 @@ public:
     InterfaceMap interfaces = ConcreteInst::buildInterfaceMap(context);
     PrintFn printFn = ConcreteInst::getPrintFn();
     HasTraitFn hasTraitFn = ConcreteInst::getHasTraitFn();
+    llvm::StringRef instName = ConcreteInst::getInstName();
 
     return AbstractInstruction(id, context, std::move(interfaces),
-                               std::move(printFn), std::move(hasTraitFn));
+                               std::move(printFn), std::move(hasTraitFn),
+                               instName);
   }
 
   const auto &getPrintFn() const { return printFn; }
   const auto &getHasTraitFn() const { return hasTraitFn; }
+  llvm::StringRef getInstName() const { return instName; }
 
 private:
   AbstractInstruction(TypeID id, IRContext *context, InterfaceMap interfaces,
-                      PrintFn printFn, HasTraitFn traitFn)
+                      PrintFn printFn, HasTraitFn traitFn,
+                      llvm::StringRef instName)
       : id(id), context(context), interfaces(std::move(interfaces)),
-        printFn(std::move(printFn)), hasTraitFn(std::move(traitFn)) {}
+        printFn(std::move(printFn)), hasTraitFn(std::move(traitFn)),
+        instName(instName) {}
 
   TypeID id;
   IRContext *context;
   InterfaceMap interfaces;
   PrintFn printFn;
   HasTraitFn hasTraitFn;
+  llvm::StringRef instName;
 };
 
 template <typename Inst> Inst InstructionStorage::getDefiningInst() {
@@ -336,6 +344,8 @@ public:
   static bool verifyTrait(InstructionStorage *storage) {
     return (verifyTraitImpl<Trait<ConcreteInst>>(storage) && ...);
   }
+
+  static llvm::StringRef getInstName() { return ConcreteInst::getDebugName(); }
 
 private:
   template <typename T>
@@ -518,6 +528,7 @@ public:
   static void build(IRBuilder &builder, InstructionState &state, Type type);
 
   static void printer(Phi op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "phi"; }
 };
 
 class BlockExit : public Instruction {
