@@ -12,6 +12,7 @@ target_link_libraries(
   KeccTranslate 
   KeccTranslatePasses 
   KeccC
+  KeccDriver
 )
 
 add_executable(kecc-opt kecc-opt.cpp)

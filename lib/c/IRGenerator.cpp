@@ -12,9 +12,55 @@
 
 namespace kecc::c {
 
+void RecordDeclManager::updateStructSizeAndFields(
+    llvm::StringRef name,
+    llvm::ArrayRef<std::pair<llvm::StringRef, ir::Type>> fields) {
+  if (structSizeMap.contains(name)) {
+    assert(structFieldsMap.contains(name) && "Inconsistent struct info");
+    assert(structFieldIndexMap.contains(name) && "Inconsistent struct info");
+    return;
+  }
+
+  llvm::SmallVector<ir::Type> fieldTypes;
+  llvm::DenseMap<llvm::StringRef, size_t> fieldIndices;
+
+  const auto [size, align, offsets] =
+      ir::getTypeSizeAlignOffsets(fieldTypes, structSizeMap);
+
+  structSizeMap[name] = {size, align, offsets};
+  structFieldsMap[name].assign(fieldTypes.begin(), fieldTypes.end());
+  for (size_t i = 0; i < fields.size(); ++i) {
+    fieldIndices[fields[i].first] = i;
+  }
+  structFieldIndexMap[name] = std::move(fieldIndices);
+}
+
+void RecordDeclManager::updateStructSizeAndFields(
+    const RecordDecl *decl, TypeConverter &typeConverter) {
+  llvm::StringRef structName = getRecordDeclID(decl, typeConverter);
+  if (structSizeMap.contains(structName)) {
+    assert(structFieldsMap.contains(structName) && "Inconsistent struct info");
+    assert(structFieldIndexMap.contains(structName) &&
+           "Inconsistent struct info");
+    return;
+  }
+
+  llvm::SmallVector<std::pair<llvm::StringRef, ir::Type>> fields;
+
+  for (const auto *field : decl->fields()) {
+    llvm::StringRef fieldName = field->getName();
+    assert(!fieldName.empty() && "Unnamed struct field");
+    ir::Type fieldType =
+        typeConverter.VisitQualType(field->getType(), field->getLocation());
+    assert(fieldType && "Struct field type conversion failed");
+    fields.emplace_back(fieldName, fieldType);
+  }
+  updateStructSizeAndFields(structName, fields);
+}
+
 void IRGenerator::VisitTranslationUnitDecl(const TranslationUnitDecl *D) {
+  assert(ir && "IR context is null");
   IRGenEnv::Scope scope(env); // global scope
-  ir = std::unique_ptr<ir::IR>(new ir::IR(ctx));
 
   for (auto I = D->decls_begin(), E = D->decls_end(); I != E; ++I) {
     if (const auto *typedefDecl = llvm::dyn_cast<TypedefDecl>(*I)) {
@@ -81,8 +127,8 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
 
   ir::Function *func;
   if (!(func = ir->getFunction(D->getName()))) {
-    func = new ir::Function(convertRange(D->getSourceRange()), name, funcT,
-                            ir.get(), ctx);
+    func = new ir::Function(convertRange(D->getSourceRange()), name, funcT, ir,
+                            ctx);
     ir->addFunction(func);
   }
 
@@ -146,16 +192,16 @@ void IRGenerator::VisitRecordDecl(const RecordDecl *D) {
   if (!D->hasBody())
     return;
 
-  llvm::StringRef structName;
-  if (D->getName().empty())
-    structName = recordDeclMgr.getRecordDeclID(D);
-  else
-    structName = D->getName();
+  llvm::StringRef structName = recordDeclMgr.getRecordDeclID(D, typeConverter);
+  // updated in recordDeclMgr
 
   llvm::SmallVector<std::pair<llvm::StringRef, ir::Type>> fields;
-
-  for (const auto *field : D->fields()) {
-    auto [fieldName, fieldType] = fieldInfo(field);
+  llvm::ArrayRef<ir::Type> fieldTypes =
+      recordDeclMgr.getStructFieldsMap().at(structName);
+  for (const auto &[fieldDecl, fieldType] :
+       llvm::zip(D->fields(), fieldTypes)) {
+    llvm::StringRef fieldName = fieldDecl->getName();
+    assert(!fieldName.empty() && "Unnamed struct field");
     fields.emplace_back(fieldName, fieldType);
   }
 
@@ -1035,6 +1081,24 @@ GlobalInitGenerator::Result::toInitializerAttr(IRGenerator *irgen) {
     llvm_unreachable("Invalid global initializer result");
   }
 }
+
+GlobalInitGenerator::Result
+GlobalInitGenerator::Result::fromInt(std::int64_t intVal, unsigned bitWidth,
+                                     bool isSigned, SourceRange range) {
+  llvm::APInt value(bitWidth, intVal, isSigned);
+  llvm::APSInt apsIntValue(std::move(value), !isSigned);
+  return fromAPSInt(apsIntValue, range);
+}
+GlobalInitGenerator::Result
+GlobalInitGenerator::Result::fromInt(std::int64_t intVal, ir::IntT intType,
+                                     SourceRange range) {
+  llvm::APInt value(intType.getBitWidth(), intVal, intType.isSigned());
+  llvm::APSInt apsIntValue(std::move(value), !intType.isSigned());
+  return fromAPSInt(apsIntValue, range);
+}
+
+ExprEvaluator::ExprEvaluator(IRGenerator *irgen)
+    : irgen(irgen), builder(irgen->builder) {}
 
 ir::Value ExprEvaluator::Visit(const Expr *E) {
   switch (E->getStmtClass()) {

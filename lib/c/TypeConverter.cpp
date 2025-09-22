@@ -30,7 +30,7 @@ ir::Type TypeConverter::VisitRecordType(const RecordType *T,
   assert(decl && "RecordType without declaration");
   auto name = decl->getName();
   if (name.empty())
-    name = recordDeclMgr->getRecordDeclID(decl);
+    name = recordDeclMgr->getRecordDeclID(decl, *this);
 
   return ir::NameStruct::get(ctx, name);
 }

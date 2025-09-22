@@ -30,14 +30,24 @@ using StructFieldIndexMap = llvm::DenseMap<llvm::StringRef, FieldIndexMap>;
 
 class RecordDeclManager {
 public:
-  llvm::StringRef getRecordDeclID(const RecordDecl *decl) {
+  RecordDeclManager() = default;
+
+  llvm::StringRef getRecordDeclID(const RecordDecl *decl,
+                                  TypeConverter &typeConverter) {
     auto it = recordDeclToIDMap.find(decl);
     if (it != recordDeclToIDMap.end()) {
       return it->second;
     }
-    size_t id = nextID++;
-    updateStructSizeAndFields(decl);
-    return recordDeclToIDMap[decl] = std::format("%t{}", id);
+
+    llvm::StringRef name;
+    if (!decl->getName().empty())
+      name = (recordDeclToIDMap[decl] = decl->getName().str());
+    else {
+      size_t id = nextID++;
+      name = (recordDeclToIDMap[decl] = std::format("%t{}", id));
+    }
+    updateStructSizeAndFields(decl, typeConverter);
+    return name;
   }
 
   llvm::StringRef lookupRecordDeclID(const RecordDecl *decl) const {
@@ -68,7 +78,8 @@ public:
     llvm::report_fatal_error("Struct not found");
   }
 
-  void updateStructSizeAndFields(const RecordDecl *decl);
+  void updateStructSizeAndFields(const RecordDecl *decl,
+                                 TypeConverter &typeConverter);
   void updateStructSizeAndFields(
       llvm::StringRef structName,
       llvm::ArrayRef<std::pair<llvm::StringRef, ir::Type>> fields);
@@ -168,7 +179,7 @@ public:
       return std::get<std::vector<std::unique_ptr<Result>>>(value);
     }
 
-    static Result fromAPInt(llvm::APSInt intVal, SourceRange range) {
+    static Result fromAPSInt(llvm::APSInt intVal, SourceRange range) {
       return {intVal, range};
     }
     static Result fromInt(std::int64_t intVal, unsigned bitWidth, bool isSigned,
@@ -340,12 +351,12 @@ private:
 class IRGenerator : public StmtVisitor<IRGenerator>,
                     public DeclVisitor<IRGenerator> {
 public:
-  IRGenerator(clang::ASTContext *astCtx, ClangDiagManager *diags, ir::IR *ir,
-              ir::IRContext *ctx, RecordDeclManager &recordDeclMgr)
+  IRGenerator(clang::ASTContext *astCtx, ClangDiagManager *diags,
+              RecordDeclManager &recordDeclMgr, ir::IR *ir)
       : StmtVisitor(diags), DeclVisitor(diags), astCtx(astCtx), diags(diags),
-        ir(ir), ctx(ctx), recordDeclMgr(recordDeclMgr),
+        ctx(ir->getContext()), recordDeclMgr(recordDeclMgr),
         typeConverter(diags, ctx, &recordDeclMgr), builder(ctx),
-        exprEvaluator(this) {}
+        exprEvaluator(this), ir(ir) {}
 
   bool generate(const TranslationUnitDecl *decl);
 
@@ -448,8 +459,8 @@ private:
   ir::IRBuilder builder;
   ExprEvaluator exprEvaluator;
 
-  std::unique_ptr<ir::IR> ir;
-  std::unique_ptr<FunctionData> currentFunctionData;
+  ir::IR *ir = nullptr;
+  std::unique_ptr<FunctionData> currentFunctionData = nullptr;
 
   std::optional<ir::JumpArgState> breakJArg = std::nullopt;
   std::optional<ir::JumpArgState> continueJArg = std::nullopt;
