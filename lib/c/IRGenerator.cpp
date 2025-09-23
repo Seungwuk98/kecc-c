@@ -9,8 +9,41 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/OperationKinds.h"
 #include "clang/AST/Stmt.h"
+#include "llvm/ADT/TypeSwitch.h"
+#include "llvm/Support/SMLoc.h"
 
 namespace kecc::c {
+
+static ir::Value convertToBoolean(ir::IRBuilder &builder, ir::Value value,
+                                  llvm::SMRange range) {
+  ir::Type valueT = value.getType();
+  if (!valueT.isBoolean()) {
+    ir::IntT intT;
+    if (valueT.isa<ir::IntT>())
+      intT = valueT.cast<ir::IntT>();
+    else if (valueT.isa<ir::PointerT>()) {
+      intT =
+          ir::IntT::get(builder.getContext(),
+                        builder.getContext()->getArchitectureBitSize(), false);
+      value = builder.create<ir::inst::TypeCast>(range, value, intT);
+    } else
+      llvm_unreachable("Unsupported condition type");
+
+    ir::Value zero;
+    {
+      ir::IRBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPoint(
+          builder.getCurrentBlock()->getParentIR()->getConstantBlock());
+      zero = builder.create<ir::inst::Constant>(
+          range, ir::ConstantIntAttr::get(builder.getContext(), 0,
+                                          intT.getBitWidth(), intT.isSigned()));
+    }
+
+    value = builder.create<ir::inst::Binary>(range, value, zero,
+                                             ir::inst::Binary::Ne);
+  }
+  return value;
+}
 
 void RecordDeclManager::updateStructSizeAndFields(
     llvm::StringRef name,
@@ -109,6 +142,7 @@ void IRGenerator::VisitVarDecl(const VarDecl *D) {
           currentFunctionData->function->getAllocationBlock());
       localVar = builder.create<ir::inst::LocalVariable>(
           convertRange(D->getSourceRange()), ir::PointerT::get(ctx, type));
+      localVar.getImpl()->setValueName(name);
     }
 
     env.insert(name, localVar);
@@ -260,14 +294,8 @@ void IRGenerator::VisitIfStmt(const IfStmt *S) {
   ir::Value condV = EvaluateExpr(S->getCond());
   assert(condV && "If condition generation failed");
 
-  ir::Type condT = condV.getType();
-
-  if (!condT.isBoolean()) {
-    auto boolType = ir::IntT::get(ctx, 1, false);
-
-    condV = builder.create<ir::inst::TypeCast>(
-        convertRange(S->getCond()->getSourceRange()), condV, boolType);
-  }
+  condV = convertToBoolean(builder, condV,
+                           convertRange(S->getCond()->getSourceRange()));
 
   ir::Block *thenBlock = createNewBlock();
   ir::Block *elseBlock = createNewBlock();
@@ -310,13 +338,8 @@ void IRGenerator::VisitWhileStmt(const WhileStmt *S) {
   ir::Value condV = EvaluateExpr(S->getCond());
   assert(condV && "While condition generation failed");
 
-  ir::Type condT = condV.getType();
-  if (!condT.isBoolean()) {
-    auto boolType = ir::IntT::get(ctx, 1, false);
-
-    condV = builder.create<ir::inst::TypeCast>(
-        convertRange(S->getCond()->getEndLoc()), condV, boolType);
-  }
+  condV = convertToBoolean(builder, condV,
+                           convertRange(S->getCond()->getSourceRange()));
 
   builder.create<ir::inst::Branch>(convertRange(S->getCond()->getEndLoc()),
                                    condV, bodyJArg, mergeJArg);
@@ -356,13 +379,8 @@ void IRGenerator::VisitForStmt(const ForStmt *S) {
     ir::Value condV = EvaluateExpr(cond);
     assert(condV && "For condition generation failed");
 
-    ir::Type condT = condV.getType();
-    if (!condT.isBoolean()) {
-      auto boolType = ir::IntT::get(ctx, 1, false);
-
-      condV = builder.create<ir::inst::TypeCast>(
-          convertRange(cond->getEndLoc()), condV, boolType);
-    }
+    condV =
+        convertToBoolean(builder, condV, convertRange(cond->getSourceRange()));
 
     builder.create<ir::inst::Branch>(convertRange(cond->getEndLoc()), condV,
                                      bodyJArg, mergeJArg);
@@ -409,13 +427,8 @@ void IRGenerator::VisitDoStmt(const DoStmt *S) {
   ir::Value condV = EvaluateExpr(S->getCond());
   assert(condV && "Do-while condition generation failed");
 
-  ir::Type condT = condV.getType();
-  if (!condT.isBoolean()) {
-    auto boolType = ir::IntT::get(ctx, 1, false);
-
-    condV = builder.create<ir::inst::TypeCast>(
-        convertRange(S->getCond()->getSourceRange()), condV, boolType);
-  }
+  condV = convertToBoolean(builder, condV,
+                           convertRange(S->getCond()->getSourceRange()));
 
   builder.create<ir::inst::Branch>(convertRange(S->getRParenLoc()), condV,
                                    bodyJArg, mergeJArg);
@@ -1115,6 +1128,8 @@ ir::Value ExprEvaluator::Visit(const Expr *E) {
   switch (E->getStmtClass()) {
   case Stmt::BinaryOperatorClass:
     return VisitBinaryOperator(llvm::cast<BinaryOperator>(E));
+  case Stmt::CompoundAssignOperatorClass:
+    return VisitBinaryOperator(llvm::cast<BinaryOperator>(E));
   case Stmt::UnaryOperatorClass:
     return VisitUnaryOperator(llvm::cast<UnaryOperator>(E));
   case Stmt::UnaryExprOrTypeTraitExprClass:
@@ -1250,11 +1265,18 @@ ir::Value ExprEvaluator::VisitUnaryOperator(const UnaryOperator *expr) {
     assert(rhsV && "RHS expression generation failed");                        \
     assert(lhsV.getType() == rhsV.getType() &&                                 \
            "LHS and RHS must be of the same type");                            \
-    return builder.create<ir::inst::Binary>(                                   \
+    ir::Value resultV = builder.create<ir::inst::Binary>(                      \
         irgen->convertRange(expr->getSourceRange()), lhsV, rhsV,               \
         ir::inst::Binary::kind);                                               \
+    auto resultT = resultV.getType();                                          \
+    auto exprT = irgen->typeConverter.VisitQualType(expr->getType(),           \
+                                                    expr->getBeginLoc());      \
+    if (resultT != exprT.constCanonicalize()) {                                \
+      resultV = builder.create<ir::inst::TypeCast>(                            \
+          irgen->convertRange(expr->getSourceRange()), resultV, exprT);        \
+    }                                                                          \
+    return resultV;                                                            \
   }
-
 BINARY_IMPL(Mul, Mul)
 BINARY_IMPL(Add, Add)
 BINARY_IMPL(Sub, Sub)
@@ -1301,12 +1323,8 @@ ir::Value ExprEvaluator::VisitBinLAndOp(const BinaryOperator *expr) {
   ir::JumpArgState lhsTrueJArg(lhsTrueBlock), lhsFalseJArg(lhsFalseBlock),
       endJArg(endBlock);
 
-  if (!lhsT.isBoolean()) {
-    auto zero = getIntegerValue(0, lhsT);
-    lhsV = builder.create<ir::inst::Binary>(
-        irgen->convertRange(expr->getLHS()->getSourceRange()), lhsV, zero,
-        ir::inst::Binary::Ne);
-  }
+  lhsV = convertToBoolean(
+      builder, lhsV, irgen->convertRange(expr->getLHS()->getSourceRange()));
 
   builder.create<ir::inst::Branch>(
       irgen->convertRange(expr->getLHS()->getEndLoc()), lhsV, lhsTrueJArg,
@@ -1317,13 +1335,8 @@ ir::Value ExprEvaluator::VisitBinLAndOp(const BinaryOperator *expr) {
   assert(rhsV && "RHS expression generation failed");
   assert(rhsV.getType().isa<ir::IntT>() && "RHS must be an integer");
 
-  ir::IntT rhsT = rhsV.getType().cast<ir::IntT>();
-  if (!rhsT.isBoolean()) {
-    auto zero = getIntegerValue(0, rhsT);
-    rhsV = builder.create<ir::inst::Binary>(
-        irgen->convertRange(expr->getRHS()->getSourceRange()), rhsV, zero,
-        ir::inst::Binary::Ne);
-  }
+  rhsV = convertToBoolean(
+      builder, rhsV, irgen->convertRange(expr->getRHS()->getSourceRange()));
 
   builder.create<ir::inst::Store>(
       irgen->convertRange(expr->getRHS()->getEndLoc()), rhsV, memory);
@@ -1369,12 +1382,8 @@ ir::Value ExprEvaluator::VisitBinLOrOp(const BinaryOperator *expr) {
   ir::JumpArgState lhsTrueJArg(lhsTrueBlock), lhsFalseJArg(lhsFalseBlock),
       endJArg(endBlock);
 
-  if (!lhsT.isBoolean()) {
-    auto zero = getIntegerValue(0, lhsT);
-    lhsV = builder.create<ir::inst::Binary>(
-        irgen->convertRange(expr->getLHS()->getSourceRange()), lhsV, zero,
-        ir::inst::Binary::Ne);
-  }
+  lhsV = convertToBoolean(
+      builder, lhsV, irgen->convertRange(expr->getLHS()->getSourceRange()));
 
   builder.create<ir::inst::Branch>(
       irgen->convertRange(expr->getLHS()->getEndLoc()), lhsV, lhsTrueBlock,
@@ -1391,13 +1400,8 @@ ir::Value ExprEvaluator::VisitBinLOrOp(const BinaryOperator *expr) {
   ir::Value rhsV = Visit(expr->getRHS());
   assert(rhsV && "RHS expression generation failed");
   assert(rhsV.getType().isa<ir::IntT>() && "RHS must be an integer");
-  ir::IntT rhsT = rhsV.getType().cast<ir::IntT>();
-  if (!rhsT.isBoolean()) {
-    auto zero = getIntegerValue(0, rhsT);
-    rhsV = builder.create<ir::inst::Binary>(
-        irgen->convertRange(expr->getRHS()->getSourceRange()), rhsV, zero,
-        ir::inst::Binary::Ne);
-  }
+  rhsV = convertToBoolean(
+      builder, rhsV, irgen->convertRange(expr->getRHS()->getSourceRange()));
 
   builder.create<ir::inst::Store>(
       irgen->convertRange(expr->getRHS()->getEndLoc()), rhsV, memory);
@@ -1493,16 +1497,32 @@ BIN_ASSIGN_IMPL(BitOr, Or)
 ir::Value ExprEvaluator::VisitUnPlusOp(const UnaryOperator *expr) {
   auto subV = Visit(expr->getSubExpr());
   assert(subV && "Sub-expression in unary plus is invalid");
-  return builder.create<ir::inst::Unary>(
+  ir::Value resultV = builder.create<ir::inst::Unary>(
       irgen->convertRange(expr->getSourceRange()), subV, ir::inst::Unary::Plus);
+  auto resultT = resultV.getType();
+  auto exprT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (resultT != exprT.constCanonicalize()) {
+    resultV = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), resultV, exprT);
+  }
+  return resultV;
 }
 
 ir::Value ExprEvaluator::VisitUnMinusOp(const UnaryOperator *expr) {
   auto subV = Visit(expr->getSubExpr());
   assert(subV && "Sub-expression in unary minus is invalid");
-  return builder.create<ir::inst::Unary>(
+  ir::Value resultV = builder.create<ir::inst::Unary>(
       irgen->convertRange(expr->getSourceRange()), subV,
       ir::inst::Unary::Minus);
+  auto resultT = resultV.getType();
+  auto exprT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (resultT != exprT.constCanonicalize()) {
+    resultV = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), resultV, exprT);
+  }
+  return resultV;
 }
 
 ir::Value ExprEvaluator::VisitUnNotOp(const UnaryOperator *expr) {
@@ -1510,9 +1530,17 @@ ir::Value ExprEvaluator::VisitUnNotOp(const UnaryOperator *expr) {
   assert(subV && "Sub-expression in bitwise not is invalid");
   assert(subV.getType().isa<ir::IntT>() &&
          "Bitwise not only supports integers");
-  return builder.create<ir::inst::Unary>(
+  ir::Value resultV = builder.create<ir::inst::Unary>(
       irgen->convertRange(expr->getSourceRange()), subV,
       ir::inst::Unary::Negate);
+  auto resultT = resultV.getType();
+  auto exprT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (resultT != exprT.constCanonicalize()) {
+    resultV = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), resultV, exprT);
+  }
+  return resultV;
 }
 
 ir::Value ExprEvaluator::VisitUnLNotOp(const UnaryOperator *expr) {
@@ -1746,19 +1774,22 @@ ir::Value ExprEvaluator::VisitParenExpr(const ParenExpr *expr) {
 
 ir::Value
 ExprEvaluator::VisitArraySubscriptExpr(const ArraySubscriptExpr *expr) {
-  assert(expr->getBase()->isLValue() &&
-         "Base of array subscript must be an lvalue");
   ir::Value baseV = Visit(expr->getBase());
   assert(baseV && "Base expression generation failed");
   assert(baseV.getType().isa<ir::PointerT>() &&
          "Base of array subscript must be a pointer");
 
-  ir::Type baseT = baseV.getType();
-  ir::ArrayT arrayT =
-      baseT.cast<ir::PointerT>().getPointeeType().cast<ir::ArrayT>();
-  ir::Type elemT = arrayT.getElementType();
+  ir::PointerT baseT = baseV.getType().cast<ir::PointerT>();
+  ir::Type elementT;
+
+  if (auto arrayT = baseT.getPointeeType().dyn_cast<ir::ArrayT>()) {
+    elementT = arrayT.getElementType();
+  } else {
+    elementT = baseT.getPointeeType();
+  }
+
   auto [elemSize, elemAlign] =
-      elemT.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+      elementT.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
   if (elemSize < elemAlign)
     elemSize = elemAlign;
 
@@ -1789,9 +1820,77 @@ ExprEvaluator::VisitArraySubscriptExpr(const ArraySubscriptExpr *expr) {
 
   auto gepV = builder.create<ir::inst::Gep>(
       irgen->convertRange(expr->getSourceRange()), baseV, mulV,
-      ir::PointerT::get(irgen->ctx, elemT));
+      ir::PointerT::get(irgen->ctx, elementT));
 
   return gepV;
+}
+
+static ir::Value castConstant(ir::IRBuilder &builder, llvm::SMRange range,
+                              ir::inst::Constant constant,
+                              ir::Type targetType) {
+  auto constAttr = constant.getValue().dyn_cast<ir::ConstantAttr>();
+  targetType = targetType.constCanonicalize();
+
+  constAttr =
+      llvm::TypeSwitch<ir::ConstantAttr, ir::ConstantAttr>(constAttr)
+          .Case([&](ir::ConstantIntAttr intAttr) -> ir::ConstantAttr {
+            if (auto targetIntT = targetType.dyn_cast<ir::IntT>()) {
+              if (intAttr.getIntType() == targetIntT)
+                return nullptr;
+
+              return ir::ConstantIntAttr::get(
+                  builder.getContext(), intAttr.getValue(),
+                  targetIntT.getBitWidth(), targetIntT.isSigned());
+            } else if (auto targetFloatT = targetType.dyn_cast<ir::FloatT>()) {
+              auto *semantics = targetFloatT.isF32()
+                                    ? &llvm::APFloat::IEEEsingle()
+                                    : &llvm::APFloat::IEEEdouble();
+              llvm::APFloat floatValue(*semantics);
+              floatValue.convertFromAPInt(intAttr.getAsAPInt(),
+                                          intAttr.isSigned(),
+                                          llvm::APFloat::rmNearestTiesToEven);
+              return ir::ConstantFloatAttr::get(builder.getContext(),
+                                                floatValue);
+            }
+            return nullptr;
+          })
+          .Case([&](ir::ConstantFloatAttr floatAttr) -> ir::ConstantAttr {
+            if (auto targetFloatT = targetType.dyn_cast<ir::FloatT>()) {
+              if (floatAttr.getFloatType() == targetFloatT)
+                return nullptr;
+
+              llvm::APFloat floatValue =
+                  targetFloatT.isF32()
+                      ? llvm::APFloat(floatAttr.getValue().convertToFloat())
+                      : llvm::APFloat(floatAttr.getValue().convertToDouble());
+
+              return ir::ConstantFloatAttr::get(builder.getContext(),
+                                                floatValue);
+            } else if (auto targetIntT = targetType.dyn_cast<ir::IntT>()) {
+              bool isExact;
+              llvm::APSInt intValue;
+              auto opStatus = floatAttr.getValue().convertToInteger(
+                  intValue, llvm::APFloat::rmNearestTiesToEven, &isExact);
+              return ir::ConstantIntAttr::get(
+                  builder.getContext(),
+                  intValue.isSigned() ? intValue.getSExtValue()
+                                      : intValue.getZExtValue(),
+                  targetIntT.getBitWidth(), targetIntT.isSigned());
+            }
+            return nullptr;
+          })
+          .Default([&](ir::ConstantAttr attr) -> ir::ConstantAttr {
+            return nullptr;
+          });
+
+  if (constAttr) {
+    ir::IRBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPoint(
+        builder.getCurrentBlock()->getParentIR()->getConstantBlock());
+
+    return builder.create<ir::inst::Constant>(range, constAttr);
+  }
+  return builder.create<ir::inst::TypeCast>(range, constant, targetType);
 }
 
 ir::Value ExprEvaluator::VisitCastExpr(const CastExpr *expr) {
@@ -1858,6 +1957,10 @@ ir::Value ExprEvaluator::VisitCastExpr(const CastExpr *expr) {
   case clang::CK_BooleanToSignedIntegral:
   case clang::CK_FloatingCast: {
     ir::Type srcT = subV.getType();
+    if (subV.isConstant())
+      return castConstant(builder, irgen->convertRange(expr->getSourceRange()),
+                          subV.getDefiningInst<ir::inst::Constant>(), destT);
+
     return builder.create<ir::inst::TypeCast>(
         irgen->convertRange(expr->getSourceRange()), subV, destT);
   }
