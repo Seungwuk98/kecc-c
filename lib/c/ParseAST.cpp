@@ -422,9 +422,15 @@ void AssertImpl::VisitTypedefType(const TypedefType *T,
   // Do nothing
 }
 
-void AssertImpl::VisitPointerType(const clang::PointerType *T,
+void AssertImpl::VisitPointerType(const PointerType *T,
                                   const SourceLocation &loc) {
   VisitQualType(T->getPointeeType(), loc);
+}
+
+void AssertImpl::VisitDecayedType(const DecayedType *T,
+                                  const SourceLocation &loc) {
+  VisitQualType(T->getOriginalType(), loc);
+  VisitQualType(T->getAdjustedType(), loc);
 }
 
 void AssertImpl::VisitFunctionType(const clang::FunctionType *T,

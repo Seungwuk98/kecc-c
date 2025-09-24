@@ -23,6 +23,7 @@ public:
   ir::Type VisitTypedefType(const TypedefType *T, const SourceLocation &loc);
   ir::Type VisitPointerType(const PointerType *T, const SourceLocation &loc);
   ir::Type VisitFunctionType(const FunctionType *T, const SourceLocation &loc);
+  ir::Type VisitDecayedType(const DecayedType *T, const SourceLocation &loc);
   ir::Type VisitBuiltinType(const BuiltinType *T, const SourceLocation &loc);
   ir::Type VisitParenType(const ParenType *T, const SourceLocation &loc);
   ir::Type VisitElaboratedType(const ElaboratedType *T,

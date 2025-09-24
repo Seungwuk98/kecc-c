@@ -93,6 +93,7 @@ public:
   void VisitTypedefType(const TypedefType *T, const SourceLocation &loc);
   void VisitPointerType(const PointerType *T, const SourceLocation &loc);
   void VisitFunctionType(const FunctionType *T, const SourceLocation &loc);
+  void VisitDecayedType(const clang::DecayedType *T, const SourceLocation &loc);
   void VisitBuiltinType(const BuiltinType *T, const SourceLocation &loc);
   void VisitParenType(const ParenType *T, const SourceLocation &loc);
 

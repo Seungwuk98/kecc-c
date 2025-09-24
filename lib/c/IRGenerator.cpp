@@ -214,6 +214,7 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
       localVar.setValueName(paramName);
       phi.setValueName(paramName);
     }
+    paramValues.emplace_back(localVar, phi);
   }
 
   builder.setInsertionPoint(entryBlock);
@@ -221,6 +222,29 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
     builder.create<ir::inst::Store>(localVar->getRange(), phi, localVar);
 
   StmtVisitor::Visit(D->getBody());
+  auto *endBlock = builder.getCurrentBlock();
+  if (!endBlock->hasTerminator()) {
+    auto funcReturnTypes =
+        func->getFunctionType().cast<ir::FunctionT>().getReturnTypes();
+
+    llvm::SmallVector<ir::Value> returnValues;
+    {
+      ir::IRBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPoint(ir->getConstantBlock());
+      for (const auto &retType : funcReturnTypes) {
+        ir::Value retValue;
+        if (retType.isa<ir::UnitT>())
+          retValue = builder.create<ir::inst::Constant>(
+              {}, ir::ConstantUnitAttr::get(ctx));
+        else
+          retValue = builder.create<ir::inst::Constant>(
+              {}, ir::ConstantUndefAttr::get(ctx, retType));
+        returnValues.emplace_back(retValue);
+      }
+    }
+    builder.create<ir::inst::Return>(convertRange(D->getBody()->getEndLoc()),
+                                     returnValues);
+  }
 
   currentFunctionData.reset();
 }
@@ -309,14 +333,16 @@ void IRGenerator::VisitIfStmt(const IfStmt *S) {
 
   builder.setInsertionPoint(thenBlock);
   StmtVisitor::Visit(S->getThen());
-  builder.create<ir::inst::Jump>(convertRange(S->getThen()->getEndLoc()),
-                                 mergeJArg);
-
-  if (S->getElse()) {
-    builder.setInsertionPoint(elseBlock);
-    StmtVisitor::Visit(S->getElse());
-    builder.create<ir::inst::Jump>(convertRange(S->getElse()->getEndLoc()),
+  if (!builder.getCurrentBlock()->hasTerminator())
+    builder.create<ir::inst::Jump>(convertRange(S->getThen()->getEndLoc()),
                                    mergeJArg);
+
+  builder.setInsertionPoint(elseBlock);
+  if (S->getElse()) {
+    StmtVisitor::Visit(S->getElse());
+    if (!builder.getCurrentBlock()->hasTerminator())
+      builder.create<ir::inst::Jump>(convertRange(S->getElse()->getEndLoc()),
+                                     mergeJArg);
   } else
     builder.create<ir::inst::Jump>(convertRange(S->getEndLoc()), mergeJArg);
 
@@ -340,7 +366,6 @@ void IRGenerator::VisitWhileStmt(const WhileStmt *S) {
 
   condV = convertToBoolean(builder, condV,
                            convertRange(S->getCond()->getSourceRange()));
-
   builder.create<ir::inst::Branch>(convertRange(S->getCond()->getEndLoc()),
                                    condV, bodyJArg, mergeJArg);
 
@@ -350,8 +375,9 @@ void IRGenerator::VisitWhileStmt(const WhileStmt *S) {
     StmtVisitor::Visit(S->getBody());
   }
 
-  builder.create<ir::inst::Jump>(convertRange(S->getBody()->getEndLoc()),
-                                 condJArg);
+  if (!builder.getCurrentBlock()->hasTerminator())
+    builder.create<ir::inst::Jump>(convertRange(S->getBody()->getEndLoc()),
+                                   condJArg);
 
   builder.setInsertionPoint(mergeBlock);
 }
@@ -393,8 +419,9 @@ void IRGenerator::VisitForStmt(const ForStmt *S) {
     StmtVisitor::Visit(S->getBody());
   }
 
-  builder.create<ir::inst::Jump>(
-      convertRange(S->getBody()->getSourceRange().getEnd()), incJArg);
+  if (!builder.getCurrentBlock()->hasTerminator())
+    builder.create<ir::inst::Jump>(
+        convertRange(S->getBody()->getSourceRange().getEnd()), incJArg);
 
   builder.setInsertionPoint(incBlock);
   if (S->getInc()) {
@@ -420,8 +447,9 @@ void IRGenerator::VisitDoStmt(const DoStmt *S) {
     BreakPoint bp(*this, mergeBlock, condBlock);
     StmtVisitor::Visit(S->getBody());
   }
-  builder.create<ir::inst::Jump>(
-      convertRange(S->getBody()->getSourceRange().getEnd()), condJArg);
+  if (!builder.getCurrentBlock()->hasTerminator())
+    builder.create<ir::inst::Jump>(
+        convertRange(S->getBody()->getSourceRange().getEnd()), condJArg);
 
   builder.setInsertionPoint(condBlock);
   ir::Value condV = EvaluateExpr(S->getCond());
@@ -465,8 +493,9 @@ void IRGenerator::VisitSwitchStmt(const SwitchStmt *S) {
       caseBlocks.emplace_back(caseBlock);
       jumpArgs.emplace_back(caseBlock);
       if (!first) {
-        builder.create<ir::inst::Jump>(convertRange(caseStmt->getEndLoc()),
-                                       caseBlocks.back());
+        if (builder.getCurrentBlock()->hasTerminator())
+          builder.create<ir::inst::Jump>(convertRange(caseStmt->getEndLoc()),
+                                         caseBlock);
       } else
         first = false;
       builder.setInsertionPoint(caseBlock);
@@ -474,14 +503,14 @@ void IRGenerator::VisitSwitchStmt(const SwitchStmt *S) {
     } else if (const DefaultStmt *defaultStmt =
                    llvm::dyn_cast<DefaultStmt>(stmt)) {
       if (!first) {
-        builder.create<ir::inst::Jump>(convertRange(defaultStmt->getEndLoc()),
-                                       defaultBlock);
+        if (builder.getCurrentBlock()->hasTerminator())
+          builder.create<ir::inst::Jump>(convertRange(defaultStmt->getEndLoc()),
+                                         defaultBlock);
       } else
         first = false;
       builder.setInsertionPoint(defaultBlock);
-    } else {
+    } else if (!builder.getCurrentBlock()->hasTerminator())
       StmtVisitor::Visit(stmt);
-    }
   }
 }
 
@@ -542,19 +571,19 @@ void LocalInitGenerator::VisitInitListExpr(const InitListExpr *expr) {
         elemType.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
 
     for (size_t i = 0; i < numInits; ++i) {
-      ir::Value newMemory;
+      ir::Value index;
       {
         ir::IRBuilder::InsertionGuard guard(builder);
         builder.setInsertionPoint(irgen->ir->getConstantBlock());
-        ir::Value index = builder.create<ir::inst::Constant>(
+        index = builder.create<ir::inst::Constant>(
             irgen->convertRange(expr->getInit(i)->getSourceRange()),
             ir::ConstantIntAttr::get(irgen->ctx, i * size,
                                      irgen->ctx->getArchitectureBitSize(),
                                      true));
-        newMemory = builder.create<ir::inst::Gep>(
-            irgen->convertRange(expr->getInit(i)->getSourceRange()), memory,
-            index, elemPtrType);
       }
+      ir::Value newMemory = builder.create<ir::inst::Gep>(
+          irgen->convertRange(expr->getInit(i)->getSourceRange()), memory,
+          index, elemPtrType);
       MemoryGuard mg(*this, newMemory);
       Visit(expr->getInit(i));
     }
@@ -567,19 +596,20 @@ void LocalInitGenerator::VisitInitListExpr(const InitListExpr *expr) {
     assert(numInits <= fieldSize && "Too many initializers for struct type");
 
     for (size_t i = 0; i < numInits; ++i) {
-      ir::Value newMemory;
+      ir::Value index;
       {
         ir::IRBuilder::InsertionGuard guard(builder);
         builder.setInsertionPoint(irgen->ir->getConstantBlock());
-        ir::Value index = builder.create<ir::inst::Constant>(
+        index = builder.create<ir::inst::Constant>(
             irgen->convertRange(expr->getInit(i)->getSourceRange()),
             ir::ConstantIntAttr::get(irgen->ctx, offsets[i],
                                      irgen->ctx->getArchitectureBitSize(),
                                      true));
-        newMemory = builder.create<ir::inst::Gep>(
-            irgen->convertRange(expr->getInit(i)->getSourceRange()), memory,
-            index, ir::PointerT::get(irgen->ctx, structT));
       }
+      ir::Value newMemory = builder.create<ir::inst::Gep>(
+          irgen->convertRange(expr->getInit(i)->getSourceRange()), memory,
+          index, ir::PointerT::get(irgen->ctx, structT));
+
       MemoryGuard mg(*this, newMemory);
       Visit(expr->getInit(i));
     }
@@ -1277,9 +1307,103 @@ ir::Value ExprEvaluator::VisitUnaryOperator(const UnaryOperator *expr) {
     }                                                                          \
     return resultV;                                                            \
   }
+
+static bool isaIndexType(ir::Type type) {
+  if (auto intT = type.dyn_cast<ir::IntT>())
+    return intT.getBitWidth() == type.getContext()->getArchitectureBitSize();
+  return false;
+}
+
+ir::Value ExprEvaluator::VisitBinAddOp(const BinaryOperator *expr) {
+  ir::Value lhsV = Visit(expr->getLHS());
+  assert(lhsV && "LHS expression generation failed");
+  ir::Value rhsV = Visit(expr->getRHS());
+  assert(rhsV && "RHS expression generation failed");
+  assert(lhsV.getType() == rhsV.getType() &&
+         "LHS and RHS must be of the same type");
+
+  ir::Value resultV;
+  if (auto baseT = lhsV.getType().dyn_cast<ir::PointerT>()) {
+    auto pointee = baseT.getPointeeType();
+    auto [size, align] =
+        pointee.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+    if (size < align)
+      size = align;
+
+    if (!isaIndexType(rhsV.getType())) {
+      rhsV = builder.create<ir::inst::TypeCast>(
+          irgen->convertRange(expr->getRHS()->getSourceRange()), rhsV,
+          ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(),
+                        true));
+    }
+    rhsV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getRHS()->getSourceRange()), rhsV,
+        getIntegerValue(size, rhsV.getType().cast<ir::IntT>()),
+        ir::inst::Binary::Mul);
+    resultV = builder.create<ir::inst::Gep>(
+        irgen->convertRange(expr->getSourceRange()), lhsV, rhsV,
+        lhsV.getType());
+  } else {
+    resultV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getSourceRange()), lhsV, rhsV,
+        ir::inst::Binary::Add);
+  }
+
+  auto resultT = resultV.getType();
+  auto exprT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (resultT != exprT.constCanonicalize()) {
+    resultV = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), resultV, exprT);
+  }
+  return resultV;
+}
+
+ir::Value ExprEvaluator::VisitBinSubOp(const BinaryOperator *expr) {
+  ir::Value lhsV = Visit(expr->getLHS());
+  assert(lhsV && "LHS expression generation failed");
+  ir::Value rhsV = Visit(expr->getRHS());
+  assert(rhsV && "RHS expression generation failed");
+  assert(lhsV.getType() == rhsV.getType() &&
+         "LHS and RHS must be of the same type");
+
+  ir::Value resultV;
+  if (auto baseT = lhsV.getType().dyn_cast<ir::PointerT>()) {
+    auto pointee = baseT.getPointeeType();
+    auto [size, align] =
+        pointee.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+    if (size < align)
+      size = align;
+
+    if (!isaIndexType(rhsV.getType())) {
+      rhsV = builder.create<ir::inst::TypeCast>(
+          irgen->convertRange(expr->getRHS()->getSourceRange()), rhsV,
+          ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(),
+                        true));
+    }
+    rhsV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getRHS()->getSourceRange()), rhsV,
+        getIntegerValue(-size, rhsV.getType().cast<ir::IntT>()),
+        ir::inst::Binary::Mul);
+    resultV = builder.create<ir::inst::Gep>(
+        irgen->convertRange(expr->getSourceRange()), lhsV, rhsV,
+        lhsV.getType());
+  } else {
+    resultV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getSourceRange()), lhsV, rhsV,
+        ir::inst::Binary::Sub);
+  }
+
+  auto resultT = resultV.getType();
+  auto exprT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (resultT != exprT.constCanonicalize()) {
+    resultV = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), resultV, exprT);
+  }
+  return resultV;
+}
 BINARY_IMPL(Mul, Mul)
-BINARY_IMPL(Add, Add)
-BINARY_IMPL(Sub, Sub)
 BINARY_IMPL(Div, Div)
 BINARY_IMPL(Mod, Rem)
 BINARY_IMPL(Shl, Shl)
@@ -1570,16 +1694,34 @@ ir::Value ExprEvaluator::VisitUnPreIncOp(const UnaryOperator *expr) {
          "Operand of pre-increment must be a pointer");
 
   ir::Type pointeeType = subV.getType().cast<ir::PointerT>().getPointeeType();
-  assert(pointeeType.isa<ir::IntT>() &&
-         "Pre-increment only supports integer types");
+  assert((pointeeType.isa<ir::IntT, ir::PointerT>()) &&
+         "Pre-increment only supports integer or pointer types");
 
-  ir::IntT intT = pointeeType.cast<ir::IntT>();
-  auto one = getIntegerValue(1, intT);
   auto loadedV = builder.create<ir::inst::Load>(
       irgen->convertRange(expr->getSubExpr()->getSourceRange()), subV);
-  auto resultV = builder.create<ir::inst::Binary>(
-      irgen->convertRange(expr->getSourceRange()), loadedV, one,
-      ir::inst::Binary::Add);
+  ir::Value resultV;
+  if (auto pointerT = loadedV.getType().dyn_cast<ir::PointerT>()) {
+    auto pointee = pointerT.getPointeeType();
+    auto [size, align] =
+        pointee.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+    if (size < align)
+      size = align;
+
+    auto intT =
+        ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(), true);
+    auto oneElementOffset = getIntegerValue(size, intT);
+    resultV = builder.create<ir::inst::Gep>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, oneElementOffset,
+        loadedV.getType());
+  } else {
+    ir::IntT intT = loadedV.getType().cast<ir::IntT>();
+    auto one = getIntegerValue(1, intT);
+
+    resultV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, one,
+        ir::inst::Binary::Add);
+  }
+
   builder.create<ir::inst::Store>(irgen->convertRange(expr->getSourceRange()),
                                   resultV, subV);
   return resultV;
@@ -1594,15 +1736,31 @@ ir::Value ExprEvaluator::VisitUnPreDecOp(const UnaryOperator *expr) {
          "Operand of pre-decrement must be a pointer");
 
   ir::Type pointeeType = subV.getType().cast<ir::PointerT>().getPointeeType();
-  assert(pointeeType.isa<ir::IntT>() &&
-         "Pre-decrement only supports integer types");
-  ir::IntT intT = pointeeType.cast<ir::IntT>();
-  auto one = getIntegerValue(1, intT);
+  assert((pointeeType.isa<ir::IntT, ir::PointerT>()) &&
+         "Pre-decrement only supports integer or pointer types");
   auto loadedV = builder.create<ir::inst::Load>(
       irgen->convertRange(expr->getSubExpr()->getSourceRange()), subV);
-  auto resultV = builder.create<ir::inst::Binary>(
-      irgen->convertRange(expr->getSourceRange()), loadedV, one,
-      ir::inst::Binary::Sub);
+  ir::Value resultV;
+  if (auto pointerT = loadedV.getType().dyn_cast<ir::PointerT>()) {
+    auto pointee = pointerT.getPointeeType();
+    auto [size, align] =
+        pointee.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+    if (size < align)
+      size = align;
+
+    auto intT =
+        ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(), true);
+    auto oneElementOffset = getIntegerValue(-size, intT);
+    resultV = builder.create<ir::inst::Gep>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, oneElementOffset,
+        loadedV.getType());
+  } else {
+    ir::IntT intT = loadedV.getType().cast<ir::IntT>();
+    auto one = getIntegerValue(1, intT);
+    resultV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, one,
+        ir::inst::Binary::Sub);
+  }
   builder.create<ir::inst::Store>(irgen->convertRange(expr->getSourceRange()),
                                   resultV, subV);
   return resultV;
@@ -1617,15 +1775,35 @@ ir::Value ExprEvaluator::VisitUnPostIncOp(const UnaryOperator *expr) {
          "Operand of post-increment must be a pointer");
 
   ir::Type pointeeType = subV.getType().cast<ir::PointerT>().getPointeeType();
-  assert(pointeeType.isa<ir::IntT>() &&
-         "Post-increment only supports integer types");
-  ir::IntT intT = pointeeType.cast<ir::IntT>();
-  auto one = getIntegerValue(1, intT);
+  assert((pointeeType.isa<ir::IntT, ir::PointerT>()) &&
+         "Post-increment only supports integer or pointer types");
+
+  ir::Value resultV;
   auto loadedV = builder.create<ir::inst::Load>(
       irgen->convertRange(expr->getSubExpr()->getSourceRange()), subV);
-  auto resultV = builder.create<ir::inst::Binary>(
-      irgen->convertRange(expr->getSourceRange()), loadedV, one,
-      ir::inst::Binary::Add);
+
+  if (auto pointerT = loadedV.getType().dyn_cast<ir::PointerT>()) {
+    auto pointee = pointerT.getPointeeType();
+    auto [size, align] =
+        pointee.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+    if (size < align)
+      size = align;
+
+    auto intT =
+        ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(), true);
+    auto oneElementOffset = getIntegerValue(size, intT);
+    resultV = builder.create<ir::inst::Gep>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, oneElementOffset,
+        loadedV.getType());
+  } else {
+    ir::IntT intT = loadedV.getType().cast<ir::IntT>();
+    auto one = getIntegerValue(1, intT);
+
+    resultV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, one,
+        ir::inst::Binary::Add);
+  }
+
   builder.create<ir::inst::Store>(irgen->convertRange(expr->getSourceRange()),
                                   resultV, subV);
   return loadedV;
@@ -1640,15 +1818,31 @@ ir::Value ExprEvaluator::VisitUnPostDecOp(const UnaryOperator *expr) {
          "Operand of post-decrement must be a pointer");
 
   ir::Type pointeeType = subV.getType().cast<ir::PointerT>().getPointeeType();
-  assert(pointeeType.isa<ir::IntT>() &&
-         "Post-decrement only supports integer types");
-  ir::IntT intT = pointeeType.cast<ir::IntT>();
-  auto one = getIntegerValue(1, intT);
+  assert((pointeeType.isa<ir::IntT, ir::PointerT>()) &&
+         "Post-decrement only supports integer or pointer types");
   auto loadedV = builder.create<ir::inst::Load>(
       irgen->convertRange(expr->getSubExpr()->getSourceRange()), subV);
-  auto resultV = builder.create<ir::inst::Binary>(
-      irgen->convertRange(expr->getSourceRange()), loadedV, one,
-      ir::inst::Binary::Sub);
+  ir::Value resultV;
+  if (auto pointerT = loadedV.getType().dyn_cast<ir::PointerT>()) {
+    auto pointee = pointerT.getPointeeType();
+    auto [size, align] =
+        pointee.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+    if (size < align)
+      size = align;
+
+    auto intT =
+        ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(), true);
+    auto oneElementOffset = getIntegerValue(-size, intT);
+    resultV = builder.create<ir::inst::Gep>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, oneElementOffset,
+        loadedV.getType());
+  } else {
+    ir::IntT intT = loadedV.getType().cast<ir::IntT>();
+    auto one = getIntegerValue(1, intT);
+    resultV = builder.create<ir::inst::Binary>(
+        irgen->convertRange(expr->getSourceRange()), loadedV, one,
+        ir::inst::Binary::Sub);
+  }
   builder.create<ir::inst::Store>(irgen->convertRange(expr->getSourceRange()),
                                   resultV, subV);
   return loadedV;
@@ -1780,16 +1974,11 @@ ExprEvaluator::VisitArraySubscriptExpr(const ArraySubscriptExpr *expr) {
          "Base of array subscript must be a pointer");
 
   ir::PointerT baseT = baseV.getType().cast<ir::PointerT>();
-  ir::Type elementT;
-
-  if (auto arrayT = baseT.getPointeeType().dyn_cast<ir::ArrayT>()) {
-    elementT = arrayT.getElementType();
-  } else {
-    elementT = baseT.getPointeeType();
-  }
+  ir::Type elementT = baseT.getPointeeType();
 
   auto [elemSize, elemAlign] =
       elementT.getSizeAndAlign(irgen->recordDeclMgr.getStructSizeMap());
+
   if (elemSize < elemAlign)
     elemSize = elemAlign;
 
@@ -1919,16 +2108,20 @@ ir::Value ExprEvaluator::VisitCastExpr(const CastExpr *expr) {
     assert(subV.getType().isa<ir::PointerT>() &&
            "Array to pointer decay source must be a pointer");
     ir::Type pointeeType = subV.getType().cast<ir::PointerT>().getPointeeType();
-    assert(pointeeType.isa<ir::ArrayT>() &&
-           "Array to pointer decay source must be a pointer to array");
-    ir::Type elemT = pointeeType.cast<ir::ArrayT>().getElementType();
-    ir::Type decayT = ir::PointerT::get(irgen->ctx, elemT);
 
-    ir::Value zero = getIntegerValue(
-        0,
-        ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(), true));
-    return builder.create<ir::inst::Gep>(
-        irgen->convertRange(expr->getSourceRange()), subV, zero, decayT);
+    if (auto arrayT = pointeeType.dyn_cast<ir::ArrayT>()) {
+      ir::Type elemT = arrayT.getElementType();
+      ir::Type decayT = ir::PointerT::get(irgen->ctx, elemT);
+
+      ir::Value zero = getIntegerValue(
+          0, ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(),
+                           true));
+      return builder.create<ir::inst::Gep>(
+          irgen->convertRange(expr->getSourceRange()), subV, zero, decayT);
+    } else {
+      // Do nothing
+      return subV;
+    }
   }
   case clang::CK_BitCast: {
     ir::Type srcT = subV.getType();

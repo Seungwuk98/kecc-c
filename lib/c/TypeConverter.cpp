@@ -72,7 +72,12 @@ ir::Type TypeConverter::VisitFunctionType(const FunctionType *T,
   return ir::FunctionT::get(ctx, retType, paramTypes);
 }
 
-ir::Type TypeConverter::VisitBuiltinType(const clang::BuiltinType *T,
+ir::Type TypeConverter::VisitDecayedType(const DecayedType *T,
+                                         const SourceLocation &loc) {
+  return VisitQualType(T->getDecayedType(), loc);
+}
+
+ir::Type TypeConverter::VisitBuiltinType(const BuiltinType *T,
                                          const SourceLocation &loc) {
   switch (T->getKind()) {
   case BuiltinType::Void:

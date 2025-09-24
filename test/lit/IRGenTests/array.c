@@ -14,8 +14,10 @@ int sum(int len, int *p) {
   // CHECK-LABEL: block b0:
   // CHECK-NEXT:   %b0:p0:i32:len
   // CHECK-NEXT:   %b0:p1:i32*:p
-  // CHECK-NEXT:   %b0:i0:unit = store 0:i32 %l2:i32*
-  // CHECK-NEXT:   %b0:i1:unit = store 0:i32 %l3:i32*
+  // CHECK-NEXT:   %b0:i0:unit = store %b0:p0:i32 %l0:i32*
+  // CHECK-NEXT:   %b0:i1:unit = store %b0:p1:i32* %l1:i32**
+  // CHECK-NEXT:   %b0:i2:unit = store 0:i32 %l2:i32*
+  // CHECK-NEXT:   %b0:i3:unit = store 0:i32 %l3:i32*
   // CHECK-NEXT:   j b1()
   //
   // CHECK-LABEL: block b1:

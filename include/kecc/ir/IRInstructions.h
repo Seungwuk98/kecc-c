@@ -223,7 +223,8 @@ public:
   };
 };
 
-class Jump : public InstructionTemplate<Jump, BlockExit, ZeroResult> {
+class Jump
+    : public InstructionTemplate<Jump, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state,
@@ -242,7 +243,8 @@ public:
   };
 };
 
-class Branch : public InstructionTemplate<Branch, BlockExit, ZeroResult> {
+class Branch
+    : public InstructionTemplate<Branch, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value value,
@@ -270,7 +272,8 @@ public:
   };
 };
 
-class Switch : public InstructionTemplate<Switch, BlockExit, ZeroResult> {
+class Switch
+    : public InstructionTemplate<Switch, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value value,
@@ -305,7 +308,8 @@ public:
   };
 };
 
-class Return : public InstructionTemplate<Return, BlockExit, ZeroResult> {
+class Return
+    : public InstructionTemplate<Return, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
 
@@ -334,8 +338,8 @@ public:
   };
 };
 
-class Unreachable
-    : public InstructionTemplate<Unreachable, BlockExit, ZeroResult> {
+class Unreachable : public InstructionTemplate<Unreachable, BlockExit,
+                                               Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state);
