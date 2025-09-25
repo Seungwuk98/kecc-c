@@ -9,7 +9,6 @@
 #include "kecc/ir/IR.h"
 #include "kecc/ir/IRAttributes.h"
 #include "kecc/ir/IRBuilder.h"
-#include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/Module.h"
 #include "kecc/ir/TypeAttributeSupport.h"
@@ -20,34 +19,55 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/SMLoc.h"
-#include <cstddef>
 #include <format>
 
 namespace kecc::c {
 
-using FieldIndexMap = llvm::DenseMap<llvm::StringRef, size_t>;
+class IRGenerator;
+
+class FieldIndexMap {
+public:
+  FieldIndexMap() = default;
+  FieldIndexMap(llvm::StringRef structName,
+                const llvm::DenseMap<llvm::StringRef, size_t> &map,
+                const llvm::DenseMap<size_t, const FieldIndexMap *> &anon)
+      : structName(structName), fieldIndices(map), anonIndexMap(anon) {}
+
+  std::vector<size_t> getFieldIndex(llvm::StringRef fieldName) const;
+
+  const FieldIndexMap *getAnonFieldIndexMap(size_t index) const {
+    auto it = anonIndexMap.find(index);
+    if (it != anonIndexMap.end()) {
+      return it->second;
+    }
+    return nullptr;
+  }
+
+  llvm::StringRef getStructName() const { return structName; }
+
+private:
+  llvm::StringRef structName;
+  llvm::DenseMap<llvm::StringRef, size_t> fieldIndices;
+  llvm::DenseMap<size_t, const FieldIndexMap *> anonIndexMap;
+};
+
 using StructFieldIndexMap = llvm::DenseMap<llvm::StringRef, FieldIndexMap>;
 
 class RecordDeclManager {
 public:
   RecordDeclManager() = default;
 
-  llvm::StringRef getRecordDeclID(const RecordDecl *decl,
-                                  TypeConverter &typeConverter) {
+  llvm::StringRef getOrCreateRecordDeclID(const RecordDecl *decl,
+                                          TypeConverter &typeConverter) {
     auto it = recordDeclToIDMap.find(decl);
     if (it != recordDeclToIDMap.end()) {
       return it->second;
     }
-
-    llvm::StringRef name;
     if (!decl->getName().empty())
-      name = (recordDeclToIDMap[decl] = decl->getName().str());
-    else {
-      size_t id = nextID++;
-      name = (recordDeclToIDMap[decl] = std::format("%t{}", id));
-    }
-    updateStructSizeAndFields(decl, typeConverter);
-    return name;
+      return recordDeclToIDMap[decl] = decl->getName().str();
+
+    std::string newName = std::format("%t{}", nextID++);
+    return recordDeclToIDMap[decl] = newName;
   }
 
   llvm::StringRef lookupRecordDeclID(const RecordDecl *decl) const {
@@ -78,11 +98,12 @@ public:
     llvm::report_fatal_error("Struct not found");
   }
 
-  void updateStructSizeAndFields(const RecordDecl *decl,
+  void updateStructSizeAndFields(IRGenerator *irgen, const RecordDecl *decl,
                                  TypeConverter &typeConverter);
   void updateStructSizeAndFields(
-      llvm::StringRef structName,
-      llvm::ArrayRef<std::pair<llvm::StringRef, ir::Type>> fields);
+      IRGenerator *irgen, llvm::StringRef structName,
+      llvm::ArrayRef<std::pair<llvm::StringRef, ir::Type>> fields,
+      llvm::SMRange range = {});
 
 private:
   llvm::DenseMap<const RecordDecl *, std::string> recordDeclToIDMap;
@@ -405,6 +426,7 @@ private:
   friend class GlobalInitGenerator;
   friend class LocalInitGenerator;
   friend class ExprEvaluator;
+  friend class RecordDeclManager;
 
   struct FunctionData {
     FunctionData(ir::Function *function, const FunctionDecl *decl)
@@ -459,7 +481,7 @@ private:
   ir::IRBuilder builder;
   ExprEvaluator exprEvaluator;
 
-  ir::IR *ir = nullptr;
+  ir::IR *ir;
   std::unique_ptr<FunctionData> currentFunctionData = nullptr;
 
   std::optional<ir::JumpArgState> breakJArg = std::nullopt;

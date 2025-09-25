@@ -10,6 +10,7 @@
 namespace kecc::c {
 
 class RecordDeclManager;
+class IRGenerator;
 
 class TypeConverter : public TypeVisitor<TypeConverter, ir::Type> {
 public:

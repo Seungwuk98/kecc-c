@@ -45,9 +45,30 @@ static ir::Value convertToBoolean(ir::IRBuilder &builder, ir::Value value,
   return value;
 }
 
+std::vector<size_t>
+FieldIndexMap::getFieldIndex(llvm::StringRef fieldName) const {
+  std::vector<size_t> indices;
+  auto it = fieldIndices.find(fieldName);
+  if (it != fieldIndices.end()) {
+    indices.emplace_back(it->second);
+    return indices;
+  }
+
+  for (const auto &[idx, innerMapPtr] : anonIndexMap) {
+    auto innerIndices = innerMapPtr->getFieldIndex(fieldName);
+    if (!innerIndices.empty()) {
+      indices.emplace_back(idx);
+      indices.insert(indices.end(), innerIndices.begin(), innerIndices.end());
+      return indices;
+    }
+  }
+  return indices;
+}
+
 void RecordDeclManager::updateStructSizeAndFields(
-    llvm::StringRef name,
-    llvm::ArrayRef<std::pair<llvm::StringRef, ir::Type>> fields) {
+    IRGenerator *irgen, llvm::StringRef name,
+    llvm::ArrayRef<std::pair<llvm::StringRef, ir::Type>> fields,
+    llvm::SMRange range) {
   if (structSizeMap.contains(name)) {
     assert(structFieldsMap.contains(name) && "Inconsistent struct info");
     assert(structFieldIndexMap.contains(name) && "Inconsistent struct info");
@@ -55,40 +76,68 @@ void RecordDeclManager::updateStructSizeAndFields(
   }
 
   llvm::SmallVector<ir::Type> fieldTypes;
+  fieldTypes.reserve(fields.size());
+  for (const auto &[_, fieldType] : fields)
+    fieldTypes.emplace_back(fieldType);
+
   llvm::DenseMap<llvm::StringRef, size_t> fieldIndices;
+  llvm::DenseMap<size_t, const FieldIndexMap *> fieldIndexMapPtr;
 
   const auto [size, align, offsets] =
       ir::getTypeSizeAlignOffsets(fieldTypes, structSizeMap);
 
   structSizeMap[name] = {size, align, offsets};
+
   structFieldsMap[name].assign(fieldTypes.begin(), fieldTypes.end());
   for (size_t i = 0; i < fields.size(); ++i) {
-    fieldIndices[fields[i].first] = i;
+    const auto &[fieldName, fieldType] = fields[i];
+    if (fieldName.empty()) {
+      assert(fieldType.isa<ir::NameStruct>() &&
+             "Unnamed struct field must be a struct type");
+      auto structFieldTypeName = fieldType.cast<ir::NameStruct>().getName();
+      const auto &innerMap = structFieldIndexMap.at(structFieldTypeName);
+      fieldIndexMapPtr[i] = &innerMap;
+    } else {
+      fieldIndices[fields[i].first] = i;
+    }
   }
-  structFieldIndexMap[name] = std::move(fieldIndices);
+
+  structFieldIndexMap[name] =
+      FieldIndexMap(name, fieldIndices, fieldIndexMapPtr);
+  ir::IRBuilder::InsertionGuard guard(irgen->builder);
+  irgen->builder.setInsertionPoint(irgen->ir->getStructBlock());
+  irgen->builder.create<ir::inst::StructDefinition>(range, fields, name);
 }
 
 void RecordDeclManager::updateStructSizeAndFields(
-    const RecordDecl *decl, TypeConverter &typeConverter) {
-  llvm::StringRef structName = getRecordDeclID(decl, typeConverter);
-  if (structSizeMap.contains(structName)) {
-    assert(structFieldsMap.contains(structName) && "Inconsistent struct info");
-    assert(structFieldIndexMap.contains(structName) &&
-           "Inconsistent struct info");
+    IRGenerator *irgen, const RecordDecl *decl, TypeConverter &typeConverter) {
+  decl = decl->getDefinition();
+  if (!decl)
     return;
-  }
+
+  if (recordDeclToIDMap.contains(decl))
+    return;
 
   llvm::SmallVector<std::pair<llvm::StringRef, ir::Type>> fields;
 
   for (const auto *field : decl->fields()) {
     llvm::StringRef fieldName = field->getName();
-    assert(!fieldName.empty() && "Unnamed struct field");
+    if (fieldName.empty()) {
+      assert(field->isAnonymousStructOrUnion() &&
+             "Unnamed field must be anonymous struct");
+      auto structDecl = field->getType()->getAsRecordDecl();
+      assert(structDecl && "Anonymous struct/union without declaration");
+      assert(structDecl->isCompleteDefinition() &&
+             "Anonymous struct/union without definition");
+      updateStructSizeAndFields(irgen, structDecl, typeConverter);
+    }
     ir::Type fieldType =
         typeConverter.VisitQualType(field->getType(), field->getLocation());
     assert(fieldType && "Struct field type conversion failed");
     fields.emplace_back(fieldName, fieldType);
   }
-  updateStructSizeAndFields(structName, fields);
+  llvm::StringRef structName = getOrCreateRecordDeclID(decl, typeConverter);
+  updateStructSizeAndFields(irgen, structName, fields);
 }
 
 void IRGenerator::VisitTranslationUnitDecl(const TranslationUnitDecl *D) {
@@ -169,6 +218,9 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
     ir->addFunction(func);
   }
 
+  if (func->hasDefinition())
+    return; // Function already defined
+
   auto funcPointerT = ir::PointerT::get(ctx, funcT);
   assert(env.isGlobalScope() && "Function declaration in non-global scope");
   {
@@ -180,10 +232,10 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
     env.insert(name, funcConst);
   }
 
-  if (!D->hasBody())
-    return;
+  D = D->getDefinition();
+  if (!D)
+    return; // Function declaration without definition
 
-  assert(!func->hasDefinition() && "Function redefinition");
   currentFunctionData = std::make_unique<FunctionData>(func, D);
 
   ir::Block *entryBlock = createNewBlock();
@@ -250,33 +302,17 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
 }
 
 void IRGenerator::VisitRecordDecl(const RecordDecl *D) {
-  if (!D->hasBody())
+  if (!D->isCompleteDefinition())
     return;
 
-  llvm::StringRef structName = recordDeclMgr.getRecordDeclID(D, typeConverter);
-  // updated in recordDeclMgr
-
-  llvm::SmallVector<std::pair<llvm::StringRef, ir::Type>> fields;
-  llvm::ArrayRef<ir::Type> fieldTypes =
-      recordDeclMgr.getStructFieldsMap().at(structName);
-  for (const auto &[fieldDecl, fieldType] :
-       llvm::zip(D->fields(), fieldTypes)) {
-    llvm::StringRef fieldName = fieldDecl->getName();
-    assert(!fieldName.empty() && "Unnamed struct field");
-    fields.emplace_back(fieldName, fieldType);
-  }
-
-  ir::IRBuilder::InsertionGuard guard(builder);
-  builder.setInsertionPoint(ir->getStructBlock());
-
-  recordDeclMgr.updateStructSizeAndFields(structName, fields);
-  builder.create<ir::inst::StructDefinition>(convertRange(D->getSourceRange()),
-                                             fields, structName);
+  recordDeclMgr.updateStructSizeAndFields(this, D, typeConverter);
 }
 
 void IRGenerator::VisitTypedefDecl(const TypedefDecl *D) {
   // Just visit the underlying type to ensure it's processed.
-  typeConverter.VisitQualType(D->getUnderlyingType(), D->getLocation());
+  auto type = D->getUnderlyingType().getTypePtr();
+  if (auto recordDecl = type->getAsRecordDecl())
+    VisitRecordDecl(recordDecl);
 }
 
 void IRGenerator::VisitCompoundStmt(const CompoundStmt *S) {
@@ -517,14 +553,12 @@ void IRGenerator::VisitSwitchStmt(const SwitchStmt *S) {
 void IRGenerator::VisitBreakStmt(const BreakStmt *S) {
   assert(breakJArg && "Break statement not within a loop or switch");
   builder.create<ir::inst::Jump>(convertRange(S->getSourceRange()), *breakJArg);
-  builder.setInsertionPoint(breakJArg->getBlock());
 }
 
 void IRGenerator::VisitContinueStmt(const ContinueStmt *S) {
   assert(continueJArg && "Continue statement not within a loop");
   builder.create<ir::inst::Jump>(convertRange(S->getSourceRange()),
                                  *continueJArg);
-  builder.setInsertionPoint(continueJArg->getBlock());
 }
 
 void IRGenerator::VisitNullStmt(const NullStmt *S) {
@@ -1434,7 +1468,7 @@ ir::Value ExprEvaluator::VisitBinLAndOp(const BinaryOperator *expr) {
     builder.setInsertionPoint(
         irgen->currentFunctionData->function->getAllocationBlock());
 
-    auto boolT = ir::IntT::get(irgen->ctx, 1, false);
+    auto boolT = ir::IntT::get(irgen->ctx, 1, true);
     memory = builder.create<ir::inst::LocalVariable>(
         irgen->convertRange(expr->getSourceRange()),
         ir::PointerT::get(irgen->ctx, boolT));
@@ -1469,7 +1503,7 @@ ir::Value ExprEvaluator::VisitBinLAndOp(const BinaryOperator *expr) {
       irgen->convertRange(expr->getRHS()->getEndLoc()), endJArg);
 
   builder.setInsertionPoint(lhsFalseBlock);
-  auto boolZero = getIntegerValue(0, ir::IntT::get(irgen->ctx, 1, false));
+  auto boolZero = getIntegerValue(0, ir::IntT::get(irgen->ctx, 1, true));
   builder.create<ir::inst::Store>(
       irgen->convertRange(expr->getLHS()->getEndLoc()), boolZero, memory);
 
@@ -1489,7 +1523,7 @@ ir::Value ExprEvaluator::VisitBinLOrOp(const BinaryOperator *expr) {
   ir::Value memory;
   {
     ir::IRBuilder::InsertionGuard guard(builder);
-    auto boolT = ir::IntT::get(irgen->ctx, 1, false);
+    auto boolT = ir::IntT::get(irgen->ctx, 1, true);
 
     builder.setInsertionPoint(
         irgen->currentFunctionData->function->getAllocationBlock());
@@ -1514,7 +1548,7 @@ ir::Value ExprEvaluator::VisitBinLOrOp(const BinaryOperator *expr) {
       lhsFalseJArg);
 
   builder.setInsertionPoint(lhsTrueBlock);
-  auto boolOne = getIntegerValue(1, ir::IntT::get(irgen->ctx, 1, false));
+  auto boolOne = getIntegerValue(1, ir::IntT::get(irgen->ctx, 1, true));
   builder.create<ir::inst::Store>(
       irgen->convertRange(expr->getLHS()->getEndLoc()), boolOne, memory);
   builder.create<ir::inst::Jump>(
@@ -1679,7 +1713,7 @@ ir::Value ExprEvaluator::VisitUnLNotOp(const UnaryOperator *expr) {
         irgen->convertRange(expr->getSubExpr()->getSourceRange()), subV, zero,
         ir::inst::Binary::Ne);
   }
-  auto boolOne = getIntegerValue(1, ir::IntT::get(irgen->ctx, 1, false));
+  auto boolOne = getIntegerValue(1, ir::IntT::get(irgen->ctx, 1, true));
   return builder.create<ir::inst::Binary>(
       irgen->convertRange(expr->getSourceRange()), subV, boolOne,
       ir::inst::Binary::BitXor);
@@ -2137,7 +2171,10 @@ ir::Value ExprEvaluator::VisitCastExpr(const CastExpr *expr) {
     // Do nothing
     return subV;
   }
-  case clang::CK_IntegralCast:
+  case clang::CK_IntegralCast: {
+    if (subV.getType() == destT.constCanonicalize())
+      return subV;
+  }
   case clang::CK_IntegralToBoolean:
   case clang::CK_IntegralToFloating:
   case clang::CK_NullToPointer:
@@ -2183,16 +2220,33 @@ ir::Value ExprEvaluator::VisitMemberExpr(const MemberExpr *expr) {
       irgen->recordDeclMgr.getStructFieldsMap().at(structT.getName());
   const auto &fieldIdxMap =
       irgen->recordDeclMgr.getFieldIndexMap(structT.getName());
-  auto memberIdx = fieldIdxMap.at(expr->getMemberDecl()->getName());
-  auto memberOffset = offsets[memberIdx];
-  ir::Value offsetV = getIntegerValue(
-      memberOffset,
-      ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(), true));
+  auto memberIdices =
+      fieldIdxMap.getFieldIndex(expr->getMemberDecl()->getName());
 
-  auto memberT = fieldTypes[memberIdx];
-  return builder.create<ir::inst::Gep>(
-      irgen->convertRange(expr->getSourceRange()), baseV, offsetV,
-      ir::PointerT::get(irgen->ctx, memberT));
+  ir::Value memory = baseV;
+  llvm::ArrayRef<size_t> offsetRef = offsets;
+  llvm::ArrayRef<ir::Type> fieldTypeRef = fieldTypes;
+  const FieldIndexMap *fieldIdxMapRef = &fieldIdxMap;
+  for (auto idx : memberIdices) {
+    auto memberOffset = offsetRef[idx];
+    ir::Value offsetV = getIntegerValue(
+        memberOffset,
+        ir::IntT::get(irgen->ctx, irgen->ctx->getArchitectureBitSize(), true));
+    memory = builder.create<ir::inst::Gep>(
+        irgen->convertRange(expr->getSourceRange()), memory, offsetV,
+        ir::PointerT::get(irgen->ctx, fieldTypeRef[idx]));
+
+    if ((fieldIdxMapRef = fieldIdxMapRef->getAnonFieldIndexMap(idx))) {
+      auto anonStructName = fieldIdxMapRef->getStructName();
+      const auto &[_, __, anonOffsets] =
+          irgen->recordDeclMgr.getStructSizeMap().at(anonStructName);
+      offsetRef = anonOffsets;
+      fieldTypeRef =
+          irgen->recordDeclMgr.getStructFieldsMap().at(anonStructName);
+    }
+  }
+
+  return memory;
 }
 
 ir::Value
@@ -2292,7 +2346,7 @@ ir::Value ExprEvaluator::VisitCallExpr(const CallExpr *expr) {
   return callV->getResult(0);
 }
 
-ir::Value ExprEvaluator::VisitDeclRefExpr(const clang::DeclRefExpr *expr) {
+ir::Value ExprEvaluator::VisitDeclRefExpr(const DeclRefExpr *expr) {
   auto nameInfo = expr->getNameInfo().getName().getAsIdentifierInfo();
   assert(nameInfo && "DeclRefExpr must have an identifier");
 
