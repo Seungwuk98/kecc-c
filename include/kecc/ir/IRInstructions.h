@@ -17,6 +17,7 @@ public:
   static void build(IRBuilder &builder, InstructionState &state);
 
   static void printer(Nop op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "nop"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
@@ -33,6 +34,7 @@ public:
   const Operand &getPointerAsOperand() const;
 
   static void printer(Load op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "load"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -55,6 +57,7 @@ public:
   const Operand &getPointerAsOperand() const;
 
   static void printer(Store op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "store"; }
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
         : operands(operands) {}
@@ -80,6 +83,7 @@ public:
   llvm::ArrayRef<Operand> getArguments() const;
 
   static void printer(Call op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "call"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -104,6 +108,7 @@ public:
   Type getTargetType() const;
 
   static void printer(TypeCast op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "typecast"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -128,6 +133,7 @@ public:
   const Operand &getOffsetAsOperand() const;
 
   static void printer(Gep op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "getelementptr"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -175,6 +181,7 @@ public:
   OpKind getOpKind() const;
 
   static void printer(Binary op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "binary"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -204,6 +211,7 @@ public:
   OpKind getOpKind() const;
 
   static void printer(Unary op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "unary"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -215,7 +223,8 @@ public:
   };
 };
 
-class Jump : public InstructionTemplate<Jump, BlockExit, ZeroResult> {
+class Jump
+    : public InstructionTemplate<Jump, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state,
@@ -224,6 +233,7 @@ public:
   JumpArg *getJumpArg() const;
 
   static void printer(Jump op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "jump"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState> jumpArgs)
@@ -233,7 +243,8 @@ public:
   };
 };
 
-class Branch : public InstructionTemplate<Branch, BlockExit, ZeroResult> {
+class Branch
+    : public InstructionTemplate<Branch, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value value,
@@ -245,6 +256,7 @@ public:
   JumpArg *getElseArg() const;
 
   static void printer(Branch op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "branch"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands,
@@ -260,7 +272,8 @@ public:
   };
 };
 
-class Switch : public InstructionTemplate<Switch, BlockExit, ZeroResult> {
+class Switch
+    : public InstructionTemplate<Switch, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state, Value value,
@@ -277,6 +290,7 @@ public:
   JumpArg *getDefaultCase() const;
 
   static void printer(Switch op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "switch"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands,
@@ -294,7 +308,8 @@ public:
   };
 };
 
-class Return : public InstructionTemplate<Return, BlockExit, ZeroResult> {
+class Return
+    : public InstructionTemplate<Return, BlockExit, Terminator, ZeroResult> {
 public:
   using Base::Base;
 
@@ -309,6 +324,7 @@ public:
   std::size_t getValueSize() const { return getValues().size(); }
 
   static void printer(Return op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "return"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -322,13 +338,14 @@ public:
   };
 };
 
-class Unreachable
-    : public InstructionTemplate<Unreachable, BlockExit, ZeroResult> {
+class Unreachable : public InstructionTemplate<Unreachable, BlockExit,
+                                               Terminator, ZeroResult> {
 public:
   using Base::Base;
   static void build(IRBuilder &builder, InstructionState &state);
 
   static void printer(Unreachable op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "unreachable"; }
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
   };
@@ -342,6 +359,7 @@ public:
                     ConstantAttr value);
 
   static void printer(Constant op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "constant"; }
 
   ConstantAttr getValue() const;
 
@@ -365,6 +383,8 @@ public:
   llvm::StringRef getName() const;
 
   static void printer(StructDefinition op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "struct"; }
+
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
   };
@@ -386,6 +406,7 @@ public:
   bool hasInitializer() const { return getInitializer(); }
 
   static void printer(GlobalVariableDefinition op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "global"; }
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
   };
@@ -402,6 +423,7 @@ public:
   void printAsDef(IRPrintContext &context) const;
 
   static void printer(LocalVariable op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "local"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
@@ -415,6 +437,7 @@ public:
   static void build(IRBuilder &builder, InstructionState &state, Type type);
 
   static void printer(Unresolved op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "unresolved"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
@@ -431,6 +454,7 @@ public:
   const Operand &getConstantAsOperand() const;
 
   static void printer(OutlineConstant op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "outline_constant"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -456,6 +480,7 @@ public:
   llvm::ArrayRef<Operand> getArguments() const;
 
   static void printer(InlineCall op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "inline_call"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -475,6 +500,7 @@ public:
   static void build(IRBuilder &builder, InstructionState &state, Type type);
 
   static void printer(FunctionArgument op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "arg"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value>, llvm::ArrayRef<JumpArgState>) {}
@@ -495,6 +521,7 @@ public:
   Value getSize() const;
   const Operand &getSizeAsOperand() const;
   static void printer(MemCpy op, IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "memcpy"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)

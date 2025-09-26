@@ -244,8 +244,7 @@ Type PointerT::getPointeeType() const { return getImpl()->getPointeeType(); }
 bool PointerT::isConst() const { return getImpl()->isConst(); }
 
 void PointerT::printer(PointerT type, llvm::raw_ostream &os) {
-  os << type.getPointeeType().toString() << "*"
-     << (type.isConst() ? "const" : "");
+  os << type.getPointeeType() << "*" << (type.isConst() ? "const" : "");
 }
 
 std::pair<size_t, size_t>

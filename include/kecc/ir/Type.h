@@ -78,6 +78,7 @@ public:
   }
 
   bool isSignedInt() const;
+  bool isBoolean() const;
 
 private:
   TypeImpl *impl;

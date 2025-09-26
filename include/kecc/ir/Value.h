@@ -66,7 +66,7 @@ public:
   void printAsOperand(IRPrintContext &context, bool printName = false) const;
   void printAsOperand(llvm::raw_ostream &os, bool printName = false) const;
 
-  Type getType() const { return getImpl()->getType(); }
+  Type getType() const { return getImpl()->getType().constCanonicalize(); }
 
   friend inline llvm::hash_code hash_value(Value value) {
     return llvm::DenseMapInfo<ValueImpl *>::getHashValue(value.getImpl());

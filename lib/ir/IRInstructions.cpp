@@ -643,7 +643,8 @@ void GlobalVariableDefinition::build(IRBuilder &builder,
                                      InitializerAttr initializer) {
   state.pushAttribute(StringAttr::get(builder.getContext(), name));
   state.pushAttribute(TypeAttr::get(builder.getContext(), type));
-  state.pushAttribute(initializer);
+  if (initializer)
+    state.pushAttribute(initializer);
 }
 
 static void printInterpretedInitailier(Attribute attr,
@@ -747,7 +748,7 @@ void Unresolved::build(IRBuilder &builder, InstructionState &state, Type type) {
 
 void Unresolved::printer(Unresolved op, IRPrintContext &context) {
   context.printValue(op, true);
-  context.getOS() << "= unresolved";
+  context.getOS() << " = unresolved";
 }
 
 //============================================================================//

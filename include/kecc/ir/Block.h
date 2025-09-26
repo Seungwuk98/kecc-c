@@ -103,6 +103,14 @@ public:
 
   void dropReferences();
 
+  bool hasTerminator() const {
+    if (empty())
+      return false;
+    auto lastIter = end();
+    --lastIter;
+    return lastIter.getNode()->data->hasTrait<Terminator>();
+  }
+
 private:
   int blockId;
   Function *parentFunction = nullptr;

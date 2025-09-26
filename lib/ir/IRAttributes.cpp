@@ -725,8 +725,9 @@ public:
                                 ASTInteger::IntegerBase base,
                                 llvm::StringRef value,
                                 ASTInteger::Suffix suffix) {
+    llvm::StringRef copiedValue = storage->copyString(value);
     return new (storage->allocate<ASTIntegerImpl>())
-        ASTIntegerImpl(convertToRangeKey(range), base, value, suffix);
+        ASTIntegerImpl(convertToRangeKey(range), base, copiedValue, suffix);
   }
 
   static KeyTy getKey(llvm::SMRange range, ASTInteger::IntegerBase base,
@@ -819,8 +820,9 @@ public:
 
   static ASTFloatImpl *create(TypeStorage *storage, llvm::SMRange range,
                               llvm::StringRef value, ASTFloat::Suffix suffix) {
+    auto copiedValue = storage->copyString(value);
     auto *impl = new (storage->allocate<ASTFloatImpl>())
-        ASTFloatImpl(convertToRangeKey(range), value, suffix);
+        ASTFloatImpl(convertToRangeKey(range), copiedValue, suffix);
     return impl;
   }
 

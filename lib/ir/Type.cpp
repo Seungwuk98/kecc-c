@@ -25,7 +25,7 @@ TypeID Type::getId() const { return impl->getId(); }
 
 Type Type::constCanonicalize() const {
   if (auto constQual = dyn_cast<ConstQualifier>())
-    return constQual.getType();
+    return constQual.getType().constCanonicalize();
 
   if (auto pointer = dyn_cast<PointerT>())
     return PointerT::get(getContext(), pointer.getPointeeType(), false);
@@ -54,6 +54,11 @@ Type::getSizeAndAlign(const StructSizeMap &sizeMap) const {
 bool Type::isSignedInt() const {
   if (auto intType = dyn_cast<IntT>())
     return intType.isSigned();
+  return false;
+}
+bool Type::isBoolean() const {
+  if (auto intType = dyn_cast<IntT>())
+    return intType.getBitWidth() == 1;
   return false;
 }
 

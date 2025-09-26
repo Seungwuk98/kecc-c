@@ -236,6 +236,7 @@ void Function::registerAllInstInfo(IRPrintContext &printContext) const {
   std::size_t allocCount = 0;
   for (const auto inst : *getAllocationBlock()) {
     auto localVariable = inst->getDefiningInst<inst::LocalVariable>();
+    assert(localVariable && "Expected LocalVariable instruction");
     auto allocId = RegisterId::alloc(localVariable.getRange(), allocCount++);
     printContext.setId(localVariable.getResult(), allocId);
   }
@@ -243,6 +244,7 @@ void Function::registerAllInstInfo(IRPrintContext &printContext) const {
   std::size_t unresolvedCount = 0;
   for (const auto inst : *getUnresolvedBlock()) {
     auto unresolvedInst = inst->getDefiningInst<inst::Unresolved>();
+    assert(unresolvedInst && "Expected Unresolved instruction");
     auto unresolvedId =
         RegisterId::unresolved(unresolvedInst.getRange(), unresolvedCount++);
     printContext.setId(unresolvedInst.getResult(), unresolvedId);

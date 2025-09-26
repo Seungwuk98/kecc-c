@@ -9,6 +9,7 @@
 #include "kecc/ir/Type.h"
 #include "kecc/ir/WalkSupport.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/APSInt.h"
 
 namespace kecc::ir {
 
@@ -44,6 +45,12 @@ public:
   int getBitWidth() const;
   bool isSigned() const;
   IntT getIntType() const;
+  llvm::APInt getAsAPInt() const {
+    return llvm::APInt(getBitWidth(), getValue(), isSigned());
+  }
+  llvm::APSInt getAsAPSInt() const {
+    return llvm::APSInt(getAsAPInt(), !isSigned());
+  }
 };
 
 class ArrayAttrImpl;

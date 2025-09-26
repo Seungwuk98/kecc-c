@@ -3,6 +3,7 @@
 
 file(GLOB_RECURSE IR_UNIT_TESTS ${CMAKE_CURRENT_SOURCE_DIR}/ir "*.cpp")
 file(GLOB_RECURSE ASM_UNIT_TESTS ${CMAKE_CURRENT_SOURCE_DIR}/asm "*.cpp")
+file(GLOB_RECURSE C_UNIT_TESTS ${CMAKE_CURRENT_SOURCE_DIR}/c "*.cpp")
 
 add_executable(
   UnitTest
@@ -23,4 +24,5 @@ target_link_libraries(
   KeccIR
   KeccParser
   KeccASM
+  KeccC
 )

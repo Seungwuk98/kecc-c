@@ -5,30 +5,13 @@
 #include "kecc/asm/Register.h"
 #include "kecc/ir/Type.h"
 #include "kecc/utils/MLIR.h"
+#include "kecc/utils/PointerCastBase.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
 
 namespace kecc::as {
 
-template <typename T> struct PointerCastBase {
-  template <typename... Us> bool isa() const {
-    return llvm::isa<Us...>(derived());
-  }
-  template <typename U> U *cast() { return llvm::cast<U>(derived()); }
-  template <typename U> const U *cast() const {
-    return llvm::cast<U>(derived());
-  }
-  template <typename U> U *dyn_cast() { return llvm::dyn_cast<U>(derived()); }
-  template <typename U> const U *dyn_cast() const {
-    return llvm::dyn_cast<U>(derived());
-  }
-
-private:
-  T *derived() { return static_cast<T *>(this); }
-  const T *derived() const { return static_cast<const T *>(this); }
-};
-
-class Immediate : public PointerCastBase<Immediate> {
+class Immediate : public utils::PointerCastBase<Immediate> {
 public:
   virtual ~Immediate() = default;
   enum class Kind {
@@ -184,7 +167,7 @@ private:
   Kind kind;
 };
 
-class Instruction : public PointerCastBase<Instruction> {
+class Instruction : public utils::PointerCastBase<Instruction> {
 public:
   virtual ~Instruction() = default;
   TypeID getId() const { return typeId; }

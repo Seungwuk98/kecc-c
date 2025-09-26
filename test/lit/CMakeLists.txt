@@ -12,5 +12,7 @@ add_lit_testsuite(check-kecc "Running the kecc testsuite"
   ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS kecc-opt
           kecc-translate
-  ARGS --timeout=20
+          kecc-test-executor
+          kecc
+  ARGS --timeout=30
 )

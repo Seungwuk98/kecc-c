@@ -39,6 +39,9 @@ public:
   static std::pair<size_t, size_t>
   calculateSizeAndAlign(FloatT type, const StructSizeMap &sizeMap);
 
+  bool isF32() const { return getBitWidth() == 32; }
+  bool isF64() const { return getBitWidth() == 64; }
+
   int getBitWidth() const;
 };
 

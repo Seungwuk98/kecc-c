@@ -147,6 +147,10 @@ bool InstructionStorage::hasTrait(TypeID traitId) const {
   return abstractInst->getHasTraitFn()(traitId);
 }
 
+llvm::StringRef InstructionStorage::getInstName() const {
+  return abstractInst->getInstName();
+}
+
 std::size_t InstructionStorage::getPrefixBytes() const {
   return llvm::alignTo(sizeof(ValueImpl) * resultSize,
                        alignof(InstructionStorage));

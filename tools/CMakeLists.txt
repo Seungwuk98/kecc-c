@@ -1,3 +1,20 @@
+add_executable(kecc driver.cpp) 
+
+target_link_libraries(
+  kecc 
+  PRIVATE
+  ${llvm_libs}
+  KeccParser
+  KeccIR 
+  KeccIRAnalyses 
+  KeccIRPasses
+  KeccASM 
+  KeccTranslate 
+  KeccTranslatePasses 
+  KeccC
+  KeccDriver
+)
+
 add_executable(kecc-opt kecc-opt.cpp)
 
 target_link_libraries(

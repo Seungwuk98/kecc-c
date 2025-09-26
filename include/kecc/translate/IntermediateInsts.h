@@ -23,7 +23,7 @@ public:
   std::int64_t getOffset() const;
 
   static void printer(LoadOffset op, ir::IRPrintContext &context);
-
+  static llvm::StringRef getDebugName() { return "load_offset"; }
   struct Adaptor {
     Adaptor(llvm::ArrayRef<ir::Value> operands,
             llvm::ArrayRef<ir::JumpArgState>)
@@ -52,6 +52,7 @@ public:
   std::int64_t getOffset() const;
 
   static void printer(StoreOffset op, ir::IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "store_offset"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<ir::Value> operands,
@@ -76,6 +77,7 @@ public:
   const ir::Operand &getValueAsOperand() const;
 
   static void printer(Copy op, ir::IRPrintContext &context);
+  static llvm::StringRef getDebugName() { return "copy"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<ir::Value> operands,

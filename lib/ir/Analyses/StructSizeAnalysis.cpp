@@ -21,6 +21,13 @@ std::unique_ptr<StructSizeAnalysis> StructSizeAnalysis::create(Module *module) {
       new StructSizeAnalysis(module, std::move(fieldsMap), std::move(sizeMap)));
 }
 
+std::unique_ptr<StructSizeAnalysis>
+StructSizeAnalysis::create(Module *module, const StructSizeMap &structSizeMap,
+                           const StructFieldsMap &structFieldsMap) {
+  return std::unique_ptr<StructSizeAnalysis>(
+      new StructSizeAnalysis(module, structFieldsMap, structSizeMap));
+}
+
 static void
 addStructToMap(StructSizeMap &sizeMap,
                const llvm::DenseMap<llvm::StringRef, llvm::SmallVector<Type>>

@@ -165,6 +165,9 @@ private:
 class StructSizeAnalysis : public Analysis {
 public:
   static std::unique_ptr<StructSizeAnalysis> create(Module *module);
+  static std::unique_ptr<StructSizeAnalysis>
+  create(Module *module, const StructSizeMap &structSizeMap,
+         const StructFieldsMap &structFieldsMap);
 
   const StructFieldsMap &getStructFieldsMap() const { return structFieldsMap; }
   const StructSizeMap &getStructSizeMap() const { return structSizeMap; }

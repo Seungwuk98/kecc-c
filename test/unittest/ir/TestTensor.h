@@ -130,6 +130,7 @@ public:
     }
     context.getOS() << "]";
   }
+  static llvm::StringRef getDebugName() { return "create_tensor"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Value> operands, llvm::ArrayRef<JumpArgState>)
@@ -168,6 +169,7 @@ public:
     context.getOS() << " = transpose ";
     inst.getInput().printAsOperand(context.getOS());
   }
+  static llvm::StringRef getDebugName() { return "transpose"; }
 
   struct Adaptor {
     Adaptor(llvm::ArrayRef<Operand> operands, llvm::ArrayRef<JumpArgState>)
