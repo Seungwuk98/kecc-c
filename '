@@ -2,19 +2,23 @@
 #define KECC_IR_INTERPRETER_H
 
 #include "kecc/ir/IR.h"
-#include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/IRInstructions.h"
 #include "kecc/ir/Module.h"
 #include "kecc/ir/Value.h"
-#include "kecc/utils/PointerCastBase.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APSInt.h"
+#include "llvm/Support/Allocator.h"
 #include "llvm/Support/MemAlloc.h"
-#include "llvm/Support/raw_ostream.h"
 
 namespace kecc::ir {
 
-class VRegister : public utils::PointerCastBase<VRegister> {
+class InterpreterContext {
+public:
+private:
+  llvm::BumpPtrAllocator allocator;
+};
+
+class VRegister {
 public:
   enum Kind {
     Int,
@@ -33,22 +37,21 @@ public:
 
   static llvm::StringRef kindToString(Kind kind);
 
-  virtual void mv(VRegister *src) = 0;
-
 private:
   Kind kind;
 };
 
 class VMemory {
 public:
-  VMemory() : data(nullptr) {}
-  VMemory(void *data) : data(data) {}
+  VMemory() : size(0), data(nullptr) {}
+  VMemory(size_t size, void *data) : size(size), data(data) {}
   ~VMemory() = default;
 
   void *getData() const { return data; }
-  VMemory getElementPtr(std::size_t offset) const;
+  void *getElementPtr(std::size_t offset) const;
 
 private:
+  size_t size;
   void *data;
 };
 
@@ -59,8 +62,6 @@ public:
 
   std::uint64_t getValue() const { return value; }
   void setValue(std::uint64_t v) { value = v; }
-  void setValue(llvm::APSInt v);
-  void setValue(VMemory v);
 
   llvm::APSInt getAsInteger(unsigned bitWidth, bool isSigned) const;
   VMemory getAsMemory() const;
@@ -69,7 +70,6 @@ public:
   void print(llvm::raw_ostream &os) const override;
 
 private:
-  static_assert(sizeof(VMemory) == sizeof(std::uint64_t));
   union {
     std::uint64_t value;
     VMemory memory;
@@ -83,7 +83,6 @@ public:
 
   std::uint64_t getValue() const { return value; }
   void setValue(llvm::APFloat v);
-  void setValue(std::uint64_t v);
 
   llvm::APFloat getAsFloat(int bitwidth) const;
   void print(llvm::raw_ostream &os) const override;
@@ -99,7 +98,7 @@ private:
 class VRegisterStruct : public VRegister {
 public:
   VRegisterStruct() : VRegister(Kind::Struct), size(0), data(nullptr) {}
-  VRegisterStruct(size_t size)
+  VRegisterStruct(size_t size, void *data)
       : VRegister(Kind::Struct), size(size), data(llvm::safe_malloc(size)) {}
   ~VRegisterStruct() {
     if (data)
@@ -114,19 +113,15 @@ public:
   void memcpy(VMemory src, std::size_t size);
   void print(llvm::raw_ostream &os) const override;
 
-  size_t getSize() const { return size; }
-
 private:
   size_t size;
   void *data;
 };
 
-class Interpreter;
-
 class StackFrame {
 public:
-  StackFrame(Interpreter *interpreter, Function *function)
-      : interpreter(interpreter), function(function) {
+  StackFrame(InterpreterContext *interpCtx, ir::Function *function)
+      : interpCtx(interpCtx), function(function) {
     initRegisters();
   }
   ~StackFrame();
@@ -141,31 +136,27 @@ public:
     return nullptr;
   }
 
-  void print(llvm::raw_ostream &os) const;
-
 private:
   void initRegisters();
 
-  Interpreter *interpreter;
+  InterpreterContext *interpCtx;
   ir::Function *function;
-  void *frameMem = nullptr;
-  size_t frameSize = 0;
+  void *frameMem;
+  size_t frameSize;
   llvm::DenseMap<ir::inst::LocalVariable, VMemory> localVars;
   llvm::DenseMap<ir::Value, std::unique_ptr<VRegister>> registers;
 };
 
 class Interpreter {
 public:
-  Interpreter(ir::Module *module) : module(module) {
-    structSizeAnalysis =
-        module->getOrCreateAnalysis<StructSizeAnalysis>(module);
-  }
+  Interpreter(InterpreterContext *interpCtx, ir::Module *module)
+      : interpCtx(interpCtx), module(module) {}
 
   struct CallStack {
     CallStack(Interpreter *interpreter, ir::Function *function)
         : interpreter(interpreter) {
-      interpreter->callStack.emplace_back(
-          std::unique_ptr<StackFrame>(new StackFrame(interpreter, function)));
+      interpreter->callStack.emplace_back(std::unique_ptr<StackFrame>(
+          new StackFrame(interpreter->interpCtx, function)));
     }
     ~CallStack() { interpreter->callStack.pop_back(); }
 
@@ -176,19 +167,10 @@ public:
   llvm::SmallVector<std::unique_ptr<VRegister>>
   call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args);
 
-  StackFrame *getCurrentFrame() const {
-    if (callStack.empty())
-      return nullptr;
-    return callStack.back().get();
-  }
-
-  void dumpAllStackFrames(llvm::raw_ostream &os = llvm::errs()) const;
-
 private:
-  friend class StackFrame;
+  InterpreterContext *interpCtx;
   llvm::SmallVector<std::unique_ptr<StackFrame>> callStack;
-  Module *module;
-  StructSizeAnalysis *structSizeAnalysis;
+  ir::Module *module;
 };
 
 } // namespace kecc::ir
