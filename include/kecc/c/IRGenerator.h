@@ -276,12 +276,17 @@ public:
     MemoryGuard(LocalInitGenerator &gen, ir::Value memory)
         : gen(gen), savedMemory(gen.memory) {
       gen.memory = memory;
-      gen.memoryInnerT = memory.getType().cast<ir::PointerT>().getPointeeType();
+      gen.memoryInnerT = memory.getType()
+                             .cast<ir::PointerT>()
+                             .getPointeeType()
+                             .constCanonicalize();
     }
     ~MemoryGuard() {
       gen.memory = savedMemory;
-      gen.memoryInnerT =
-          savedMemory.getType().cast<ir::PointerT>().getPointeeType();
+      gen.memoryInnerT = savedMemory.getType()
+                             .cast<ir::PointerT>()
+                             .getPointeeType()
+                             .constCanonicalize();
     }
 
   private:
@@ -312,6 +317,7 @@ public:
   ir::Value VisitCharacterLiteral(const CharacterLiteral *expr);
   ir::Value VisitParenExpr(const ParenExpr *expr);
   ir::Value VisitArraySubscriptExpr(const ArraySubscriptExpr *expr);
+  ir::Value VisitConstantExpr(const ConstantExpr *expr);
 
   ir::Value VisitCastExpr(const CastExpr *expr);
 
@@ -449,15 +455,19 @@ private:
                ir::Block *continueBlock)
         : irgen(irgen), savedBreakBlock(irgen.breakJArg),
           savedContinueBlock(irgen.continueJArg) {
-      irgen.breakJArg = ir::JumpArgState(breakBlock);
-      irgen.continueJArg = ir::JumpArgState(continueBlock);
+      if (breakBlock)
+        irgen.breakJArg = ir::JumpArgState(breakBlock);
+      if (continueBlock)
+        irgen.continueJArg = ir::JumpArgState(continueBlock);
     }
     BreakPoint(IRGenerator &irgen, std::optional<ir::JumpArgState> breakJArg,
                std::optional<ir::JumpArgState> continueJArg)
         : irgen(irgen), savedBreakBlock(irgen.breakJArg),
           savedContinueBlock(irgen.continueJArg) {
-      irgen.breakJArg = breakJArg;
-      irgen.continueJArg = continueJArg;
+      if (breakJArg)
+        irgen.breakJArg = breakJArg;
+      if (continueJArg)
+        irgen.continueJArg = continueJArg;
     }
     ~BreakPoint() {
       irgen.breakJArg = savedBreakBlock;

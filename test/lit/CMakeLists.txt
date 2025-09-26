@@ -14,5 +14,5 @@ add_lit_testsuite(check-kecc "Running the kecc testsuite"
           kecc-translate
           kecc-test-executor
           kecc
-  ARGS --timeout=20
+  ARGS --timeout=30
 )

@@ -150,6 +150,9 @@ void AssertImpl::VisitArraySubscriptExpr(const ArraySubscriptExpr *expr) {
   StmtVisitor::Visit(expr->getBase());
   StmtVisitor::Visit(expr->getIdx());
 }
+void AssertImpl::VisitConstantExpr(const ConstantExpr *expr) {
+  StmtVisitor::Visit(expr->getSubExpr());
+}
 
 void AssertImpl::VisitCastExpr(const CastExpr *expr) {
   switch (expr->getCastKind()) {

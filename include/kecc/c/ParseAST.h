@@ -52,6 +52,7 @@ public:
   void VisitCharacterLiteral(const CharacterLiteral *expr);
   void VisitParenExpr(const ParenExpr *expr);
   void VisitArraySubscriptExpr(const ArraySubscriptExpr *expr);
+  void VisitConstantExpr(const ConstantExpr *expr);
 
   void VisitCastExpr(const CastExpr *expr);
   void VisitImplicitCastExpr(const ImplicitCastExpr *expr);
