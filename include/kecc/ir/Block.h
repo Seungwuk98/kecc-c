@@ -12,6 +12,7 @@ class IR;
 
 class Block : public utils::ListObject<Block, InstructionStorage *> {
 public:
+  using Node = typename utils::ListObject<Block, InstructionStorage *>::Node;
   Block(int id) : blockId(id) {}
 
   static void deleteObject(InstructionStorage *storage) {
@@ -115,6 +116,9 @@ private:
   int blockId;
   Function *parentFunction = nullptr;
 };
+
+// FIX: This is a workaround for circular dependency
+class BlockNode : public Block::Node {};
 
 } // namespace kecc::ir
 

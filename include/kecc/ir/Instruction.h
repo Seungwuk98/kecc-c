@@ -19,6 +19,7 @@
 namespace kecc::ir {
 
 class Block;
+class BlockNode;
 class InstructionStorage;
 class IRPrintContext;
 class AbstractInstruction;
@@ -214,6 +215,9 @@ public:
 
   llvm::StringRef getInstName() const;
 
+  InstructionStorage *getNextInBlock() const;
+  BlockNode *getBlockNode() const { return blockNode; }
+
 private:
   friend class IRBuilder;
   InstructionStorage(std::uint8_t resultSize, std::size_t operandSize,
@@ -224,6 +228,8 @@ private:
 
   std::size_t getPrefixBytes() const;
 
+  void setBlockNode(BlockNode *node) { blockNode = node; }
+
   const std::uint8_t resultSize;
   const std::size_t operandSize;
   const std::size_t attributeSize;
@@ -231,6 +237,7 @@ private:
 
   llvm::SMRange range;
   Block *parentBlock;
+  BlockNode *blockNode;
   AbstractInstruction *abstractInst;
 };
 

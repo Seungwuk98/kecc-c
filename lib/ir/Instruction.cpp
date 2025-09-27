@@ -151,6 +151,11 @@ llvm::StringRef InstructionStorage::getInstName() const {
   return abstractInst->getInstName();
 }
 
+InstructionStorage *InstructionStorage::getNextInBlock() const {
+  assert(getBlockNode()->next && "No next instruction in block");
+  return getBlockNode()->next->data;
+}
+
 std::size_t InstructionStorage::getPrefixBytes() const {
   return llvm::alignTo(sizeof(ValueImpl) * resultSize,
                        alignof(InstructionStorage));

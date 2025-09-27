@@ -115,21 +115,10 @@ void Block::print(llvm::raw_ostream &os) const {
   print(context);
 }
 
-void Block::remove(InstructionStorage *inst) {
-  auto it = find(inst);
-  if (it == end()) {
-    return; // Instruction not found in the block
-  }
-  it.getNode()->remove();
-}
+void Block::remove(InstructionStorage *inst) { inst->getBlockNode()->remove(); }
 
 Block::Iterator Block::find(InstructionStorage *inst) const {
-  auto it = begin();
-  for (; it != end(); ++it) {
-    if (*it == inst)
-      return it;
-  }
-  return it;
+  return Block::Iterator(inst->getBlockNode());
 }
 
 ir::IR *Block::getParentIR() const {

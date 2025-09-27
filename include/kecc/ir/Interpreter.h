@@ -9,8 +9,11 @@
 #include "kecc/utils/PointerCastBase.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APSInt.h"
+#include "llvm/ADT/MapVector.h"
+#include "llvm/Support/Allocator.h"
 #include "llvm/Support/MemAlloc.h"
 #include "llvm/Support/raw_ostream.h"
+#include <variant>
 
 namespace kecc::ir {
 
@@ -29,11 +32,12 @@ public:
   Kind getKind() const { return kind; }
 
   void dump() const;
-  virtual void print(llvm::raw_ostream &os) const = 0;
+  virtual void print(llvm::raw_ostream &os, Type type,
+                     StructSizeAnalysis *analysis) const = 0;
+  virtual void mv(VRegister *src) = 0;
+  virtual std::unique_ptr<VRegister> clone() const = 0;
 
   static llvm::StringRef kindToString(Kind kind);
-
-  virtual void mv(VRegister *src) = 0;
 
 private:
   Kind kind;
@@ -43,10 +47,15 @@ class VMemory {
 public:
   VMemory() : data(nullptr) {}
   VMemory(void *data) : data(data) {}
-  ~VMemory() = default;
 
   void *getData() const { return data; }
-  VMemory getElementPtr(std::size_t offset) const;
+  VMemory getElementPtr(int offset) const;
+
+  void loadInto(VRegister *dest, Type type, StructSizeAnalysis *analysis) const;
+  void storeFrom(VRegister *src, Type type, StructSizeAnalysis *analysis);
+
+  void print(llvm::raw_ostream &os, Type type,
+             StructSizeAnalysis *analysis) const;
 
 private:
   void *data;
@@ -66,7 +75,10 @@ public:
   VMemory getAsMemory() const;
 
   static bool classof(const VRegister *v) { return v->getKind() == Kind::Int; }
-  void print(llvm::raw_ostream &os) const override;
+  void print(llvm::raw_ostream &os, Type type,
+             StructSizeAnalysis *analysis) const override;
+  void mv(VRegister *src) override;
+  std::unique_ptr<VRegister> clone() const override;
 
 private:
   static_assert(sizeof(VMemory) == sizeof(std::uint64_t));
@@ -86,7 +98,10 @@ public:
   void setValue(std::uint64_t v);
 
   llvm::APFloat getAsFloat(int bitwidth) const;
-  void print(llvm::raw_ostream &os) const override;
+  void print(llvm::raw_ostream &os, Type type,
+             StructSizeAnalysis *analysis) const override;
+  void mv(VRegister *src) override;
+  std::unique_ptr<VRegister> clone() const override;
 
   static bool classof(const VRegister *v) {
     return v->getKind() == Kind::Float;
@@ -96,12 +111,12 @@ private:
   std::uint64_t value;
 };
 
-class VRegisterStruct : public VRegister {
+class VRegisterDynamic : public VRegister {
 public:
-  VRegisterStruct() : VRegister(Kind::Struct), size(0), data(nullptr) {}
-  VRegisterStruct(size_t size)
+  VRegisterDynamic() : VRegister(Kind::Struct), size(0), data(nullptr) {}
+  VRegisterDynamic(size_t size)
       : VRegister(Kind::Struct), size(size), data(llvm::safe_malloc(size)) {}
-  ~VRegisterStruct() {
+  ~VRegisterDynamic() {
     if (data)
       free(data);
   }
@@ -111,8 +126,10 @@ public:
     return v->getKind() == Kind::Struct;
   }
 
-  void memcpy(VMemory src, std::size_t size);
-  void print(llvm::raw_ostream &os) const override;
+  void print(llvm::raw_ostream &os, Type type,
+             StructSizeAnalysis *analysis) const override;
+  void mv(VRegister *src) override;
+  std::unique_ptr<VRegister> clone() const override;
 
   size_t getSize() const { return size; }
 
@@ -123,19 +140,41 @@ private:
 
 class Interpreter;
 
-class StackFrame {
+class InterpValue {
 public:
-  StackFrame(Interpreter *interpreter, Function *function)
-      : interpreter(interpreter), function(function) {
-    initRegisters();
+  InterpValue(VRegister *v) : value(v) {}
+  InterpValue(std::unique_ptr<VRegister> v) : value(std::move(v)) {}
+
+  VRegister *get() const {
+    if (std::holds_alternative<VRegister *>(value)) {
+      return std::get<VRegister *>(value);
+    } else {
+      return std::get<std::unique_ptr<VRegister>>(value).get();
+    }
   }
-  ~StackFrame();
 
-  ir::Function *getFunction() const { return function; }
+  void print(llvm::raw_ostream &os, Type type,
+             StructSizeAnalysis *analysis) const {
+    get()->print(os, type, analysis);
+  }
 
-  VRegister *getRegister(ir::Value v) const {
-    auto it = registers.find(v);
-    if (it != registers.end()) {
+  auto operator->() const { return get(); }
+
+private:
+  std::variant<VRegister *, std::unique_ptr<VRegister>> value;
+};
+
+class GlobalTable {
+public:
+  GlobalTable() = default;
+
+  void addGlobal(llvm::StringRef name, std::unique_ptr<VRegister> reg) {
+    table[name] = std::move(reg);
+  }
+
+  VRegister *getGlobal(llvm::StringRef name) const {
+    auto it = table.find(name);
+    if (it != table.end()) {
       return it->second.get();
     }
     return nullptr;
@@ -143,15 +182,57 @@ public:
 
   void print(llvm::raw_ostream &os) const;
 
+  llvm::BumpPtrAllocator &getAllocator() { return allocator; }
+
+private:
+  llvm::BumpPtrAllocator allocator;
+  llvm::DenseMap<llvm::StringRef, std::unique_ptr<VRegister>> table;
+};
+
+class StackFrame {
+public:
+  StackFrame(Interpreter *interpreter, Function *function,
+             GlobalTable *globalTable, llvm::SMRange callSite)
+      : interpreter(interpreter), function(function), globalTable(globalTable),
+        callSite(callSite) {
+    initRegisters();
+  }
+  ~StackFrame();
+
+  ir::Function *getFunction() const { return function; }
+
+  std::unique_ptr<VRegister> constValue(inst::Constant c) const;
+
+  InterpValue getRegister(ir::Value v) const {
+    if (auto constant = v.getDefiningInst<inst::Constant>())
+      return InterpValue(constValue(constant));
+
+    auto it = registers.find(v);
+    if (it != registers.end()) {
+      return it->second;
+    }
+    llvm_unreachable("Register not found");
+  }
+
+  void print(IRPrintContext &context, bool summary = false) const;
+
+  llvm::SmallVectorImpl<std::unique_ptr<VRegister>> &getReturnValues() {
+    return returnValues;
+  }
+
 private:
   void initRegisters();
 
   Interpreter *interpreter;
-  ir::Function *function;
+  Function *function;
+  GlobalTable *globalTable;
+  llvm::SMRange callSite;
   void *frameMem = nullptr;
   size_t frameSize = 0;
-  llvm::DenseMap<ir::inst::LocalVariable, VMemory> localVars;
-  llvm::DenseMap<ir::Value, std::unique_ptr<VRegister>> registers;
+  llvm::MapVector<ir::inst::LocalVariable, VMemory> localVars;
+  llvm::MapVector<ir::Value, VRegister *> registers;
+  llvm::SmallVector<std::unique_ptr<VRegister>> stackRegisters;
+  llvm::SmallVector<std::unique_ptr<VRegister>> returnValues;
 };
 
 class Interpreter {
@@ -159,13 +240,22 @@ public:
   Interpreter(ir::Module *module) : module(module) {
     structSizeAnalysis =
         module->getOrCreateAnalysis<StructSizeAnalysis>(module);
+    initGlobal();
   }
 
   struct CallStack {
     CallStack(Interpreter *interpreter, ir::Function *function)
         : interpreter(interpreter) {
       interpreter->callStack.emplace_back(
-          std::unique_ptr<StackFrame>(new StackFrame(interpreter, function)));
+          std::unique_ptr<StackFrame>(new StackFrame(
+              interpreter, function, &interpreter->globalTable, {})));
+    }
+    CallStack(Interpreter *interpreter, ir::Function *function,
+              llvm::SMRange callSite)
+        : interpreter(interpreter) {
+      interpreter->callStack.emplace_back(
+          std::unique_ptr<StackFrame>(new StackFrame(
+              interpreter, function, &interpreter->globalTable, callSite)));
     }
     ~CallStack() { interpreter->callStack.pop_back(); }
 
@@ -174,7 +264,10 @@ public:
   };
 
   llvm::SmallVector<std::unique_ptr<VRegister>>
-  call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args);
+  call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
+       llvm::SMRange callSite = {});
+
+  int callMain(llvm::StringRef name, llvm::ArrayRef<llvm::StringRef> args);
 
   StackFrame *getCurrentFrame() const {
     if (callStack.empty())
@@ -183,12 +276,37 @@ public:
   }
 
   void dumpAllStackFrames(llvm::raw_ostream &os = llvm::errs()) const;
+  void dumpShortenedStackFrames(llvm::raw_ostream &os = llvm::errs()) const;
+
+  struct PCGuard {
+    PCGuard(Interpreter *interpreter)
+        : interpreter(interpreter), oldPC(interpreter->programCounter) {}
+    ~PCGuard() { interpreter->programCounter = oldPC; }
+
+  private:
+    Interpreter *interpreter;
+    ir::InstructionStorage *oldPC;
+  };
+
+  void setPC(ir::InstructionStorage *pc) { programCounter = pc; }
+  ir::InstructionStorage *getPC() const { return programCounter; }
+
+  void setStackOverflowLimit(size_t limit) { stackOverflowLimit = limit; }
+
+  StructSizeAnalysis *getStructSizeAnalysis() const {
+    return structSizeAnalysis;
+  }
 
 private:
+  void initGlobal();
+
   friend class StackFrame;
   llvm::SmallVector<std::unique_ptr<StackFrame>> callStack;
+  GlobalTable globalTable;
   Module *module;
   StructSizeAnalysis *structSizeAnalysis;
+  ir::InstructionStorage *programCounter = nullptr;
+  size_t stackOverflowLimit = 1024;
 };
 
 } // namespace kecc::ir

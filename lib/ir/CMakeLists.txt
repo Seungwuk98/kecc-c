@@ -17,6 +17,7 @@ add_library(KeccIR
   Pass.cpp
   JumpArg.cpp
   PatternMatch.cpp
+  Interpreter.cpp
 )
 
 add_subdirectory(Analyses)

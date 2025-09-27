@@ -34,6 +34,8 @@ public:
   llvm::SourceMgr &getSourceMgr() { return srcMgr; }
   llvm::raw_ostream &getOS() { return *os; }
 
+  void setOS(llvm::raw_ostream *newOS) { os = newOS; }
+
 private:
   llvm::SourceMgr &srcMgr;
   llvm::raw_ostream *os;

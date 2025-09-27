@@ -33,6 +33,8 @@ public:
 
     Inst newInst(storage);
     insertionPoint = insertionPoint.insertNext(newInst.getStorage());
+    newInst->setBlockNode(
+        static_cast<BlockNode *>(insertionPoint.getIterator().getNode()));
     return newInst;
   }
 

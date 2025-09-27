@@ -386,7 +386,7 @@ void IRTranslater::translateGlobalVariableImpl(
         const auto &[size, align, offsets] =
             structSizeAnalysis->getStructSizeMap().at(structT.getName());
 
-        auto fields =
+        const auto &fields =
             structSizeAnalysis->getStructFieldsMap().at(structT.getName());
 
         size_t structSize = 0;
@@ -406,6 +406,11 @@ void IRTranslater::translateGlobalVariableImpl(
                   ? arrayInitializer.getValues()[idx]
                   : nullptr,
               structSizeAnalysis, directives, structSize);
+        }
+
+        if (size > structSize) {
+          directives.emplace_back(new as::ZeroDirective(size - structSize));
+          structSize = size;
         }
 
         currSize += structSize;
