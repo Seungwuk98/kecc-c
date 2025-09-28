@@ -267,13 +267,20 @@ public:
   call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
        llvm::SMRange callSite = {});
 
-  int callMain(llvm::StringRef name, llvm::ArrayRef<llvm::StringRef> args);
+  int callMain(llvm::ArrayRef<llvm::StringRef> args);
 
   StackFrame *getCurrentFrame() const {
     if (callStack.empty())
       return nullptr;
     return callStack.back().get();
   }
+  StackFrame *getPreviousFrame() const {
+    if (callStack.size() < 2)
+      return nullptr;
+    return callStack[callStack.size() - 2].get();
+  }
+
+  Module *getModule() const { return module; }
 
   void dumpAllStackFrames(llvm::raw_ostream &os = llvm::errs()) const;
   void dumpShortenedStackFrames(llvm::raw_ostream &os = llvm::errs()) const;

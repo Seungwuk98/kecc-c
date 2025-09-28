@@ -56,11 +56,11 @@ static llvm::cl::opt<std::string> registerForAllocation(
     "reg-for-alloc",
     llvm::cl::desc("Declare registers for register allocation"));
 
-struct CLOptions {
+struct PassOptions {
 
   std::function<void(ir::PassManager &)> passCallback;
 
-  CLOptions() {
+  PassOptions() {
     static ir::PassPipelineParser pipelineParser("", "Passes to run\n");
 
     passCallback = [&](ir::PassManager &pm) {
@@ -69,7 +69,7 @@ struct CLOptions {
   }
 };
 
-llvm::ManagedStatic<CLOptions> pmOption;
+llvm::ManagedStatic<PassOptions> pmOption;
 
 void registerPMOption() { *pmOption; }
 

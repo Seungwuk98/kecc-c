@@ -9,11 +9,14 @@
 #include "kecc/ir/IR.h"
 #include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/Instruction.h"
+#include "kecc/ir/Interpreter.h"
 #include "kecc/ir/Pass.h"
 #include "kecc/parser/Lexer.h"
 #include "kecc/parser/Parser.h"
 #include "kecc/translate/IRTranslater.h"
 #include "kecc/translate/TranslatePasses.h"
+#include "kecc/utils/LogicalResult.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVectorExtras.h"
 #include "llvm/Support/Program.h"
 #include <format>
@@ -78,7 +81,8 @@ private:
   int returnCode;
 };
 
-class ParseCAction : public ActionTemplate<ActionData, OptArg> {
+class ParseCAction
+    : public ActionTemplate<CompilationAction, ActionData, OptArg> {
 public:
   ParseCAction(Compilation *compilation) : Base(compilation) {}
 
@@ -125,7 +129,8 @@ public:
   }
 };
 
-class ParseIRAction : public ActionTemplate<ActionData, OptArg> {
+class ParseIRAction
+    : public ActionTemplate<CompilationAction, ActionData, OptArg> {
 public:
   ParseIRAction(Compilation *compilation) : Base(compilation) {}
 
@@ -152,7 +157,81 @@ public:
   }
 };
 
-class RegisterPassesAction : public ActionTemplate<OptArg, OptArg> {
+class InterpretResult : public ActionDataTemplate<InterpretResult> {
+public:
+  InterpretResult(
+      utils::LogicalResult result,
+      llvm::SmallVector<std::unique_ptr<ir::VRegister>> returnValues)
+      : Base(result) {}
+
+  static llvm::StringRef getNameStr() { return "Interpret Result"; }
+  llvm::StringRef getName() const override { return getNameStr(); }
+
+  llvm::SmallVectorImpl<std::unique_ptr<ir::VRegister>> &getReturnValues() {
+    return returnValues;
+  }
+
+private:
+  llvm::SmallVector<std::unique_ptr<ir::VRegister>> returnValues;
+};
+
+class IRInterpretAction
+    : public ActionTemplate<CompilationAction, OptArg, InterpretResult> {
+public:
+  IRInterpretAction(Compilation *compilation,
+                    llvm::SmallVector<std::unique_ptr<ir::VRegister>> args,
+                    llvm::StringRef entryFunction)
+      : Base(compilation), arguments(std::move(args)),
+        entryFunctionName(entryFunction) {
+    assert(entryFunction != "main");
+  }
+
+  IRInterpretAction(Compilation *compilation,
+                    llvm::ArrayRef<llvm::StringRef> args)
+      : Base(compilation), arguments(args), entryFunctionName("main") {}
+
+  static llvm::StringRef getNameStr() { return "Interpret IR"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<InterpretResult>
+  execute(std::unique_ptr<OptArg> arg) override {
+    ir::Module *module = arg->getModule();
+    ir::Interpreter interpreter(module);
+
+    if (entryFunctionName.empty() || entryFunctionName == "main") {
+      assert(
+          std::holds_alternative<llvm::ArrayRef<llvm::StringRef>>(arguments) &&
+          "Entry function is 'main', but arguments are not string refs");
+      auto args = std::get<llvm::ArrayRef<llvm::StringRef>>(arguments);
+      int returnCode = interpreter.callMain(args);
+      llvm::SmallVector<std::unique_ptr<ir::VRegister>> returnValues;
+      returnValues.emplace_back(std::make_unique<ir::VRegisterInt>(returnCode));
+      return std::make_unique<InterpretResult>(utils::LogicalResult::success(),
+                                               std::move(returnValues));
+    } else {
+      assert(
+          std::holds_alternative<
+              llvm::SmallVector<std::unique_ptr<ir::VRegister>>>(arguments) &&
+          "Entry function is not 'main'");
+      auto args = llvm::map_to_vector(
+          std::get<llvm::SmallVector<std::unique_ptr<ir::VRegister>>>(
+              arguments),
+          [](std::unique_ptr<ir::VRegister> &reg) { return reg.get(); });
+      auto returnValues = interpreter.call(entryFunctionName, args);
+      return std::make_unique<InterpretResult>(utils::LogicalResult::success(),
+                                               std::move(returnValues));
+    }
+  }
+
+private:
+  std::variant<llvm::SmallVector<std::unique_ptr<ir::VRegister>>,
+               llvm::ArrayRef<llvm::StringRef>>
+      arguments;
+  llvm::StringRef entryFunctionName;
+};
+
+class RegisterPassesAction
+    : public ActionTemplate<CompilationAction, OptArg, OptArg> {
 public:
   RegisterPassesAction(Compilation *compilation,
                        llvm::ArrayRef<ir::Pass *> passes)
@@ -191,7 +270,8 @@ private:
       passes;
 };
 
-class RunPassesAction : public ActionTemplate<OptArg, OptArg> {
+class RunPassesAction
+    : public ActionTemplate<CompilationAction, OptArg, OptArg> {
 public:
   RunPassesAction(Compilation *compilation) : Base(compilation) {}
 
@@ -208,7 +288,8 @@ public:
   }
 };
 
-class TranslateIRAction : public ActionTemplate<OptArg, AsmArg> {
+class TranslateIRAction
+    : public ActionTemplate<CompilationAction, OptArg, AsmArg> {
 public:
   TranslateIRAction(Compilation *compilation) : Base(compilation) {}
 
@@ -240,10 +321,10 @@ public:
   }
 };
 
-class OutputAction : public Action {
+class OutputAction : public CompilationAction {
 public:
   OutputAction(Compilation *compilation, llvm::StringRef output)
-      : Action(compilation) {}
+      : CompilationAction(compilation) {}
 
   static llvm::StringRef getNameStr() { return "Output Assembly"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
@@ -272,10 +353,10 @@ private:
   llvm::StringRef outputFileName;
 };
 
-class PrintAction : public Action {
+class PrintAction : public CompilationAction {
 public:
   PrintAction(Compilation *compilation, llvm::raw_ostream &os)
-      : Action(compilation), os(&os) {}
+      : CompilationAction(compilation), os(&os) {}
 
   static llvm::StringRef getNameStr() { return "Print Action"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
@@ -326,8 +407,9 @@ private:
   llvm::SmallVector<std::string> arguments;
 };
 
-class CompileToObjAction : public ActionTemplate<ActionData, ReturnCodeResult>,
-                           public ClangExecutor {
+class CompileToObjAction
+    : public ActionTemplate<CompilationAction, ActionData, ReturnCodeResult>,
+      public ClangExecutor {
 public:
   CompileToObjAction(Compilation *copmilation, llvm::StringRef inputFileName,
                      llvm::StringRef outputFileName)
@@ -357,8 +439,9 @@ private:
   llvm::StringRef outputFileName;
 };
 
-class CompileToExeAction : public ActionTemplate<ActionData, ReturnCodeResult>,
-                           public ClangExecutor {
+class CompileToExeAction
+    : public ActionTemplate<CompilationAction, ActionData, ReturnCodeResult>,
+      public ClangExecutor {
 public:
   CompileToExeAction(Compilation *compilation,
                      llvm::ArrayRef<llvm::StringRef> inputFileNames,
@@ -416,7 +499,7 @@ int Compilation::compile() {
   Invocation mainInvocation;
 
   if (opt.inputFormat == InputFormat::C) {
-    mainInvocation.addAction<ParseCAction>(this); // IR to Assembly
+    mainInvocation.addAction<ParseCAction>(this); // C to IR
   } else if (opt.inputFormat == InputFormat::KeccIR) {
     mainInvocation.addAction<ParseIRAction>(this); // KeccIR source to IR
   }
@@ -476,6 +559,29 @@ int Compilation::compile() {
   } else {
     return result->getLogicalResult().succeeded() ? 0 : 1;
   }
+}
+
+int Compilation::interpret(llvm::ArrayRef<llvm::StringRef> args) {
+  Invocation mainInvocation;
+
+  if (opt.inputFormat == InputFormat::C) {
+    mainInvocation.addAction<ParseCAction>(this); // C to IR
+  } else if (opt.inputFormat == InputFormat::KeccIR) {
+    mainInvocation.addAction<ParseIRAction>(this); // KeccIR source to IR
+  }
+
+  mainInvocation.addAction<IRInterpretAction>(this, args);
+
+  auto result = mainInvocation.executeAll();
+  assert(result && "Result is null");
+  InterpretResult *interpretResult = result->cast<InterpretResult>();
+
+  assert(interpretResult->getReturnValues().size() <= 1);
+  if (interpretResult->getReturnValues().empty())
+    return 0;
+  ir::VRegister *reg = interpretResult->getReturnValues()[0].get();
+  assert(reg->isa<ir::VRegisterInt>());
+  return reg->cast<ir::VRegisterInt>()->getValue();
 }
 
 } // namespace kecc

@@ -48,7 +48,7 @@ template <typename ConcreteType> struct ActionDataTemplate : public ActionData {
 
 class Action {
 public:
-  Action(Compilation *compilation) : compilation(compilation) {}
+  Action() = default;
 
   virtual ~Action() = default;
   virtual llvm::StringRef getActionName() const { return "Anonymous Action"; };
@@ -60,28 +60,42 @@ public:
   execute(std::unique_ptr<ActionData> arg) = 0;
 
   virtual llvm::StringRef getDescription() const { return ""; }
+};
+
+class CompilationAction : public Action {
+public:
+  CompilationAction(Compilation *compilation) : compilation(compilation) {}
 
   Compilation *getCompilation() const { return compilation; }
+  virtual llvm::StringRef getActionName() const override {
+    return "Compilation Action";
+  }
 
 private:
   Compilation *compilation;
 };
 
-template <typename ArgType, typename ResultType, bool Enable = true>
+template <typename ParentAction, typename ArgType, typename ResultType,
+          bool Enable = true>
 class ActionTemplate;
 
-template <typename ResultType>
-class ActionTemplate<ActionData, ResultType> : public Action {
+template <typename ParentAction, typename ResultType>
+class ActionTemplate<ParentAction, ActionData, ResultType>
+    : public ParentAction {
 public:
-  using Base = ActionTemplate<ActionData, ResultType>;
-  using Action::Action;
+  using Base = ActionTemplate<ParentAction, ActionData, ResultType>;
+  using ParentAction::ParentAction;
 };
 
-template <typename ArgType, typename ResultType>
-class ActionTemplate<ArgType, ResultType> : public Action {
+template <typename ParentAction, typename ArgType, typename ResultType>
+class ActionTemplate<ParentAction, ArgType, ResultType> : public ParentAction {
 public:
-  using Base = ActionTemplate<ArgType, ResultType>;
-  using Action::Action;
+  using Base = ActionTemplate<ParentAction, ArgType, ResultType>;
+  using ParentAction::ParentAction;
+
+  llvm::StringRef getActionName() const override {
+    return ParentAction::getActionName();
+  }
 
   void preExecute(ActionData *arg) override final {
     if (!arg->isa<ArgType>()) {

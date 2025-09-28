@@ -1,4 +1,9 @@
-add_executable(kecc driver.cpp) 
+add_kecc_driver(
+  kecc 
+  GEN_DRIVER_MAIN
+  SOURCES 
+  driver.cpp
+)
 
 target_link_libraries(
   kecc 
@@ -12,6 +17,25 @@ target_link_libraries(
   KeccTranslate 
   KeccTranslatePasses 
   KeccC
+  KeccDriver
+)
+
+add_kecc_driver(
+  keci 
+  GEN_DRIVER_MAIN
+  SOURCES 
+  driver.cpp
+)
+
+target_link_libraries(
+  keci 
+  PRIVATE 
+  ${llvm_libs}
+  KeccParser
+  KeccIR
+  KeccIRAnalyses
+  KeccIRPasses 
+  KeccC 
   KeccDriver
 )
 

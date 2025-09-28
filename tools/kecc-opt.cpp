@@ -60,11 +60,11 @@ static llvm::cl::opt<bool> debugInfo(
     llvm::cl::desc(
         "Generate information for debugging compiler in the output file"));
 
-struct CLOptions {
+struct PassOptions {
 
   std::function<void(ir::PassManager &)> passCallback;
 
-  CLOptions() {
+  PassOptions() {
     static ir::PassPipelineParser pipelineParser("", "Passes to run\n");
 
     passCallback = [&](ir::PassManager &pm) {
@@ -73,7 +73,7 @@ struct CLOptions {
   }
 };
 
-llvm::ManagedStatic<CLOptions> pmOption;
+llvm::ManagedStatic<PassOptions> pmOption;
 
 void registerPMOption() { *pmOption; }
 

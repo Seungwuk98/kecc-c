@@ -443,9 +443,9 @@ void StackFrame::initRegisters() {
   for (InstructionStorage *inst : *function->getAllocationBlock()) {
     inst::LocalVariable localVar = inst->getDefiningInst<inst::LocalVariable>();
     size_t offset = offsets[i++];
-    localVars[localVar] = VMemory(static_cast<char *>(frameMem) + offset);
-
     auto localVarReg = createVRegister(localVar.getType(), structSizeMap);
+    localVarReg->cast<VRegisterInt>()->setValue(
+        localVars[localVar] = VMemory(static_cast<char *>(frameMem) + offset));
     registers[localVar] = localVarReg.get();
     stackRegisters.emplace_back(std::move(localVarReg));
   }
@@ -501,7 +501,6 @@ std::unique_ptr<VRegister> StackFrame::constValue(inst::Constant c) const {
         return ptrR;
       })
       .Case([&](ConstantUnitAttr unitAttr) {
-        assert(type.isa<ir::IntT>() && "Unit type must be an integer type");
         auto intR = std::make_unique<VRegisterInt>();
         intR->setValue(0);
         return intR;
@@ -886,6 +885,89 @@ void store(Interpreter *interpreter, inst::Store inst) {
                 interpreter->getStructSizeAnalysis());
 }
 
+void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
+  auto value = typecast.getValue();
+  auto srcType = value.getType();
+  auto destType = typecast.getResult().getType().constCanonicalize();
+
+  InterpValue srcReg = frame->getRegister(value);
+  InterpValue destReg = frame->getRegister(typecast.getResult());
+
+  if (srcType == destType) {
+    destReg->mv(srcReg.get());
+    return;
+  }
+
+  if (srcType.isa<ir::PointerT>()) {
+    if (destType.isa<ir::PointerT>()) {
+      destReg->mv(srcReg.get());
+      return;
+    } else if (auto destIntT = destType.dyn_cast<IntT>()) {
+      VRegisterInt *srcIntR = srcReg->cast<VRegisterInt>();
+      llvm::APSInt srcInt =
+          srcIntR->getAsInteger(destIntT.getBitWidth(), destIntT.isSigned());
+      VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
+      destIntR->setValue(srcInt);
+      return;
+    }
+  } else if (auto srcIntT = srcType.dyn_cast<IntT>()) {
+    VRegisterInt *srcIntR = srcReg->cast<VRegisterInt>();
+    if (auto destIntT = destType.dyn_cast<IntT>()) {
+      llvm::APSInt srcInt =
+          srcIntR->getAsInteger(destIntT.getBitWidth(), destIntT.isSigned());
+      VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
+      destIntR->setValue(srcInt);
+      return;
+    } else if (destType.isa<ir::PointerT>()) {
+      VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
+      destIntR->setValue(srcIntR->getValue());
+      return;
+    } else if (auto destFloatT = destType.dyn_cast<ir::FloatT>()) {
+      auto srcInt =
+          srcIntR->getAsInteger(srcIntT.getBitWidth(), srcIntT.isSigned());
+
+      llvm::APFloat destFloat(destFloatT.getBitWidth() == 32
+                                  ? llvm::APFloat::IEEEsingle()
+                                  : llvm::APFloat::IEEEdouble());
+      bool losesInfo = false;
+      auto status = destFloat.convertFromAPInt(srcInt, srcInt.isSigned(),
+                                               llvm::APFloat::rmTowardZero);
+      assert(status == llvm::APFloat::opOK && "Conversion failed");
+      // TODO: handle losesInfo?
+
+      VRegisterFloat *destFloatR = destReg->cast<VRegisterFloat>();
+      destFloatR->setValue(destFloat);
+      return;
+    }
+  } else if (auto srcFloatT = srcType.dyn_cast<FloatT>()) {
+    VRegisterFloat *srcFloatR = srcReg->cast<VRegisterFloat>();
+    llvm::APFloat srcFloat = srcFloatR->getAsFloat(srcFloatT.getBitWidth());
+
+    if (auto destIntT = destType.dyn_cast<IntT>()) {
+      llvm::APSInt destInt(destIntT.getBitWidth(), !destIntT.isSigned());
+
+      bool isExact = false;
+      auto status = srcFloat.convertToInteger(
+          destInt, llvm::APFloat::rmTowardZero, &isExact);
+      assert(status == llvm::APFloat::opOK && "Conversion failed");
+
+      VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
+      destIntR->setValue(destInt);
+      return;
+    } else if (auto destFloatT = destType.dyn_cast<FloatT>()) {
+      bool losesInfo = false;
+      auto status = srcFloat.convert(
+          destFloatT.getBitWidth() == 32 ? llvm::APFloat::IEEEsingle()
+                                         : llvm::APFloat::IEEEdouble(),
+          llvm::APFloat::rmNearestTiesToEven, &losesInfo);
+      assert(status == llvm::APFloat::opOK && "Conversion failed");
+      auto destFloatR = destReg->cast<VRegisterFloat>();
+      destFloatR->setValue(srcFloat);
+      return;
+    }
+  }
+}
+
 void call(Interpreter *interpreter, inst::Call inst) {
   StackFrame *frame = interpreter->getCurrentFrame();
   InterpValue calleeReg = frame->getRegister(inst.getFunction());
@@ -916,7 +998,10 @@ void nop(ir::inst::Nop) {
   // Do nothing
 }
 
-void unreachable(Interpreter *interpreter, ir::inst::Unreachable) {
+void unreachable(Interpreter *interpreter, ir::inst::Unreachable unreachable) {
+  interpreter->getModule()->getContext()->diag().report(
+      unreachable->getRange(), llvm::SourceMgr::DK_Error, "((Unreachable))");
+
   interpreter->dumpAllStackFrames(llvm::errs());
   interpreter->setPC(nullptr);
 }
@@ -1210,6 +1295,9 @@ static void executeInstruction(Interpreter *interpreter, StackFrame *frame,
       .Case([&](inst::Load load) { return impl::load(interpreter, load); })
       .Case([&](inst::Store store) { return impl::store(interpreter, store); })
       .Case([&](inst::Call call) { return impl::call(interpreter, call); })
+      .Case([&](inst::TypeCast typecast) {
+        return impl::typecast(frame, typecast);
+      })
       .Case([&](inst::Nop nop) { return impl::nop(nop); })
       .Case([&](inst::Unreachable unreachable) {
         return impl::unreachable(interpreter, unreachable);
@@ -1234,17 +1322,19 @@ Interpreter::call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
                   llvm::SMRange callSite) {
   auto func = module->getIR()->getFunction(name);
   assert(func && "Function not found");
+  IRContext *irContext = func->getContext();
 
+  llvm::raw_ostream &os = irContext->diag().getOS();
   if (!func->hasDefinition()) {
-    llvm::errs() << "Function " << name << " has no definition\n";
-    dumpAllStackFrames(llvm::errs());
+    os << "Function " << name << " has no definition\n";
+    dumpAllStackFrames(os);
     llvm::report_fatal_error("Cannot call function without definition");
   }
 
   CallStack callStackDecl(this, func, callSite);
   if (callStack.size() > stackOverflowLimit) {
-    llvm::errs() << "Stack overflow when calling function " << name << "\n";
-    dumpShortenedStackFrames(llvm::errs());
+    os << "Stack overflow when calling function " << name << "\n";
+    dumpShortenedStackFrames(os);
     setPC(nullptr);
     return {};
   }
@@ -1261,9 +1351,10 @@ Interpreter::call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
   }
   assert(idx == args.size() && "Argument size mismatch");
 
+  PCGuard guard(this);
   setPC(*iter);
 
-  while (getPC()) {
+  while (getPC() && !irContext->diag().hasError()) {
     auto *currentInst = getPC();
     auto *nextInst = currentInst->getNextInBlock();
     setPC(nextInst);
@@ -1271,7 +1362,77 @@ Interpreter::call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
     executeInstruction(this, frame, currentInst);
   }
 
+  if (irContext->diag().hasError()) {
+    std::unique_ptr<VRegisterInt> retR = std::make_unique<VRegisterInt>();
+    retR->setValue(-1);
+    frame->getReturnValues().clear();
+    frame->getReturnValues().emplace_back(std::move(retR));
+  }
   return std::move(frame->getReturnValues());
+}
+
+int Interpreter::callMain(llvm::ArrayRef<llvm::StringRef> args) {
+  Function *mainFunc = module->getIR()->getFunction("main");
+  if (!mainFunc) {
+    module->getContext()->diag().getOS() << "Function 'main' not found in IR\n";
+    return -1;
+  }
+
+  if (!mainFunc->hasDefinition()) {
+    module->getContext()->diag().getOS()
+        << "Function 'main' has no definition\n";
+    return -1;
+  }
+
+  auto mainFuncT = mainFunc->getFunctionType().cast<FunctionT>();
+  auto parmTypes = mainFuncT.getArgTypes();
+  auto retTypes = mainFuncT.getReturnTypes();
+
+  if (parmTypes.size() > 2 || retTypes.size() > 1 ||
+      (parmTypes.size() == 2 &&
+       (!parmTypes[0].isa<IntT>() || !parmTypes[1].isa<PointerT>())) ||
+      (parmTypes.size() == 1 && !parmTypes[0].isa<IntT>()) ||
+      (retTypes.size() == 1 && !retTypes[0].isa<IntT, UnitT>())) {
+    module->getContext()->diag().getOS()
+        << "Function 'main' has invalid signature\n";
+    return -1;
+  }
+
+  std::unique_ptr<VRegisterInt> argcR, argvR;
+  llvm::SmallVector<VRegister *, 2> mainArgs;
+  if (parmTypes.size() >= 1) {
+    argcR = std::make_unique<VRegisterInt>();
+    argcR->setValue(args.size());
+    mainArgs.emplace_back(argcR.get());
+  }
+
+  llvm::SmallVector<char> argBuffer;
+  llvm::SmallVector<char *> argPtrs;
+
+  if (parmTypes.size() == 2) {
+    argvR = std::make_unique<VRegisterInt>();
+
+    for (llvm::StringRef arg : args) {
+      char *argPtr = argBuffer.data() + argBuffer.size();
+      argBuffer.append(arg.begin(), arg.end());
+      argBuffer.push_back('\0');
+      argPtrs.push_back(argPtr);
+    }
+
+    char **argPtr = argPtrs.data();
+    argvR->setValue(VMemory(argPtr));
+  }
+
+  auto rets = call("main", mainArgs, llvm::SMRange());
+  assert(rets.size() <= 1);
+  if (rets.empty())
+    return 0;
+
+  VRegister *retR = rets[0].get();
+  if (retTypes[0].isa<UnitT>())
+    return 0;
+
+  return retR->cast<VRegisterInt>()->getValue();
 }
 
 void Interpreter::dumpAllStackFrames(llvm::raw_ostream &os) const {

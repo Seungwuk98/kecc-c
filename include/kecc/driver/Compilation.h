@@ -2,6 +2,7 @@
 #define KECC_DRIVER_COMPILATION_H
 
 #include "kecc/ir/Context.h"
+#include "kecc/ir/Interpreter.h"
 #include "kecc/ir/Pass.h"
 #include "kecc/translate/TranslateContext.h"
 #include "kecc/utils/LogicalResult.h"
@@ -96,6 +97,8 @@ public:
   void setOptPipeline(std::function<void(ir::PassManager &)> pipeline) {
     optPipeline = pipeline;
   }
+
+  int interpret(llvm::ArrayRef<llvm::StringRef> args);
 
 private:
   llvm::StringRef inputFileName;

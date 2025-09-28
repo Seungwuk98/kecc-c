@@ -1,0 +1,9 @@
+#include "llvm/Support/InitLLVM.h"
+
+// clang-format off
+extern int @KECC_DRIVER_NAME@_main(int argc, char **argv);
+
+int main(int argc, char **argv) {
+  llvm::InitLLVM X(argc, argv);
+  return @KECC_DRIVER_NAME@_main(argc, argv);
+}
