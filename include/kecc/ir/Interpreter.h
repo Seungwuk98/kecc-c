@@ -180,8 +180,6 @@ public:
     return nullptr;
   }
 
-  void print(llvm::raw_ostream &os) const;
-
   llvm::BumpPtrAllocator &getAllocator() { return allocator; }
 
 private:
@@ -306,6 +304,7 @@ public:
 
 private:
   void initGlobal();
+  void printGlobalTable(llvm::raw_ostream &os) const;
 
   friend class StackFrame;
   llvm::SmallVector<std::unique_ptr<StackFrame>> callStack;

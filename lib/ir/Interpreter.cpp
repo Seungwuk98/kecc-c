@@ -72,13 +72,13 @@ static void printDynamicImpl(llvm::raw_ostream &os, void *mem, Type type,
       .Case([&](FloatT floatT) {
         llvm::APFloat apFloat = [&]() {
           if (floatT.getBitWidth() == 32) {
-            llvm::APFloat::integerPart value =
-                *static_cast<std::uint32_t *>(mem);
-            return llvm::APFloat(llvm::APFloat::IEEEsingle(), value);
+            std::uint32_t value = *static_cast<std::uint32_t *>(mem);
+            llvm::APInt apInt(32, value, false);
+            return llvm::APFloat(llvm::APFloat::IEEEsingle(), apInt);
           } else {
-            llvm::APFloat::integerPart value =
-                *static_cast<std::uint64_t *>(mem);
-            return llvm::APFloat(llvm::APFloat::IEEEdouble(), value);
+            std::uint64_t value = *static_cast<std::uint64_t *>(mem);
+            llvm::APInt apInt(64, value, false);
+            return llvm::APFloat(llvm::APFloat::IEEEdouble(), apInt);
           }
         }();
         llvm::SmallVector<char> buffer;
@@ -360,9 +360,11 @@ void VRegisterFloat::setValue(std::uint64_t v) { value = v; }
 
 llvm::APFloat VRegisterFloat::getAsFloat(int bitwidth) const {
   if (bitwidth == 32) {
-    return llvm::APFloat(llvm::APFloat::IEEEsingle(), value);
+    llvm::APInt apInt(32, value, false);
+    return llvm::APFloat(llvm::APFloat::IEEEsingle(), apInt);
   } else {
-    return llvm::APFloat(llvm::APFloat::IEEEdouble(), value);
+    llvm::APInt apInt(64, value, false);
+    return llvm::APFloat(llvm::APFloat::IEEEdouble(), apInt);
   }
 }
 
@@ -1126,14 +1128,15 @@ static void initGlobalMemImpl(Type type, void *mem, Attribute init,
         auto value = floatInit.getValue();
         auto bitValue = value.bitcastToAPInt().getZExtValue();
         if (&value.getSemantics() == &llvm::APFloat::IEEEsingle()) {
-          *static_cast<std::int32_t *>(mem) =
-              static_cast<std::int32_t>(bitValue);
+          *static_cast<std::uint32_t *>(mem) =
+              static_cast<std::uint32_t>(bitValue);
         } else if (&value.getSemantics() == &llvm::APFloat::IEEEdouble()) {
-          *static_cast<std::int64_t *>(mem) =
-              static_cast<std::int64_t>(bitValue);
+          *static_cast<std::uint64_t *>(mem) =
+              static_cast<std::uint64_t>(bitValue);
         } else {
           llvm_unreachable("Unsupported float bit width");
         }
+        filledSize += size;
       })
       .Case([&](ArrayT arrayT) {
         auto arrayAttr = init.cast<ArrayAttr>();
@@ -1427,6 +1430,7 @@ int Interpreter::callMain(llvm::ArrayRef<llvm::StringRef> args) {
     argvR->setValue(VMemory(argPtr));
   }
 
+  printGlobalTable(llvm::errs());
   auto rets = call("main", mainArgs, llvm::SMRange());
   assert(rets.size() <= 1);
   if (rets.empty())
@@ -1439,8 +1443,27 @@ int Interpreter::callMain(llvm::ArrayRef<llvm::StringRef> args) {
   return retR->cast<VRegisterInt>()->getValue();
 }
 
+void Interpreter::printGlobalTable(llvm::raw_ostream &os) const {
+  os << "Global Table:\n";
+  for (auto *inst : *module->getIR()->getGlobalBlock()) {
+    auto gv = inst->getDefiningInst<inst::GlobalVariableDefinition>();
+    assert(gv && "Global block can only contain global variable definitions");
+    auto name = gv.getName();
+    os << "  @" << name << " = ";
+    auto type = gv.getType();
+    auto pointerT = PointerT::get(type.getContext(), type);
+    auto reg = globalTable.getGlobal(name);
+    auto vmem = reg->cast<VRegisterInt>()->getAsMemory();
+    reg->print(os, pointerT, structSizeAnalysis);
+    os << " -- inMemory(";
+    vmem.print(os, type, structSizeAnalysis);
+    os << ")\n";
+  }
+}
+
 void Interpreter::dumpAllStackFrames(llvm::raw_ostream &os) const {
   IRPrintContext context(os);
+  printGlobalTable(os);
   for (ir::Function *func : *module->getIR()) {
     if (!func->hasDefinition())
       continue;
