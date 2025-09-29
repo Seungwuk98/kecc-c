@@ -576,7 +576,8 @@ int Compilation::interpret(llvm::ArrayRef<llvm::StringRef> args) {
     return 0;
   ir::VRegister *reg = interpretResult->getReturnValues()[0].get();
   assert(reg->isa<ir::VRegisterInt>());
-  return reg->cast<ir::VRegisterInt>()->getValue();
+  // cast to uint8_t to match the return of main
+  return static_cast<std::uint8_t>(reg->cast<ir::VRegisterInt>()->getValue());
 }
 
 } // namespace kecc

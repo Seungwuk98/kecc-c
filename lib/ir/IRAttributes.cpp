@@ -703,7 +703,10 @@ ConstantAttr ASTUnaryOp::interpret() const {
         llvm::APFloat negatedValue = -operand.getValue();
         return ConstantFloatAttr::get(getContext(), negatedValue);
       })
-      .Default([&](Attribute) { return nullptr; });
+      .Default([&](Attribute) {
+        llvm::errs() << "DEBUG\n";
+        return nullptr;
+      });
 }
 
 //==------------------------------------------------------------------------==//

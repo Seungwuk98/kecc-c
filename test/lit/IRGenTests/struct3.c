@@ -1,4 +1,5 @@
 // RUN: kecc %s -S -emit-kecc -print-stdout | FileCheck %s
+// RUN: keci %s --test-return-value=1
 // clang-format off
 
 // CHECK-DAG: struct Sub : { m1:i32, m2:i32, m3:i32, m4:i32 }

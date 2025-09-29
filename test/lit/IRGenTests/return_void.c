@@ -1,4 +1,5 @@
 // RUN: kecc %s -S -emit-kecc -print-stdout | FileCheck %s
+// RUN: keci %s --test-return-value=1
 // clang-format off
 
 // CHECK: fun unit @foo () {

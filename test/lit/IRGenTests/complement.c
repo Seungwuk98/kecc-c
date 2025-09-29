@@ -1,4 +1,5 @@
 // RUN: kecc %s -S -emit-kecc -print-stdout | FileCheck %s
+// RUN: keci %s --test-return-value=254
 // clang-format off
 
 int nonce = 1; // For random input

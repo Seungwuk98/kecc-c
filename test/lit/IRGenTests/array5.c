@@ -1,4 +1,5 @@
 // RUN: kecc %s -S -emit-kecc -print-stdout | FileCheck %s
+// RUN: keci %s --test-return-value=11
 // clang-format off
 
 int g_a[5] = {1, 2, 3};

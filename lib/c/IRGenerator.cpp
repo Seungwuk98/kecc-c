@@ -1156,16 +1156,23 @@ GlobalInitGenerator::VisitUnLNotOp(const UnaryOperator *expr) {
 ir::InitializerAttr
 GlobalInitGenerator::Result::toInitializerAttr(IRGenerator *irgen) {
   if (isAPSInt()) {
+    bool isMinus = getAPSInt().isNegative();
+    auto absValue = isMinus ? -getAPSInt() : getAPSInt();
     llvm::SmallVector<char> buffer;
-    getAPSInt().toString(buffer, 10);
+    absValue.toString(buffer, 10);
     llvm::StringRef str(buffer.data(), buffer.size());
 
-    ir::ASTInteger::Suffix suffix = getAPSInt().getBitWidth() <= 32
+    ir::ASTInteger::Suffix suffix = absValue.getBitWidth() <= 32
                                         ? ir::ASTInteger::Suffix::Int
                                         : ir::ASTInteger::Suffix::Long_L;
-    return ir::ASTInteger::get(irgen->ctx, irgen->convertRange(range),
-                               ir::ASTInteger::IntegerBase::Decimal, str,
-                               suffix);
+    ir::InitializerAttr astInteger =
+        ir::ASTInteger::get(irgen->ctx, irgen->convertRange(range),
+                            ir::ASTInteger::IntegerBase::Decimal, str, suffix);
+    if (isMinus) {
+      astInteger = ir::ASTUnaryOp::get(irgen->ctx, irgen->convertRange(range),
+                                       ir::ASTUnaryOp::Minus, astInteger);
+    }
+    return astInteger;
   } else if (isAPFloat()) {
     llvm::SmallVector<char> buffer;
     getAPFloat().toString(buffer);

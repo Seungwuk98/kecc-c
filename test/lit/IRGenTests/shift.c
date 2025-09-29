@@ -1,4 +1,7 @@
 // RUN: kecc %s -S -emit-kecc -print-stdout | FileCheck %s
+// TODO: The output of cmp.c is 0 but this ir must be 1
+//       There are difference between x86(=1) and riscv(=0)
+// RUN: keci %s --test-return-value=0
 // clang-format off
 
 // CHECK: fun i32 @main () {

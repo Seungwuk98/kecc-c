@@ -39,9 +39,9 @@ static void printDynamicImpl(llvm::raw_ostream &os, void *mem, Type type,
           if (intT.getBitWidth() == 1)
             os << (value ? "true" : "false");
           else if (intT.isSigned()) {
-            os << static_cast<int8_t>(value);
+            os << static_cast<int>(static_cast<int8_t>(value));
           } else {
-            os << static_cast<uint8_t>(value);
+            os << static_cast<int>(static_cast<uint8_t>(value));
           }
         } else if (intT.getBitWidth() <= 16) {
           auto value = *static_cast<std::uint16_t *>(mem);
@@ -288,9 +288,12 @@ void VRegisterInt::print(llvm::raw_ostream &os, Type type,
                          StructSizeAnalysis *analysis) const {
   os << "Raw value: " << value << " type: " << type;
   if (type.isa<ir::PointerT>()) {
-    os << llvm::format_hex(value, 18);
+    os << ' ' << llvm::format_hex(value, 18);
   } else if (auto intT = type.dyn_cast<ir::IntT>()) {
-    auto apInt = getAsInteger(intT.getBitWidth(), intT.isSigned());
+    bool isSigned = intT.isSigned();
+    if (intT.getBitWidth() == 1)
+      isSigned = false;
+    auto apInt = getAsInteger(intT.getBitWidth(), isSigned);
     os << ' ' << apInt;
   }
 }
@@ -1368,6 +1371,7 @@ Interpreter::call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
     frame->getReturnValues().clear();
     frame->getReturnValues().emplace_back(std::move(retR));
   }
+
   return std::move(frame->getReturnValues());
 }
 
