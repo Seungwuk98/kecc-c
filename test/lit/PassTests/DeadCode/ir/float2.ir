@@ -1,4 +1,5 @@
 // RUN: kecc-test-executor %s --test-return-value=216 
+// RUN: keci %s --test-return-value=216
 // RUN: kecc-opt %s --dead-code-elimination | FileCheck %s
 
 
