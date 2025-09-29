@@ -130,7 +130,7 @@ int keccMain() {
   if (cl::inputOption->inputFormat.getNumOccurrences()) {
     inputFormat = cl::inputOption->inputFormat;
   } else if (cl::inputOption->input == "-") {
-    inputFormat = InputFormat::C;
+    inputFormat = InputFormat::KeccIR;
   } else {
     llvm::StringRef inputExt =
         llvm::sys::path::extension(cl::inputOption->input);
@@ -258,7 +258,7 @@ int keciMain() {
   if (cl::inputOption->inputFormat.getNumOccurrences())
     inputFormat = cl::inputOption->inputFormat;
   else if (cl::inputOption->input == "-") {
-    inputFormat = InputFormat::C;
+    inputFormat = InputFormat::KeccIR;
   } else {
     llvm::StringRef inputExt =
         llvm::sys::path::extension(cl::inputOption->input);
