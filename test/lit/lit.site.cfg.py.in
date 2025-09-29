@@ -1,4 +1,5 @@
-import os
+@LIT_SITE_CFG_IN_HEADER@
+
 
 config.kecc_src_root = "@CMAKE_SOURCE_DIR@"
 config.kecc_bin_root = "@CMAKE_BINARY_DIR@"

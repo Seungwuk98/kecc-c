@@ -17,6 +17,13 @@ struct InputCLOptions {
   llvm::cl::opt<std::string> input{
       llvm::cl::Positional, llvm::cl::desc("<input file>"), llvm::cl::init("-"),
       llvm::cl::value_desc("filename"), llvm::cl::cat(category)};
+
+  llvm::cl::opt<InputFormat> inputFormat{
+      "input-format", llvm::cl::desc("Specify input format"),
+      llvm::cl::values(clEnumValN(InputFormat::C, "c", "C source code"),
+                       clEnumValN(InputFormat::KeccIR, "ir",
+                                  "Kecc Intermediate Representation")),
+      llvm::cl::init(InputFormat::C), llvm::cl::cat(category)};
 };
 
 static llvm::ManagedStatic<InputCLOptions> inputOption;
@@ -117,15 +124,12 @@ int keccMain() {
     return 1;
   }
 
-  llvm::SourceMgr sourceMgr;
-  auto index =
-      sourceMgr.AddNewSourceBuffer(std::move(*inputBufferOrErr), llvm::SMLoc());
-  auto inputBuffer = sourceMgr.getMemoryBuffer(index);
-
   CompileOptTable compileOpts;
 
   InputFormat inputFormat;
-  if (cl::inputOption->input == "-") {
+  if (cl::inputOption->inputFormat.getNumOccurrences()) {
+    inputFormat = cl::inputOption->inputFormat;
+  } else if (cl::inputOption->input == "-") {
     inputFormat = InputFormat::C;
   } else {
     llvm::StringRef inputExt =
@@ -232,7 +236,7 @@ int keccMain() {
   Compilation compilation(
       compileOpts, cl::inputOption->input,
       llvm::StringRef{outputFileNameBuffer.data(), outputFileNameBuffer.size()},
-      inputBuffer->getBuffer(), sourceMgr);
+      inputBufferOrErr->get()->getBuffer());
 
   compilation.setOptPipeline(cl::pmOption->passCallback);
 
@@ -248,15 +252,12 @@ int keciMain() {
     return 1;
   }
 
-  llvm::SourceMgr sourceMgr;
-  auto index =
-      sourceMgr.AddNewSourceBuffer(std::move(*inputBufferOrErr), llvm::SMLoc());
-  auto inputBuffer = sourceMgr.getMemoryBuffer(index);
-
   CompileOptTable compileOpts;
 
   InputFormat inputFormat;
-  if (cl::inputOption->input == "-") {
+  if (cl::inputOption->inputFormat.getNumOccurrences())
+    inputFormat = cl::inputOption->inputFormat;
+  else if (cl::inputOption->input == "-") {
     inputFormat = InputFormat::C;
   } else {
     llvm::StringRef inputExt =
@@ -275,7 +276,7 @@ int keciMain() {
   compileOpts.setInputFormat(inputFormat);
 
   Compilation compilation(compileOpts, cl::inputOption->input, "-",
-                          inputBuffer->getBuffer(), sourceMgr);
+                          inputBufferOrErr->get()->getBuffer());
 
   llvm::SmallVector<llvm::StringRef> mainArgs;
   mainArgs.emplace_back("keci");

@@ -6,6 +6,7 @@
 #include "kecc/driver/Action.h"
 #include "kecc/driver/DriverConfig.h"
 #include "kecc/driver/DriverConfig.h.in"
+#include "kecc/ir/Context.h"
 #include "kecc/ir/IR.h"
 #include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/Instruction.h"
@@ -18,6 +19,7 @@
 #include "kecc/utils/LogicalResult.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVectorExtras.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Program.h"
 #include <format>
 #include <memory>
@@ -89,11 +91,6 @@ public:
   static llvm::StringRef getNameStr() { return "Parse C source"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
 
-  void preExecute(ActionData *) override {
-    if (!getCompilation()->getIRContext())
-      getCompilation()->createIRContext();
-  }
-
   std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
     auto &compilation = *getCompilation();
 
@@ -137,11 +134,6 @@ public:
   static llvm::StringRef getNameStr() { return "Parse IR source"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
 
-  void preExecute(ActionData *) override {
-    if (!getCompilation()->getIRContext())
-      getCompilation()->createIRContext();
-  }
-
   std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
     auto &compilation = *getCompilation();
 
@@ -162,7 +154,7 @@ public:
   InterpretResult(
       utils::LogicalResult result,
       llvm::SmallVector<std::unique_ptr<ir::VRegister>> returnValues)
-      : Base(result) {}
+      : Base(result), returnValues(std::move(returnValues)) {}
 
   static llvm::StringRef getNameStr() { return "Interpret Result"; }
   llvm::StringRef getName() const override { return getNameStr(); }
@@ -490,10 +482,13 @@ TempDirectory::~TempDirectory() {
 Compilation::Compilation(const CompileOptTable &opt,
                          llvm::StringRef inputFileName,
                          llvm::StringRef outputFileName,
-                         llvm::StringRef inputSource,
-                         llvm::SourceMgr &sourceMgr)
+                         llvm::StringRef inputSource)
     : opt(opt), inputFileName(inputFileName), outputFileName(outputFileName),
-      inputSource(inputSource), sourceMgr(sourceMgr) {}
+      inputSource(inputSource), irContext(new ir::IRContext) {
+
+  auto memBuffer = llvm::MemoryBuffer::getMemBuffer(inputSource, inputFileName);
+  getSourceMgr().AddNewSourceBuffer(std::move(memBuffer), llvm::SMLoc());
+}
 
 int Compilation::compile() {
   Invocation mainInvocation;

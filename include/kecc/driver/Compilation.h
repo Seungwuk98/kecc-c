@@ -67,15 +67,14 @@ private:
 class Compilation {
 public:
   Compilation(const CompileOptTable &opt, llvm::StringRef inputFileName,
-              llvm::StringRef outputFileName, llvm::StringRef inputSource,
-              llvm::SourceMgr &sourceMgr);
+              llvm::StringRef outputFileName, llvm::StringRef inputSource);
 
   llvm::StringRef getInputFileName() const { return inputFileName; }
   llvm::StringRef getOutputFileName() const { return outputFileName; }
   llvm::StringRef getInputSource() const { return inputSource; }
-  llvm::SourceMgr &getSourceMgr() const { return sourceMgr; }
+  llvm::SourceMgr &getSourceMgr() const { return irContext->getSourceMgr(); }
 
-  ir::IRContext *getIRContext() const { return irContext.get(); }
+  ir::IRContext *getIRContext() { return irContext.get(); }
   TranslateContext *getTranslateContext() const {
     return translateContext.get();
   }
@@ -83,7 +82,6 @@ public:
 
   CompileOptTable &getCompileOptTable() { return opt; }
 
-  void createIRContext() { irContext = std::make_unique<ir::IRContext>(); }
   void createTranslateContext() {
     translateContext = std::make_unique<TranslateContext>();
   }
@@ -105,7 +103,6 @@ private:
   llvm::StringRef outputFileName;
 
   llvm::StringRef inputSource;
-  llvm::SourceMgr &sourceMgr;
 
   std::function<void(ir::PassManager &)> optPipeline;
   std::unique_ptr<ir::IRContext> irContext;

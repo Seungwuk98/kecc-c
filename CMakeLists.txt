@@ -11,7 +11,6 @@ find_package(LLVM REQUIRED CONFIG)
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(AddLLVM)
 
-
 llvm_map_components_to_libnames(llvm_libs support core irreader)
 
 find_package(MLIR REQUIRED CONFIG)
@@ -30,6 +29,8 @@ if (KECC_USE_MOLD)
   message(STATUS "Using mold as the linker")      
 endif()
 
+include(AdaptLITConfig)
+
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
 include_directories(${CLANG_INCLUDE_DIRS})
@@ -43,3 +44,5 @@ add_subdirectory(tools)
 add_subdirectory(third-party)
 add_subdirectory(test)
 
+
+add_subdirectory(utils/llvm-lit)

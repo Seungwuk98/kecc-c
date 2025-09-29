@@ -16,7 +16,7 @@ std::unique_ptr<ActionData> Invocation::executeAll() {
     action->postExecute(currentArg.get());
   }
 
-  return currentArg;
+  return std::move(currentArg);
 }
 
 } // namespace kecc
