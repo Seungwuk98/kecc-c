@@ -1,6 +1,8 @@
 // RUN: kecc-test-executor %s --test-return-value=1
 // RUN: keci %s --test-return-value=1
 // RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+// RUN: kecc-test-executor %s --translate-passes="--canonicalize-constant --gvn" --test-return-value=1
+// RUN: kecc-opt %s --canonicalize-constant --gvn | keci --test-return-value=1
 
 struct %t0 : { b:[4 x i32] }
 struct %t1 : { a:i8, %anon:struct %t0, c:i64 }

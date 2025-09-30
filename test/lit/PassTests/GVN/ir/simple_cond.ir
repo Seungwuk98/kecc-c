@@ -1,6 +1,8 @@
 // RUN: kecc-test-executor %s --test-return-value=1
 // RUN: keci %s --test-return-value=1
 // RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+// RUN: kecc-test-executor %s --translate-passes="--canonicalize-constant --gvn" --test-return-value=1
+// RUN: kecc-opt %s --canonicalize-constant --gvn | keci --test-return-value=1
 
 
 fun i32 @f (i32) {

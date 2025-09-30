@@ -1430,7 +1430,6 @@ int Interpreter::callMain(llvm::ArrayRef<llvm::StringRef> args) {
     argvR->setValue(VMemory(argPtr));
   }
 
-  printGlobalTable(llvm::errs());
   auto rets = call("main", mainArgs, llvm::SMRange());
   assert(rets.size() <= 1);
   if (rets.empty())

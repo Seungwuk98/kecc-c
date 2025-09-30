@@ -1,6 +1,8 @@
 // RUN: kecc-test-executor %s --test-return-value=9
 // RUN: keci %s --test-return-value=9
 // RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+// RUN: kecc-test-executor %s --translate-passes="--canonicalize-constant --gvn" --test-return-value=9
+// RUN: kecc-opt %s --canonicalize-constant --gvn | keci --test-return-value=9
 
 var i32 @nonce = 1
 // CHECK: var i32 @nonce = 1

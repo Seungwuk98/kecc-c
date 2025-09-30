@@ -1,6 +1,8 @@
 // RUN: kecc-test-executor %s --test-return-value=7
 // RUN: keci %s --test-return-value=7
 // RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+// RUN: kecc-test-executor %s --translate-passes="--canonicalize-constant --gvn" --test-return-value=7
+// RUN: kecc-opt %s --canonicalize-constant --gvn | keci --test-return-value=7
 
 struct color : { number:i32, name:i8 }
 // CHECK: struct color : { number:i32, name:i8 }

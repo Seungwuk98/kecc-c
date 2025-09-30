@@ -1,6 +1,8 @@
 // RUN: kecc-test-executor %s --test-return-value=1
 // RUN: keci %s --test-return-value=1
 // RUN: kecc-opt %s --canonicalize-constant --gvn | FileCheck %s
+// RUN: kecc-test-executor %s --translate-passes="--canonicalize-constant --gvn" --test-return-value=1
+// RUN: kecc-opt %s --canonicalize-constant --gvn | keci --test-return-value=1
 
 struct Sub : { m1:i64, m2:i64, m3:i64, m4:i64 }
 struct Big : { m1:struct Sub, m2:struct Sub, m3:struct Sub }

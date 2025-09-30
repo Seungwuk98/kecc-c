@@ -296,7 +296,7 @@ int keciMain() {
     }
   }
 
-  if (cl::interpreterOption->testReturnValue) {
+  if (cl::interpreterOption->testReturnValue.getNumOccurrences()) {
     if (returnValue != cl::interpreterOption->testReturnValue) {
       llvm::errs() << "Error: return value " << returnValue
                    << " does not match expected "
