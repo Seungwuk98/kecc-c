@@ -40,7 +40,9 @@ int main() {
 
   // CHECK-LABEL: block b3:
   // CHECK-NEXT:   %b3:i0:i1 = load %l4:i1*
-  // CHECK-NEXT:   br %b3:i0:i1, b4(), b5()
+  // CHECK-NEXT:   %b3:i1:i32 = typecast %b3:i0:i1 to i32
+  // CHECK-NEXT:   %b3:i2:i1 = cmp ne %b3:i1:i32 0:i32
+  // CHECK-NEXT:   br %b3:i2:i1, b4(), b5()
   if ((a = 1) || (b = 1)) {
     // CHECK-LABEL: block b4:
     // CHECK-NEXT:   %b4:i0:i32 = load %l1:i32*
@@ -69,7 +71,9 @@ int main() {
 
   // CHECK-LABEL: block b9:
   // CHECK-NEXT:   %b9:i0:i1 = load %l5:i1*
-  // CHECK-NEXT:   br %b9:i0:i1, b10(), b11()
+  // CHECK-NEXT:   %b9:i1:i32 = typecast %b9:i0:i1 to i32
+  // CHECK-NEXT:   %b9:i2:i1 = cmp ne %b9:i1:i32 0:i32
+  // CHECK-NEXT:   br %b9:i2:i1, b10(), b11()
   if ((c = 1) && (d = 1)) {
     // CHECK-LABEL: block b10:
     // CHECK-NEXT:   %b10:i0:i32 = load %l3:i32*

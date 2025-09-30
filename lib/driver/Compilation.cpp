@@ -316,7 +316,7 @@ public:
 class OutputAction : public CompilationAction {
 public:
   OutputAction(Compilation *compilation, llvm::StringRef output)
-      : CompilationAction(compilation) {}
+      : CompilationAction(compilation), outputFileName(output) {}
 
   static llvm::StringRef getNameStr() { return "Output Assembly"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
@@ -326,7 +326,8 @@ public:
     std::error_code ec;
     llvm::raw_fd_ostream os(outputFileName, ec);
     if (ec) {
-      llvm::errs() << "Error opening output file: " << ec.message() << "\n";
+      llvm::errs() << "Error opening output file " << outputFileName << ": "
+                   << ec.message() << "\n";
       return std::make_unique<ActionData>(utils::LogicalResult::failure());
     }
 
@@ -342,7 +343,7 @@ public:
   }
 
 private:
-  llvm::StringRef outputFileName;
+  std::string outputFileName;
 };
 
 class PrintAction : public CompilationAction {

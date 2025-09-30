@@ -108,7 +108,9 @@ int main() {
 
   // CHECK-LABEL: block b3:
   // CHECK-NEXT:   %b3:i0:i1 = load %l9:i1*
-  // CHECK-NEXT:   br %b3:i0:i1, b4(), b5()
+  // CHECK-NEXT:   %b3:i1:i32 = typecast %b3:i0:i1 to i32
+  // CHECK-NEXT:   %b3:i2:i1 = cmp ne %b3:i1:i32 0:i32
+  // CHECK-NEXT:   br %b3:i2:i1, b4(), b5()
   
   // CHECK-LABEL: block b4: 
   // CHECK-NEXT:   %b4:i0:u8 = load %l5:u8*
@@ -125,7 +127,9 @@ int main() {
 
   // CHECK-LABEL: block b6:
   // CHECK-NEXT:   %b6:i0:i1 = load %l10:i1*
-  // CHECK-NEXT:   br %b6:i0:i1, b7(), b8()
+  // CHECK-NEXT:   %b6:i1:i32 = typecast %b6:i0:i1 to i32
+  // CHECK-NEXT:   %b6:i2:i1 = cmp ne %b6:i1:i32 0:i32
+  // CHECK-NEXT:   br %b6:i2:i1, b7(), b8()
 
   // CHECK-LABEL: block b7: 
   // CHECK-NEXT:   %b7:i0:u8 = load %l6:u8*
@@ -142,7 +146,9 @@ int main() {
 
   // CHECK-LABEL: block b9:
   // CHECK-NEXT:   %b9:i0:i1 = load %l11:i1*
-  // CHECK-NEXT:   br %b9:i0:i1, b10(), b11()
+  // CHECK-NEXT:   %b9:i1:i32 = typecast %b9:i0:i1 to i32
+  // CHECK-NEXT:   %b9:i2:i1 = cmp ne %b9:i1:i32 0:i32
+  // CHECK-NEXT:   br %b9:i2:i1, b10(), b11()
 
   // CHECK-LABEL: block b10:
   // CHECK-NEXT:   %b10:i0:u8 = load %l7:u8*
@@ -159,7 +165,9 @@ int main() {
   
   // CHECK-LABEL: block b12:
   // CHECK-NEXT:   %b12:i0:i1 = load %l12:i1*
-  // CHECK-NEXT:   br %b12:i0:i1, b13(), b14()
+  // CHECK-NEXT:   %b12:i1:i32 = typecast %b12:i0:i1 to i32
+  // CHECK-NEXT:   %b12:i2:i1 = cmp ne %b12:i1:i32 0:i32
+  // CHECK-NEXT:   br %b12:i2:i1, b13(), b14()
   
   // CHECK-LABEL: block b13: 
   // CHECK-NEXT:   %b13:i0:u8 = load %l8:u8*

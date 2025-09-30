@@ -6,6 +6,7 @@
 #include "kecc/ir/Instruction.h"
 #include "kecc/ir/TypeAttributeSupport.h"
 #include "kecc/ir/WalkSupport.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -954,7 +955,9 @@ void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
       bool isExact = false;
       auto status = srcFloat.convertToInteger(
           destInt, llvm::APFloat::rmTowardZero, &isExact);
-      assert(status == llvm::APFloat::opOK && "Conversion failed");
+      assert((status == llvm::APFloat::opOK ||
+              status == llvm::APFloat::opInexact) &&
+             "Conversion failed");
 
       VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
       destIntR->setValue(destInt);
@@ -965,7 +968,9 @@ void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
           destFloatT.getBitWidth() == 32 ? llvm::APFloat::IEEEsingle()
                                          : llvm::APFloat::IEEEdouble(),
           llvm::APFloat::rmNearestTiesToEven, &losesInfo);
-      assert(status == llvm::APFloat::opOK && "Conversion failed");
+      assert((status == llvm::APFloat::opOK ||
+              status == llvm::APFloat::opInexact) &&
+             "Conversion failed");
       auto destFloatR = destReg->cast<VRegisterFloat>();
       destFloatR->setValue(srcFloat);
       return;

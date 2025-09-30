@@ -98,7 +98,9 @@ int main() {
 
     // CHECK-LABEL: block b7:
     // CHECK-NEXT:   %b7:i0:i1 = load %l5:i1*
-    // CHECK-NEXT:   br %b7:i0:i1, b8(), b9()
+    // CHECK-NEXT:   %b7:i1:i32 = typecast %b7:i0:i1 to i32
+    // CHECK-NEXT:   %b7:i2:i1 = cmp ne %b7:i1:i32 0:i32
+    // CHECK-NEXT:   br %b7:i2:i1, b8(), b9()
 
     // CHECK-LABEL: block b8:
     // CHECK-NEXT:   j b4()

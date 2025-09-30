@@ -36,7 +36,9 @@ int main() {
 
   // CHECK-LABEL: block b3:
   // CHECK-NEXT:   %b3:i0:i1 = load %l3:i1*
-  // CHECK-NEXT:   br %b3:i0:i1, b4(), b5()
+  // CHECK-NEXT:   %b3:i1:i32 = typecast %b3:i0:i1 to i32
+  // CHECK-NEXT:   %b3:i2:i1 = cmp ne %b3:i1:i32 0:i32
+  // CHECK-NEXT:   br %b3:i2:i1, b4(), b5()
 
   // CHECK-LABEL: block b4:
   // CHECK-NEXT:   %b4:i0:i1 = cmp eq 40:u32 80:u32 

@@ -207,8 +207,8 @@ int keccMain() {
     if (cl::inputOption->input == "-") {
       llvm::sys::path::append(outputFileNameBuffer, "a");
     } else {
-      outputFileNameBuffer.append(cl::inputOption->input.begin(),
-                                  cl::inputOption->input.end());
+      auto inputStem = llvm::sys::path::stem(cl::inputOption->input);
+      llvm::sys::path::append(outputFileNameBuffer, inputStem);
     }
     switch (outputFormat) {
     case OutputFormat::KeccIR:

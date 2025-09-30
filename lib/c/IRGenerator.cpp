@@ -1538,8 +1538,16 @@ ir::Value ExprEvaluator::VisitBinLAndOp(const BinaryOperator *expr) {
       irgen->convertRange(expr->getLHS()->getEndLoc()), endJArg);
 
   builder.setInsertionPoint(endBlock);
-  return builder.create<ir::inst::Load>(irgen->convertRange(expr->getEndLoc()),
-                                        memory);
+  ir::Value load = builder.create<ir::inst::Load>(
+      irgen->convertRange(expr->getEndLoc()), memory);
+
+  auto exprT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (load.getType() != exprT.constCanonicalize()) {
+    load = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), load, exprT);
+  }
+  return load;
 }
 
 ir::Value ExprEvaluator::VisitBinLOrOp(const BinaryOperator *expr) {
@@ -1594,8 +1602,15 @@ ir::Value ExprEvaluator::VisitBinLOrOp(const BinaryOperator *expr) {
       irgen->convertRange(expr->getRHS()->getEndLoc()), endJArg);
 
   builder.setInsertionPoint(endBlock);
-  return builder.create<ir::inst::Load>(irgen->convertRange(expr->getEndLoc()),
-                                        memory);
+  ir::Value load = builder.create<ir::inst::Load>(
+      irgen->convertRange(expr->getEndLoc()), memory);
+  auto exprT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (load.getType() != exprT.constCanonicalize()) {
+    load = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), load, exprT);
+  }
+  return load;
 }
 
 ir::Value ExprEvaluator::VisitBinCommaOp(const BinaryOperator *expr) {
@@ -1655,10 +1670,16 @@ static ir::Value castConstant(ir::IRBuilder &builder, llvm::SMRange range,
               if (floatAttr.getFloatType() == targetFloatT)
                 return nullptr;
 
-              llvm::APFloat floatValue =
-                  targetFloatT.isF32()
-                      ? llvm::APFloat(floatAttr.getValue().convertToFloat())
-                      : llvm::APFloat(floatAttr.getValue().convertToDouble());
+              auto floatValue = floatAttr.getValue();
+              bool losesInfo = false;
+              auto status = floatValue.convert(
+                  targetFloatT.getBitWidth() == 32
+                      ? llvm::APFloat::IEEEsingle()
+                      : llvm::APFloat::IEEEdouble(),
+                  llvm::APFloat::rmNearestTiesToEven, &losesInfo);
+              assert((status == llvm::APFloat::opOK ||
+                      status == llvm::APFloat::opInexact) &&
+                     "Conversion failed");
 
               return ir::ConstantFloatAttr::get(builder.getContext(),
                                                 floatValue);
