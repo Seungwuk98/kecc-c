@@ -37,7 +37,7 @@ add_executable(
 )
 
 target_link_libraries(
-  fuzz 
+  fuzz-test 
   PRIVATE 
   ${llvm_libs}
   KeccDriver

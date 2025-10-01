@@ -1,5 +1,8 @@
+#include "kecc/driver/Action.h"
 #include "kecc/driver/Compilation.h"
+#include "kecc/driver/DriverConfig.h"
 #include "kecc/ir/IRTransforms.h"
+#include "kecc/ir/Interpreter.h"
 #include "kecc/translate/TranslatePasses.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CommandLine.h"
@@ -309,6 +312,178 @@ int keciMain() {
   return returnValue;
 }
 
+int fuzzMain() {
+  if (cl::inputOption->input == "-") {
+    llvm::errs() << "Error: input file must be specified\n";
+    return 1;
+  }
+
+  auto inputBufferOrErr = llvm::MemoryBuffer::getFile(cl::inputOption->input);
+  if (inputBufferOrErr.getError()) {
+    llvm::errs() << "read file error: " << inputBufferOrErr.getError().message()
+                 << "\n";
+    return 1;
+  }
+
+  InputFormat inputFormat;
+  llvm::StringRef inputExt = llvm::sys::path::extension(cl::inputOption->input);
+  if (inputExt == ".c") {
+    inputFormat = InputFormat::C;
+  } else if (inputExt == ".ir") {
+    inputFormat = InputFormat::KeccIR;
+  } else {
+    llvm::errs() << "Error: unknown input file extension: " << inputExt << "\n";
+    return 1;
+  }
+
+  llvm::SmallVector<char> testDir;
+  {
+    llvm::StringRef parentDir =
+        llvm::sys::path::parent_path(cl::inputOption->input);
+    testDir.append(parentDir.begin(), parentDir.end());
+    if (!llvm::sys::path::is_absolute(parentDir)) {
+      llvm::SmallVector<char> currentPath;
+      if (auto ec = llvm::sys::fs::current_path(currentPath)) {
+        llvm::errs() << "Error: cannot get current path: " << ec.message()
+                     << "\n";
+        return 1;
+      }
+      llvm::SmallVector<char> absTestDir;
+      llvm::sys::path::append(absTestDir, currentPath);
+      llvm::sys::path::append(absTestDir, testDir);
+      llvm::sys::path::remove_dots(absTestDir);
+      testDir = std::move(absTestDir);
+    }
+  }
+
+  CompileOptTable compileOpts;
+  compileOpts.setInputFormat(inputFormat);
+
+  Compilation compilation(compileOpts, cl::inputOption->input, "-",
+                          inputBufferOrErr->get()->getBuffer());
+  compilation.setOptPipeline(cl::pmOption->passCallback);
+
+  std::optional<int> returnCode;
+  llvm::StringRef returnCodeFrom;
+  Invocation fullInvocation;
+  Invocation interpretInvocation;
+
+  if (inputFormat == InputFormat::C) {
+    Invocation clangInvocation;
+
+    llvm::SmallVector<char> clangOutputFileBuffer;
+    auto inputStem = llvm::sys::path::stem(cl::inputOption->input);
+    llvm::sys::path::append(clangOutputFileBuffer, testDir,
+                            std::format("{}_clang.out", inputStem.str()));
+    clangInvocation.addAction<CompileToExeAction>(
+        llvm::StringRef(cl::inputOption->input),
+        llvm::StringRef(clangOutputFileBuffer.data(),
+                        clangOutputFileBuffer.size()));
+
+    clangInvocation.addAction<ExecuteExeByQemuAction>(
+        QEMU_RISCV64_STATIC, llvm::StringRef(clangOutputFileBuffer.data(),
+                                             clangOutputFileBuffer.size()));
+
+    auto result = clangInvocation.executeAll();
+    if (!result->getLogicalResult().succeeded()) {
+      llvm::errs() << "Error: clang invocation failed\n";
+      return 1;
+    }
+
+    ReturnCodeResult *returnCodeResult = result->cast<ReturnCodeResult>();
+    returnCode = returnCodeResult->getReturnCode();
+    returnCodeFrom = "clang";
+
+    fullInvocation.addAction<ParseCAction>(&compilation);
+    interpretInvocation.addAction<ParseCAction>(&compilation);
+  } else if (inputFormat == InputFormat::KeccIR) {
+    fullInvocation.addAction<ParseIRAction>(&compilation);
+    interpretInvocation.addAction<ParseIRAction>(&compilation);
+  } else {
+    llvm_unreachable("unknown input format");
+  }
+
+  interpretInvocation.addAction<IRInterpretAction>(std::nullopt);
+  auto interpretInvokeResult = interpretInvocation.executeAll();
+  if (!interpretInvokeResult->getLogicalResult().succeeded()) {
+    llvm::errs() << "Error: interpretation failed\n";
+    return 1;
+  }
+
+  InterpretResult *interpretResult =
+      interpretInvokeResult->cast<InterpretResult>();
+  assert(interpretResult->getReturnValues().size() == 1 &&
+         "main function should return one integer value");
+  int interpretReturnCode =
+      static_cast<uint8_t>(interpretResult->getReturnValues()[0]
+                               ->cast<ir::VRegisterInt>()
+                               ->getValue());
+  bool testFailed = false;
+  if (returnCode) {
+    if (interpretReturnCode != *returnCode) {
+      llvm::errs() << "Error: return code " << interpretReturnCode
+                   << " does not match clang's " << *returnCode << "\n";
+      testFailed = true;
+    }
+  } else {
+    returnCode = interpretReturnCode;
+    returnCodeFrom = "interpreter";
+  }
+
+  fullInvocation.addAction<RegisterPassesAction>(compilation.getOptPipeline());
+  fullInvocation.addAction<RunPassesAction>();
+
+  llvm::SmallVector<char> irFileBuffer;
+  auto inputStem = llvm::sys::path::stem(cl::inputOption->input);
+  llvm::sys::path::append(irFileBuffer, testDir,
+                          std::format("{}_kecc.ir", inputStem.str()));
+
+  fullInvocation.addAction<OutputAction>(
+      llvm::StringRef(irFileBuffer.data(), irFileBuffer.size()));
+
+  fullInvocation.addAction<RegisterPassesAction>([](ir::PassManager &pm) {
+    translate::registerDefaultTranslationPasses(pm);
+  });
+  fullInvocation.addAction<RunPassesAction>();
+  fullInvocation.addAction<TranslateIRAction>(&compilation);
+
+  llvm::SmallVector<char> asmFileBuffer;
+  llvm::sys::path::append(asmFileBuffer, testDir,
+                          std::format("{}_kecc.s", inputStem.str()));
+  fullInvocation.addAction<OutputAction>(
+      llvm::StringRef(asmFileBuffer.data(), asmFileBuffer.size()));
+
+  llvm::SmallVector<char> keccOutputFileBuffer;
+  llvm::sys::path::append(keccOutputFileBuffer, testDir,
+                          std::format("{}_kecc.out", inputStem.str()));
+
+  fullInvocation.addAction<CompileToExeAction>(
+      llvm::StringRef(asmFileBuffer.data(), asmFileBuffer.size()),
+      llvm::StringRef(keccOutputFileBuffer.data(),
+                      keccOutputFileBuffer.size()));
+
+  fullInvocation.addAction<ExecuteExeByQemuAction>(
+      QEMU_RISCV64_STATIC, llvm::StringRef(keccOutputFileBuffer.data(),
+                                           keccOutputFileBuffer.size()));
+
+  auto fullResult = fullInvocation.executeAll();
+  if (!fullResult->getLogicalResult().succeeded()) {
+    llvm::errs() << "Error: full invocation failed\n";
+    return 1;
+  }
+  ReturnCodeResult *fullReturnCodeResult = fullResult->cast<ReturnCodeResult>();
+  int fullReturnCode =
+      static_cast<uint8_t>(fullReturnCodeResult->getReturnCode());
+  if (returnCode && fullReturnCode != *returnCode) {
+    llvm::errs() << "Error: return code " << fullReturnCode
+                 << " does not match " << returnCodeFrom << "'s " << *returnCode
+                 << "\n";
+    testFailed = true;
+  }
+
+  return testFailed;
+}
+
 } // namespace kecc
 
 int kecc_main(int argc, char **argv) {
@@ -339,4 +514,25 @@ int keci_main(int argc, char **argv) {
   kecc::cl::registerInterpreterOption();
   llvm::cl::ParseCommandLineOptions(argc, argv, "Kecc IR Interpreter\n");
   return kecc::keciMain();
+}
+
+int fuzz_main(int argc, char **argv) {
+  kecc::ir::registerPass<kecc::ir::CanonicalizeConstant>();
+  kecc::ir::registerPass<kecc::ir::Mem2Reg>();
+  kecc::ir::registerPass<kecc::ir::GVN>();
+  kecc::ir::registerPass<kecc::ir::DeadCode>();
+  kecc::ir::registerPass<kecc::ir::OutlineConstantPass>();
+  kecc::ir::registerPass<kecc::ir::InstructionFold>();
+  kecc::ir::registerPass<kecc::ir::OutlineMultipleResults>();
+  kecc::ir::registerPass<kecc::ir::InlineCallPass>();
+  kecc::ir::registerPass<kecc::ir::CreateFunctionArgument>();
+  kecc::ir::registerPass<kecc::translate::ConversionToCopyPass>();
+  kecc::ir::registerPass<kecc::translate::InlineMemoryInstPass>();
+  kecc::ir::registerSimplifyCFGPass();
+  kecc::ir::registerCanonicalizeStructPasses();
+  kecc::cl::registerInputOption();
+  kecc::cl::registerPMOption();
+
+  llvm::cl::ParseCommandLineOptions(argc, argv, "Kecc C Compiler\n");
+  return kecc::fuzzMain();
 }

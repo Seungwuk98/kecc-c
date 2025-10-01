@@ -93,12 +93,24 @@ target_link_libraries(
   KeccTranslatePasses
 )
 
-add_executable(fuzz fuzz.cpp)
+
+add_kecc_driver(
+  fuzz 
+  GEN_DRIVER_MAIN
+  SOURCES
+  driver.cpp
+)
 
 target_link_libraries(
   fuzz 
   PRIVATE 
   ${llvm_libs}
   KeccDriver
+  KeccParser
+  KeccIR
+  KeccIRAnalyses
+  KeccIRPasses
+  KeccC
 )
+
 

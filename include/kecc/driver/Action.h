@@ -2,9 +2,26 @@
 #define KECC_DRIVER_ACTION_H
 
 #include "kecc/asm/AsmInstruction.h"
+#include "kecc/c/Diag.h"
+#include "kecc/c/IRGenerator.h"
+#include "kecc/c/ParseAST.h"
+#include "kecc/driver/DriverConfig.h"
+#include "kecc/driver/DriverConfig.h.in"
 #include "kecc/ir/Context.h"
+#include "kecc/ir/IR.h"
+#include "kecc/ir/IRAnalyses.h"
+#include "kecc/ir/Instruction.h"
+#include "kecc/ir/Interpreter.h"
+#include "kecc/ir/Pass.h"
+#include "kecc/parser/Lexer.h"
+#include "kecc/parser/Parser.h"
+#include "kecc/translate/IRTranslater.h"
 #include "kecc/utils/LogicalResult.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVectorExtras.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Program.h"
+#include <format>
 #include <memory>
 
 namespace kecc {
@@ -154,6 +171,346 @@ public:
 
 private:
   std::vector<std::unique_ptr<Action>> actions;
+};
+
+class OptArg : public ActionDataTemplate<OptArg> {
+public:
+  OptArg(utils::LogicalResult result, std::unique_ptr<ir::Module> module)
+      : Base(result), module(std::move(module)),
+        passManager(new ir::PassManager), recordDeclManager(nullptr) {}
+
+  static llvm::StringRef getNameStr() { return "Optimization Argument"; }
+  llvm::StringRef getName() const override { return getNameStr(); }
+
+  void setModule(std::unique_ptr<ir::Module> mod) { module = std::move(mod); }
+  ir::Module *getModule() const { return module.get(); }
+  ir::PassManager &getPassManager() { return *passManager; }
+
+  void createRecordDeclManager() {
+    recordDeclManager = std::make_unique<c::RecordDeclManager>();
+  }
+  c::RecordDeclManager *getRecordDeclManager() const {
+    return recordDeclManager.get();
+  }
+
+private:
+  std::unique_ptr<ir::Module> module;
+  std::unique_ptr<ir::PassManager> passManager;
+  std::unique_ptr<c::RecordDeclManager> recordDeclManager;
+};
+
+class AsmArg : public ActionDataTemplate<AsmArg> {
+public:
+  AsmArg(utils::LogicalResult result, std::unique_ptr<as::Asm> asmModule)
+      : Base(result), asmModule(std::move(asmModule)) {}
+
+  static llvm::StringRef getNameStr() { return "Assembly Argument"; }
+  llvm::StringRef getName() const override { return getNameStr(); }
+
+  as::Asm *getAsm() const { return asmModule.get(); }
+  void setAsm(std::unique_ptr<as::Asm> asmMod) {
+    asmModule = std::move(asmMod);
+  }
+
+private:
+  std::unique_ptr<as::Asm> asmModule;
+};
+
+class ReturnCodeResult : public ActionDataTemplate<ReturnCodeResult> {
+public:
+  ReturnCodeResult(utils::LogicalResult result, int returnCode)
+      : Base(result), returnCode(returnCode) {}
+
+  static llvm::StringRef getNameStr() { return "Return Code Result"; }
+  llvm::StringRef getName() const override { return getNameStr(); }
+
+  int getReturnCode() const { return returnCode; }
+
+private:
+  int returnCode;
+};
+
+class ParseCAction
+    : public ActionTemplate<CompilationAction, ActionData, OptArg> {
+public:
+  ParseCAction(Compilation *compilation) : Base(compilation) {}
+
+  static llvm::StringRef getNameStr() { return "Parse C source"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override;
+};
+
+class ParseIRAction
+    : public ActionTemplate<CompilationAction, ActionData, OptArg> {
+public:
+  ParseIRAction(Compilation *compilation) : Base(compilation) {}
+
+  static llvm::StringRef getNameStr() { return "Parse IR source"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override;
+};
+
+class InterpretResult : public ActionDataTemplate<InterpretResult> {
+public:
+  InterpretResult(
+      utils::LogicalResult result,
+      llvm::SmallVector<std::unique_ptr<ir::VRegister>> returnValues)
+      : Base(result), returnValues(std::move(returnValues)) {}
+
+  static llvm::StringRef getNameStr() { return "Interpret Result"; }
+  llvm::StringRef getName() const override { return getNameStr(); }
+
+  llvm::SmallVectorImpl<std::unique_ptr<ir::VRegister>> &getReturnValues() {
+    return returnValues;
+  }
+
+private:
+  llvm::SmallVector<std::unique_ptr<ir::VRegister>> returnValues;
+};
+
+class IRInterpretAction
+    : public ActionTemplate<Action, OptArg, InterpretResult> {
+public:
+  IRInterpretAction(llvm::SmallVector<std::unique_ptr<ir::VRegister>> args,
+                    llvm::StringRef entryFunction)
+      : arguments(std::move(args)), entryFunctionName(entryFunction) {
+    assert(entryFunction != "main");
+  }
+
+  IRInterpretAction(llvm::ArrayRef<llvm::StringRef> args)
+      : arguments(args), entryFunctionName("main") {}
+
+  static llvm::StringRef getNameStr() { return "Interpret IR"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<InterpretResult>
+  execute(std::unique_ptr<OptArg> arg) override;
+
+private:
+  std::variant<llvm::SmallVector<std::unique_ptr<ir::VRegister>>,
+               llvm::ArrayRef<llvm::StringRef>>
+      arguments;
+  llvm::StringRef entryFunctionName;
+};
+
+class RegisterPassesAction : public ActionTemplate<Action, OptArg, OptArg> {
+public:
+  RegisterPassesAction(llvm::ArrayRef<ir::Pass *> passes) : passes(passes) {}
+
+  RegisterPassesAction(std::function<void(ir::PassManager &)> passRegisterFunc)
+      : passes(std::move(passRegisterFunc)) {}
+
+  static llvm::StringRef getNameStr() { return "Register Passes"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<OptArg> execute(std::unique_ptr<OptArg> arg) override;
+
+private:
+  std::variant<llvm::ArrayRef<ir::Pass *>,
+               std::function<void(ir::PassManager &)>>
+      passes;
+};
+
+class RunPassesAction : public ActionTemplate<Action, OptArg, OptArg> {
+public:
+  RunPassesAction() : Base() {}
+
+  static llvm::StringRef getNameStr() { return "Run Passes"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<OptArg> execute(std::unique_ptr<OptArg> arg) override {
+    auto &pm = arg->getPassManager();
+    auto module = arg->getModule();
+    auto result = pm.run(module);
+    if (result.isFailure())
+      return std::make_unique<OptArg>(utils::LogicalResult::failure(), nullptr);
+    return arg;
+  }
+};
+
+class TranslateIRAction
+    : public ActionTemplate<CompilationAction, OptArg, AsmArg> {
+public:
+  TranslateIRAction(Compilation *compilation) : Base(compilation) {}
+
+  static llvm::StringRef getNameStr() { return "Translate to Assembly"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  void preExecute(OptArg *) override;
+
+  std::unique_ptr<AsmArg> execute(std::unique_ptr<OptArg> arg) override;
+};
+
+class OutputAction : public Action {
+public:
+  OutputAction(llvm::StringRef output) : outputFileName(output) {}
+
+  static llvm::StringRef getNameStr() { return "Output Assembly"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData>
+  execute(std::unique_ptr<ActionData> arg) override {
+    std::error_code ec;
+    llvm::raw_fd_ostream os(outputFileName, ec);
+    if (ec) {
+      llvm::errs() << "Error opening output file " << outputFileName << ": "
+                   << ec.message() << "\n";
+      return std::make_unique<ActionData>(utils::LogicalResult::failure());
+    }
+
+    if (AsmArg *asmArg = llvm::dyn_cast<AsmArg>(arg.get())) {
+      asmArg->getAsm()->print(os);
+    } else if (OptArg *optArg = llvm::dyn_cast<OptArg>(arg.get())) {
+      ir::IRPrintContext printContext(os);
+      optArg->getModule()->getIR()->print(printContext);
+    } else {
+      llvm_unreachable("Argument is neither OptArg nor AsmArg");
+    }
+    return std::move(arg);
+  }
+
+private:
+  std::string outputFileName;
+};
+
+class PrintAction : public Action {
+public:
+  PrintAction(llvm::raw_ostream &os) : os(&os) {}
+
+  static llvm::StringRef getNameStr() { return "Print Action"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData>
+  execute(std::unique_ptr<ActionData> arg) override {
+    if (AsmArg *asmArg = llvm::dyn_cast<AsmArg>(arg.get())) {
+      asmArg->getAsm()->print(*os);
+    } else if (OptArg *optArg = llvm::dyn_cast<OptArg>(arg.get())) {
+      ir::IRPrintContext printContext(*os);
+      optArg->getModule()->getIR()->print(printContext);
+    } else {
+      llvm_unreachable("Argument is neither OptArg nor AsmArg");
+    }
+    return std::move(arg);
+  }
+
+private:
+  llvm::raw_ostream *os;
+};
+
+class ClangExecutor {
+public:
+  ClangExecutor() { arguments.emplace_back(CLANG_DIR); }
+
+  void addArgument(llvm::StringRef arg) { arguments.emplace_back(arg); }
+
+  void addArgument(llvm::StringRef argName, llvm::StringRef value) {
+    if (value.empty())
+      addArgument(argName);
+    arguments.emplace_back(std::format("{}={}", argName.str(), value.str()));
+  }
+
+  void addArgument(llvm::DenseMap<llvm::StringRef, llvm::StringRef> args) {
+    for (auto &[argName, value] : args) {
+      addArgument(argName, value);
+    }
+  }
+
+  int execute() {
+    llvm::SmallVector<llvm::StringRef> argRefs = llvm::map_to_vector(
+        arguments, [](const std::string &s) { return llvm::StringRef(s); });
+
+    return llvm::sys::ExecuteAndWait(CLANG_DIR, argRefs);
+  }
+
+private:
+  llvm::SmallVector<std::string> arguments;
+};
+
+class CompileToObjAction
+    : public ActionTemplate<Action, ActionData, ReturnCodeResult>,
+      public ClangExecutor {
+public:
+  CompileToObjAction(llvm::StringRef inputFileName,
+                     llvm::StringRef outputFileName)
+      : inputFileName(inputFileName), outputFileName(outputFileName) {}
+
+  static llvm::StringRef getNameStr() { return "Compile to Object"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
+    addArgument("-c");
+    addArgument("-o", outputFileName);
+    addArgument(inputFileName);
+    addArgument("--target", "riscv64-unknown-linux-gnu");
+
+    int returnCode = ClangExecutor::execute();
+    if (returnCode != 0)
+      return std::make_unique<ReturnCodeResult>(utils::LogicalResult::failure(),
+                                                returnCode);
+
+    return std::make_unique<ReturnCodeResult>(utils::LogicalResult::success(),
+                                              returnCode);
+  }
+
+private:
+  llvm::StringRef inputFileName;
+  llvm::StringRef outputFileName;
+};
+
+class CompileToExeAction
+    : public ActionTemplate<Action, ActionData, ReturnCodeResult>,
+      public ClangExecutor {
+public:
+  CompileToExeAction(llvm::ArrayRef<llvm::StringRef> inputFileNames,
+                     llvm::StringRef outputFileName)
+      : inputFileNames(inputFileNames), outputFileName(outputFileName) {}
+
+  static llvm::StringRef getNameStr() { return "Compile to Executable"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
+    addArgument("-o");
+    addArgument(outputFileName);
+    for (auto inputFileName : inputFileNames) {
+      addArgument(inputFileName);
+    }
+
+    addArgument("--target", "riscv64-unknown-linux-gnu");
+    addArgument("-fuse-ld", "lld");
+
+    int returnCode = ClangExecutor::execute();
+    if (returnCode != 0)
+      return std::make_unique<ReturnCodeResult>(utils::LogicalResult::failure(),
+                                                returnCode);
+    return std::make_unique<ReturnCodeResult>(utils::LogicalResult::success(),
+                                              returnCode);
+  }
+
+private:
+  llvm::SmallVector<llvm::StringRef> inputFileNames;
+  llvm::StringRef outputFileName;
+};
+
+class ExecuteExeByQemuAction
+    : public ActionTemplate<Action, ActionData, ReturnCodeResult> {
+public:
+  ExecuteExeByQemuAction(llvm::StringRef qemuPath, llvm::StringRef exePath)
+      : qemuPath(qemuPath), exePath(exePath) {}
+
+  static llvm::StringRef getNameStr() { return "Execute Executable by QEMU"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
+    int returnCode = llvm::sys::ExecuteAndWait(qemuPath, {qemuPath, exePath});
+    return std::make_unique<ReturnCodeResult>(utils::LogicalResult::success(),
+                                              returnCode);
+  }
+
+private:
+  llvm::StringRef qemuPath;
+  llvm::StringRef exePath;
 };
 
 } // namespace kecc

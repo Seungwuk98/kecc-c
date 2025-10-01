@@ -98,6 +98,10 @@ public:
 
   int interpret(llvm::ArrayRef<llvm::StringRef> args);
 
+  const std::function<void(ir::PassManager &)> &getOptPipeline() const {
+    return optPipeline;
+  }
+
 private:
   llvm::StringRef inputFileName;
   llvm::StringRef outputFileName;

@@ -34,6 +34,8 @@ public:
 
 void addO1Passes(ir::PassManager &pm);
 
+void registerDefaultTranslationPasses(ir::PassManager &pm);
+
 } // namespace kecc::translate
 
 #endif // KECC_TRANSLATE_PASSES_H
