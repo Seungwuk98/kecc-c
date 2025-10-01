@@ -1,0 +1,14 @@
+#ifndef KECC_TEST_FUZZ_CONFIG_H
+#define KECC_TEST_FUZZ_CONFIG_H
+
+#define CSMITH_BIN_PATH "@CSMITH_PATH@"
+#define CSMITH_INCLUDE_PATH "@CSMITH_INCLUDE_DIR@"
+#define CREDUCE_BIN_PATH "@CREDUCE_PATH@"
+#define TEST_LOG_DIR "@CMAKE_CURRENT_BINARY_DIR@/test/logs/"
+#define KECC_TEST_EXECUTOR_PATH "@PROJECT_BINARY_DIR@/tools/kecc-test-executor"
+#define KECC_PATH "@PROJECT_BINARY_DIR@/tools/kecc"
+#define FUZZ_BIN_PATH "@PROJECT_BINARY_DIR@/tools/fuzz"
+#define REDUCE_CRITERIA_TEMPLATE_PATH                                          \
+  "@PROJECT_SOURCE_DIR@/test/fuzz/reduce-criteria-template.sh"
+
+#endif // KECC_TEST_FUZZ_CONFIG_H
