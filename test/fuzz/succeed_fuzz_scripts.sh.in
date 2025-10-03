@@ -1,0 +1,17 @@
+#!/bin/bash
+
+FUZZ_TEST_BIN=@PROJECT_BINARY_DIR@/test/fuzz/fuzz-test
+
+
+if (\
+  $FUZZ_TEST_BIN -n 100 --easy --test-interp-only &&\
+  $FUZZ_TEST_BIN -n 100 --easy --test-interp-only -seed 1313 &&\
+  $FUZZ_TEST_BIN -n 50 --test-interp-only -seed 1313) 
+then
+  echo "succeed"
+  exit 0
+else
+  echo "fuzz failed"
+  exit 1
+fi
+    

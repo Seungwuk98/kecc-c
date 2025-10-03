@@ -897,7 +897,7 @@ GlobalInitGenerator::VisitCastExpr(const CastExpr *expr) {
     auto intType = destType.cast<ir::IntT>();
 
     bool isExact = true;
-    llvm::APSInt intValue;
+    llvm::APSInt intValue(intType.getBitWidth(), !intType.isSigned());
     srcValue.convertToInteger(intValue, llvm::APFloat::rmTowardZero, &isExact);
 
     /// TODO: handle isExact?
@@ -924,8 +924,8 @@ GlobalInitGenerator::VisitCastExpr(const CastExpr *expr) {
     llvm::APInt destAPInt(destIntT.getBitWidth(),
                           srcValue.isSigned() ? srcValue.getSExtValue()
                                               : srcValue.getZExtValue(),
-                          srcValue.isSigned());
-    llvm::APSInt destValue = llvm::APSInt(destAPInt, srcValue.isSigned());
+                          destIntT.isSigned());
+    llvm::APSInt destValue = llvm::APSInt(destAPInt, !destIntT.isSigned());
     return {destValue, expr->getSourceRange()};
   }
 }
@@ -1187,6 +1187,9 @@ GlobalInitGenerator::Result::toInitializerAttr(IRGenerator *irgen) {
     llvm::SmallVector<char> buffer;
     absValue.toString(buffer, 10);
     llvm::StringRef str(buffer.data(), buffer.size());
+    if (str[0] == '-') // absValue can have a leading '-' when it's the most
+                       // negative value
+      str = str.drop_front();
 
     ir::ASTInteger::Suffix suffix = absValue.getBitWidth() <= 32
                                         ? ir::ASTInteger::Suffix::Int

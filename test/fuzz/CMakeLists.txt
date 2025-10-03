@@ -44,3 +44,8 @@ target_link_libraries(
 )
 
 add_dependencies(fuzz-test kecc fuzz keci)
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/succeed_fuzz_scripts.sh.in 
+  ${CMAKE_CURRENT_BINARY_DIR}/succeed_fuzz_scripts.sh
+)

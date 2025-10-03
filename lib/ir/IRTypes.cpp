@@ -2,6 +2,7 @@
 #include "kecc/ir/Attribute.h"
 #include "kecc/ir/Context.h"
 #include "kecc/ir/Type.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVectorExtras.h"
 #include <cstddef>
@@ -84,6 +85,17 @@ void FloatT::printer(FloatT type, llvm::raw_ostream &os) {
 }
 
 int FloatT::getBitWidth() const { return getImpl()->getBitWidth(); }
+
+const llvm::fltSemantics *FloatT::getSemantics() const {
+  switch (getBitWidth()) {
+  case 32:
+    return &llvm::APFloat::IEEEsingle();
+  case 64:
+    return &llvm::APFloat::IEEEdouble();
+  default:
+    return nullptr;
+  }
+}
 
 std::pair<size_t, size_t> FloatT::calculateSizeAndAlign(FloatT type,
                                                         const StructSizeMap &) {

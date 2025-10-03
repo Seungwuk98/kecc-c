@@ -4,6 +4,7 @@
 #include "kecc/ir/Context.h"
 #include "kecc/ir/Type.h"
 #include "kecc/parser/Lexer.h"
+#include "llvm/ADT/APFloat.h"
 #include <cstddef>
 
 namespace kecc::ir {
@@ -43,6 +44,7 @@ public:
   bool isF64() const { return getBitWidth() == 64; }
 
   int getBitWidth() const;
+  const llvm::fltSemantics *getSemantics() const;
 };
 
 class NameStruct : public Type::Base<NameStruct, Type, NameStructImpl> {

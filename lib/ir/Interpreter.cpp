@@ -160,8 +160,9 @@ void VMemory::loadInto(VRegister *dest, Type type,
         } else {
           llvm_unreachable("Unsupported integer bit width");
         }
-        VInteger vInt(value, isSigned, bitWidth);
-        destIntR->setValue(vInt);
+        llvm::APInt vInt(bitWidth, value, isSigned);
+        llvm::APSInt apsInt(vInt, !isSigned);
+        destIntR->setValue(apsInt);
       })
 
       .Case([&](FloatT floatT) {
@@ -218,19 +219,19 @@ void VMemory::storeFrom(VRegister *src, Type type,
           isSigned = false;
 
         VRegisterInt *srcIntR = src->cast<VRegisterInt>();
-        VInteger apInt = srcIntR->getAsInteger(bitWidth, isSigned);
+        llvm::APSInt apInt = srcIntR->getAsInteger(bitWidth, isSigned);
         if (bitWidth <= 8) {
           *static_cast<std::uint8_t *>(data) =
-              static_cast<std::uint8_t>(apInt.getValue());
+              static_cast<std::uint8_t>(apInt.getZExtValue());
         } else if (bitWidth == 16) {
           *static_cast<std::uint16_t *>(data) =
-              static_cast<std::uint16_t>(apInt.getValue());
+              static_cast<std::uint16_t>(apInt.getZExtValue());
         } else if (bitWidth == 32) {
           *static_cast<std::uint32_t *>(data) =
-              static_cast<std::uint32_t>(apInt.getValue());
+              static_cast<std::uint32_t>(apInt.getZExtValue());
         } else if (bitWidth == 64) {
           *static_cast<std::uint64_t *>(data) =
-              static_cast<std::uint64_t>(apInt.getValue());
+              static_cast<std::uint64_t>(apInt.getZExtValue());
         } else {
           llvm_unreachable("Unsupported integer bit width");
         }
@@ -310,14 +311,17 @@ std::unique_ptr<VRegister> VRegisterInt::clone() const {
   return std::make_unique<VRegisterInt>(value);
 }
 
-VInteger VRegisterInt::getAsInteger(unsigned bitWidth, bool isSigned) const {
-  return VInteger(value, isSigned, bitWidth);
+llvm::APSInt VRegisterInt::getAsInteger(unsigned bitWidth,
+                                        bool isSigned) const {
+  return llvm::APSInt(llvm::APInt(bitWidth, value, isSigned), !isSigned);
 }
 VMemory VRegisterInt::getAsMemory() const {
   return VMemory(reinterpret_cast<void *>(value));
 }
 
-void VRegisterInt::setValue(VInteger v) { value = v.getValue(); }
+void VRegisterInt::setValue(llvm::APSInt v) {
+  value = v.isSigned() ? v.getSExtValue() : v.getZExtValue();
+}
 
 void VRegisterInt::setValue(VMemory v) {
   auto ptr = v.getData();
@@ -331,7 +335,9 @@ void VRegisterFloat::print(llvm::raw_ostream &os, Type type,
   os << "Raw value: " << value << " type: " << type << ' ';
   auto floatT = type.cast<ir::FloatT>();
   auto vFloat = getAsFloat(floatT.getBitWidth());
-  os << vFloat;
+  llvm::SmallVector<char> buffer;
+  vFloat.toString(buffer);
+  os << buffer;
 }
 
 void VRegisterFloat::mv(VRegister *src) {
@@ -344,15 +350,19 @@ std::unique_ptr<VRegister> VRegisterFloat::clone() const {
   return std::make_unique<VRegisterFloat>(value);
 }
 
-void VRegisterFloat::setValue(VFloat v) { value = v.getValue(); }
+void VRegisterFloat::setValue(llvm::APFloat v) {
+  value = v.bitcastToAPInt().getZExtValue();
+}
 void VRegisterFloat::setValue(std::uint64_t v) { value = v; }
 
-VFloat VRegisterFloat::getAsFloat(int bitwidth) const {
+llvm::APFloat VRegisterFloat::getAsFloat(int bitwidth) const {
   if (bitwidth == 32) {
-    VFloat vFloat(static_cast<std::uint32_t>(value), 32);
+    llvm::APInt intVal(32, value, false);
+    llvm::APFloat vFloat(llvm::APFloat::IEEEsingle(), intVal);
     return vFloat;
   } else {
-    VFloat vFloat(value, 64);
+    llvm::APInt intVal(64, value, false);
+    llvm::APFloat vFloat(llvm::APFloat::IEEEdouble(), intVal);
     return vFloat;
   }
 }
@@ -465,14 +475,15 @@ std::unique_ptr<VRegister> StackFrame::constValue(inst::Constant c) const {
         if (bitWidth == 1)
           isSigned = false;
 
-        VInteger vInt(intAttr.getValue(), isSigned, bitWidth);
+        llvm::APSInt vInt(llvm::APInt(bitWidth, intAttr.getValue(), isSigned),
+                          !isSigned);
         auto intR = std::make_unique<VRegisterInt>();
-        intR->setValue(vInt.getValue());
+        intR->setValue(vInt);
         return intR;
       })
       .Case([&](ConstantFloatAttr floatAttr) {
         auto floatR = std::make_unique<VRegisterFloat>();
-        floatR->setValue(VFloat::fromAPFloat(floatAttr.getValue()));
+        floatR->setValue(floatAttr.getValue());
         return floatR;
       })
       .Case([&](ConstantStringFloatAttr strAttr) {
@@ -482,7 +493,7 @@ std::unique_ptr<VRegister> StackFrame::constValue(inst::Constant c) const {
                                   : llvm::APFloat::IEEEdouble(),
                               strAttr.getValue());
         auto floatR = std::make_unique<VRegisterFloat>();
-        floatR->setValue(VFloat::fromAPFloat(apFloat));
+        floatR->setValue(apFloat);
         return floatR;
       })
       .Case([&](ConstantVariableAttr varAttr) {
@@ -586,9 +597,9 @@ namespace impl {
       VRegisterInt *rhsIntR = rhsReg->cast<VRegisterInt>();                    \
       VRegisterInt *retIntR = retReg->cast<VRegisterInt>();                    \
                                                                                \
-      VInteger lhsInt = lhsIntR->getAsInteger(bitWidth, isSigned);             \
-      VInteger rhsInt = rhsIntR->getAsInteger(bitWidth, isSigned);             \
-      VInteger retInt = lhsInt operator rhsInt;                                \
+      llvm::APSInt lhsInt = lhsIntR->getAsInteger(bitWidth, isSigned);         \
+      llvm::APSInt rhsInt = rhsIntR->getAsInteger(bitWidth, isSigned);         \
+      llvm::APSInt retInt = lhsInt operator rhsInt;                            \
       retIntR->setValue(retInt);                                               \
     } else if (auto floatT = type.dyn_cast<ir::FloatT>()) {                    \
       VRegisterFloat *lhsFloatR = lhsReg->cast<VRegisterFloat>();              \
@@ -637,9 +648,9 @@ ARITH_IMPL(div, Div, /);
     VRegisterInt *rhsIntR = rhsReg->cast<VRegisterInt>();                      \
     VRegisterInt *retIntR = retReg->cast<VRegisterInt>();                      \
                                                                                \
-    VInteger lhsInt = lhsIntR->getAsInteger(bitWidth, isSigned);               \
-    VInteger rhsInt = rhsIntR->getAsInteger(bitWidth, isSigned);               \
-    VInteger retInt = lhsInt operator rhsInt;                                  \
+    llvm::APSInt lhsInt = lhsIntR->getAsInteger(bitWidth, isSigned);           \
+    llvm::APSInt rhsInt = rhsIntR->getAsInteger(bitWidth, isSigned);           \
+    llvm::APSInt retInt = lhsInt operator rhsInt;                              \
     retIntR->setValue(retInt);                                                 \
   }
 
@@ -647,8 +658,67 @@ INTEGER_OP_IMPL(mod, Mod, %);
 INTEGER_OP_IMPL(bitAnd, BitAnd, &);
 INTEGER_OP_IMPL(bitOr, BitOr, |);
 INTEGER_OP_IMPL(bitXor, BitXor, ^);
-INTEGER_OP_IMPL(shl, Shl, <<);
-INTEGER_OP_IMPL(shr, Shr, >>);
+#undef INTEGER_OP_IMPL
+
+#define SHIFT_OP_IMPL(Func, OpKind, operator)                                  \
+  void Func(StackFrame *frame, ir::inst::Binary binary) {                      \
+    assert(binary.getOpKind() == ir::inst::Binary::OpKind && "Only " #OpKind   \
+                                                             " is supported"); \
+    assert(binary.getLhs().getType().constCanonicalize() ==                    \
+           binary.getRhs().getType().constCanonicalize());                     \
+                                                                               \
+    auto type = binary.getLhs().getType().constCanonicalize();                 \
+    assert(type.isa<ir::IntT>() && "Only integer types are supported");        \
+                                                                               \
+    auto intT = type.cast<ir::IntT>();                                         \
+    auto isSigned = intT.isSigned();                                           \
+    auto bitWidth = intT.getBitWidth();                                        \
+    if (bitWidth == 1)                                                         \
+      isSigned = false;                                                        \
+                                                                               \
+    InterpValue lhsReg = frame->getRegister(binary.getLhs());                  \
+    InterpValue rhsReg = frame->getRegister(binary.getRhs());                  \
+    InterpValue retReg = frame->getRegister(binary.getResult());               \
+                                                                               \
+    VRegisterInt *lhsIntR = lhsReg->cast<VRegisterInt>();                      \
+    VRegisterInt *rhsIntR = rhsReg->cast<VRegisterInt>();                      \
+    VRegisterInt *retIntR = retReg->cast<VRegisterInt>();                      \
+                                                                               \
+    llvm::APSInt lhsInt = lhsIntR->getAsInteger(bitWidth, isSigned);           \
+    llvm::APSInt rhsInt = rhsIntR->getAsInteger(bitWidth, isSigned);           \
+    llvm::APSInt retInt;                                                       \
+    if (lhsInt.getBitWidth() == 32) {                                          \
+      if (lhsInt.isSigned()) {                                                 \
+        std::int32_t lhs = lhsInt.getSExtValue();                              \
+        std::int32_t rhs = rhsInt.getSExtValue();                              \
+        lhs = lhs operator rhs;                                                \
+        retInt = llvm::APSInt(llvm::APInt(32, lhs, true), false);              \
+      } else {                                                                 \
+        std::uint32_t lhs = lhsInt.getZExtValue();                             \
+        std::uint32_t rhs = rhsInt.getZExtValue();                             \
+        lhs = lhs operator rhs;                                                \
+        retInt = llvm::APSInt(llvm::APInt(32, lhs, false), false);             \
+      }                                                                        \
+    } else if (lhsInt.getBitWidth() == 64) {                                   \
+      if (lhsInt.isSigned()) {                                                 \
+        std::int64_t lhs = lhsInt.getSExtValue();                              \
+        std::int64_t rhs = rhsInt.getSExtValue();                              \
+        lhs = lhs operator rhs;                                                \
+        retInt = llvm::APSInt(llvm::APInt(64, lhs, true), false);              \
+      } else {                                                                 \
+        std::uint64_t lhs = lhsInt.getZExtValue();                             \
+        std::uint64_t rhs = rhsInt.getZExtValue();                             \
+        lhs = lhs operator rhs;                                                \
+        retInt = llvm::APSInt(llvm::APInt(64, lhs, false), false);             \
+      }                                                                        \
+    } else {                                                                   \
+      llvm_unreachable("Unsupported integer bit width");                       \
+    }                                                                          \
+    retIntR->setValue(retInt);                                                 \
+  }
+SHIFT_OP_IMPL(shl, Shl, <<);
+SHIFT_OP_IMPL(shr, Shr, >>);
+#undef SHIFT_OP_IMPL
 
 #define CMP_OP_IMPL(Func, OpKind, operator)                                    \
   void Func(StackFrame *frame, ir::inst::Binary binary) {                      \
@@ -674,8 +744,8 @@ INTEGER_OP_IMPL(shr, Shr, >>);
       VRegisterInt *lhsIntR = lhsReg->cast<VRegisterInt>();                    \
       VRegisterInt *rhsIntR = rhsReg->cast<VRegisterInt>();                    \
                                                                                \
-      VInteger lhsInt = lhsIntR->getAsInteger(bitWidth, isSigned);             \
-      VInteger rhsInt = rhsIntR->getAsInteger(bitWidth, isSigned);             \
+      llvm::APSInt lhsInt = lhsIntR->getAsInteger(bitWidth, isSigned);         \
+      llvm::APSInt rhsInt = rhsIntR->getAsInteger(bitWidth, isSigned);         \
       retIntR->setValue(lhsInt operator rhsInt);                               \
     } else if (auto floatT = type.dyn_cast<ir::FloatT>()) {                    \
       VRegisterFloat *lhsFloatR = lhsReg->cast<VRegisterFloat>();              \
@@ -739,8 +809,8 @@ void unaryMinus(StackFrame *frame, ir::inst::Unary unary) {
     VRegisterInt *valIntR = valReg->cast<VRegisterInt>();
     VRegisterInt *retIntR = retReg->cast<VRegisterInt>();
 
-    VInteger valInt = valIntR->getAsInteger(bitWidth, isSigned);
-    VInteger retInt = -valInt;
+    llvm::APSInt valInt = valIntR->getAsInteger(bitWidth, isSigned);
+    llvm::APSInt retInt = -valInt;
     retIntR->setValue(retInt);
   } else if (type.isa<ir::FloatT>()) {
     VRegisterFloat *valFloatR = valReg->cast<VRegisterFloat>();
@@ -775,8 +845,8 @@ void unaryNegate(StackFrame *frame, ir::inst::Unary unary) {
   VRegisterInt *valIntR = valReg->cast<VRegisterInt>();
   VRegisterInt *retIntR = retReg->cast<VRegisterInt>();
 
-  VInteger valInt = valIntR->getAsInteger(bitWidth, isSigned);
-  VInteger retInt = ~valInt;
+  llvm::APSInt valInt = valIntR->getAsInteger(bitWidth, isSigned);
+  llvm::APSInt retInt = ~valInt;
   retIntR->setValue(retInt);
 }
 
@@ -860,7 +930,7 @@ void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
       return;
     } else if (auto destIntT = destType.dyn_cast<IntT>()) {
       VRegisterInt *srcIntR = srcReg->cast<VRegisterInt>();
-      VInteger srcInt =
+      llvm::APSInt srcInt =
           srcIntR->getAsInteger(destIntT.getBitWidth(), destIntT.isSigned());
       VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
       destIntR->setValue(srcInt);
@@ -869,7 +939,7 @@ void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
   } else if (auto srcIntT = srcType.dyn_cast<IntT>()) {
     VRegisterInt *srcIntR = srcReg->cast<VRegisterInt>();
     if (auto destIntT = destType.dyn_cast<IntT>()) {
-      VInteger srcInt =
+      llvm::APSInt srcInt =
           srcIntR->getAsInteger(destIntT.getBitWidth(), destIntT.isSigned());
       VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
       destIntR->setValue(srcInt);
@@ -882,8 +952,10 @@ void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
       auto srcInt =
           srcIntR->getAsInteger(srcIntT.getBitWidth(), srcIntT.isSigned());
 
-      VFloat destFloat(destFloatT.getBitWidth());
-      destFloat.castFrom(srcInt);
+      llvm::APFloat destFloat(*destFloatT.getSemantics());
+      bool isExact;
+      destFloat.convertFromAPInt(srcInt, srcIntT.isSigned(),
+                                 llvm::APFloat::rmNearestTiesToEven);
 
       VRegisterFloat *destFloatR = destReg->cast<VRegisterFloat>();
       destFloatR->setValue(destFloat);
@@ -891,20 +963,23 @@ void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
     }
   } else if (auto srcFloatT = srcType.dyn_cast<FloatT>()) {
     VRegisterFloat *srcFloatR = srcReg->cast<VRegisterFloat>();
-    VFloat srcFloat = srcFloatR->getAsFloat(srcFloatT.getBitWidth());
+    llvm::APFloat srcFloat = srcFloatR->getAsFloat(srcFloatT.getBitWidth());
 
     if (auto destIntT = destType.dyn_cast<IntT>()) {
-      VInteger destInt(destIntT.isSigned(), destIntT.getBitWidth());
-      destInt.castFrom(srcFloat);
+      llvm::APSInt destInt(destIntT.getBitWidth(), !destIntT.isSigned());
+
+      bool isExact;
+      srcFloat.convertToInteger(destInt, llvm::APFloat::rmTowardZero, &isExact);
 
       VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
       destIntR->setValue(destInt);
       return;
     } else if (auto destFloatT = destType.dyn_cast<FloatT>()) {
-      VFloat destFloat(destFloatT.getBitWidth());
-      destFloat.castFrom(srcFloat);
+      bool loseInfo;
+      srcFloat.convert(*destFloatT.getSemantics(),
+                       llvm::APFloat::rmNearestTiesToEven, &loseInfo);
       auto destFloatR = destReg->cast<VRegisterFloat>();
-      destFloatR->setValue(destFloat);
+      destFloatR->setValue(srcFloat);
       return;
     }
   }
@@ -1311,11 +1386,6 @@ Interpreter::call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
     frame->getReturnValues().clear();
     frame->getReturnValues().emplace_back(std::move(retR));
   }
-
-  IRPrintContext context(os);
-  func->registerAllInstInfo(context);
-  getCurrentFrame()->print(context);
-  printGlobalTable(llvm::errs());
 
   return std::move(frame->getReturnValues());
 }
