@@ -6,6 +6,7 @@
 #include "kecc/ir/Pass.h"
 #include "kecc/translate/TranslateContext.h"
 #include "kecc/utils/LogicalResult.h"
+#include "clang/Frontend/ASTUnit.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/SourceMgr.h"
 
@@ -102,6 +103,11 @@ public:
     return optPipeline;
   }
 
+  clang::ASTUnit *getASTUnit() const { return astUnit.get(); }
+  void setASTUnit(std::unique_ptr<clang::ASTUnit> unit) {
+    astUnit = std::move(unit);
+  }
+
 private:
   llvm::StringRef inputFileName;
   llvm::StringRef outputFileName;
@@ -112,6 +118,7 @@ private:
   std::unique_ptr<ir::IRContext> irContext;
   std::unique_ptr<TranslateContext> translateContext;
   std::unique_ptr<TempDirectory> tempDirectory;
+  std::unique_ptr<clang::ASTUnit> astUnit;
   CompileOptTable opt;
 };
 

@@ -2,6 +2,7 @@
 #define KECC_DRIVER_CONFIG_H
 
 #define CLANG_DIR "@CLANG@"
+#define GCC_DIR "@GCC@"
 #define QEMU_RISCV64_STATIC "@QEMU_RISCV64_STATIC@"
 
 #endif // KECC_DRIVER_CONFIG_H

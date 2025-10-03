@@ -361,6 +361,9 @@ PassResult CFGMerge::run(Module *module, Function *fun) {
   }
 
   for (Block *block : removedBlock) {
+    block->dropReferences();
+  }
+  for (Block *block : removedBlock) {
     module->removeBlock(block);
   }
 
@@ -390,8 +393,12 @@ PassResult CFGReach::run(Module *module, Function *fun) {
     }
   }
 
-  for (Block *block : unreachableBlock)
+  for (Block *block : unreachableBlock) {
+    block->dropReferences();
+  }
+  for (Block *block : unreachableBlock) {
     module->removeBlock(block);
+  }
 
   return !unreachableBlock.empty() ? PassResult::success() : PassResult::skip();
 }

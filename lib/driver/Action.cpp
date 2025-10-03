@@ -26,13 +26,23 @@ std::unique_ptr<ActionData>
 ParseCAction::execute(std::unique_ptr<ActionData> input) {
   auto &compilation = *getCompilation();
 
-  c::ParseAST parser(compilation.getInputSource(),
-                     compilation.getInputFileName());
-  auto result = parser.parse();
-  if (!result.succeeded())
-    return std::make_unique<OptArg>(utils::LogicalResult::failure(), nullptr);
+  if (!compilation.getASTUnit()) {
+    c::ParseAST parser(compilation.getInputSource(),
+                       compilation.getInputFileName(), llvm::errs(),
+                       ignoreWarnings);
+    auto result = parser.parse();
+    if (!result.succeeded())
+      return std::make_unique<OptArg>(utils::LogicalResult::failure(), nullptr);
 
-  auto astUnit = parser.getASTUnit();
+    clang::SourceManager &sm = parser.getASTUnit()->getSourceManager();
+    llvm::StringRef sourceData = sm.getBufferData(sm.getMainFileID());
+
+    auto newBuffer = llvm::MemoryBuffer::getMemBuffer(sourceData);
+    compilation.getSourceMgr().AddNewSourceBuffer(std::move(newBuffer), {});
+    compilation.setASTUnit(parser.releaseASTUnit());
+  }
+
+  clang::ASTUnit *astUnit = compilation.getASTUnit();
 
   c::ClangDiagManager diagManager(&astUnit->getDiagnostics(), astUnit);
 

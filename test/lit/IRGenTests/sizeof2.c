@@ -1,5 +1,5 @@
 // RUN: kecc %s -S -emit-kecc -print-stdout | FileCheck %s
-// RUN: keci %s --test-return-value=0
+// RUN: keci %s --test-return-value=1
 // clang-format off
 
 // CHECK: fun i32 @main () {
@@ -8,7 +8,7 @@
 // CHECK-NEXT:   allocations:
 // CHECK-NEXT:     %l0:u8:a
 // CHECK-NEXT:     %l1:u8:b
-// CHECK-NEXT:     %l2:[10 x i32]:c
+// CHECK-NEXT:     %l2:[10 x i64]:c
 // CHECK-NEXT:     %l3:i1
 // CHECK-NEXT:     %l4:i1
 int main() {
@@ -18,13 +18,13 @@ int main() {
   // CHECK-NEXT:   %b0:i1:unit = store 5:u8 %l1:u8*
   long c[10];
 
-  // CHECK-NEXT:   %b0:i2:i1 = cmp eq 1:u32 1:u32
+  // CHECK-NEXT:   %b0:i2:i1 = cmp eq 1:u64 1:u64
   // CHECK-NEXT:   %b0:i3:i32 = typecast %b0:i2:i1 to i32
   // CHECK-NEXT:   %b0:i4:i1 = cmp ne %b0:i3:i32 0:i32
   // CHECK-NEXT:   br %b0:i4:i1, b1(), b2()
 
   // CHECK-LABEL: block b1:
-  // CHECK-NEXT:   %b1:i0:i1 = cmp eq 4:u32 4:u32
+  // CHECK-NEXT:   %b1:i0:i1 = cmp eq 4:u64 4:u64
   // CHECK-NEXT:   %b1:i1:i32 = typecast %b1:i0:i1 to i32
   // CHECK-NEXT:   %b1:i2:i1 = cmp ne %b1:i1:i32 0:i32
   // CHECK-NEXT:   %b1:i3:unit = store %b1:i2:i1 %l3:i1*
@@ -41,7 +41,7 @@ int main() {
   // CHECK-NEXT:   br %b3:i2:i1, b4(), b5()
 
   // CHECK-LABEL: block b4:
-  // CHECK-NEXT:   %b4:i0:i1 = cmp eq 40:u32 80:u32 
+  // CHECK-NEXT:   %b4:i0:i1 = cmp eq 80:u64 80:u64
   // CHECK-NEXT:   %b4:i1:i32 = typecast %b4:i0:i1 to i32
   // CHECK-NEXT:   %b4:i2:i1 = cmp ne %b4:i1:i32 0:i32
   // CHECK-NEXT:   %b4:i3:unit = store %b4:i2:i1 %l4:i1*

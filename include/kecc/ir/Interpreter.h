@@ -7,8 +7,6 @@
 #include "kecc/ir/Module.h"
 #include "kecc/ir/Value.h"
 #include "kecc/utils/PointerCastBase.h"
-#include "llvm/ADT/APFloat.h"
-#include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/MemAlloc.h"
@@ -16,6 +14,122 @@
 #include <variant>
 
 namespace kecc::ir {
+
+class VFloat;
+
+class VInteger {
+public:
+  VInteger(std::uint64_t value, bool isSigned, unsigned bitWidth)
+      : value(value), isSigned(isSigned), bitWidth(bitWidth) {
+    createValue();
+  }
+  VInteger(bool isSigned, unsigned bitWidth)
+      : value(0), isSigned(isSigned), bitWidth(bitWidth) {}
+
+  std::uint64_t getValue() const { return value; }
+  bool getIsSigned() const { return isSigned; }
+  unsigned getBitWidth() const { return bitWidth; }
+
+  VInteger operator+(const VInteger &other) const;
+  VInteger operator-(const VInteger &other) const;
+  VInteger operator*(const VInteger &other) const;
+  VInteger operator/(const VInteger &other) const;
+  VInteger operator%(const VInteger &other) const;
+  VInteger operator&(const VInteger &other) const;
+  VInteger operator|(const VInteger &other) const;
+  VInteger operator^(const VInteger &other) const;
+  VInteger operator<<(const VInteger &other) const;
+  VInteger operator>>(const VInteger &other) const;
+
+  VInteger operator<(const VInteger &other) const;
+  VInteger operator<=(const VInteger &other) const;
+  VInteger operator>(const VInteger &other) const;
+  VInteger operator>=(const VInteger &other) const;
+  VInteger operator==(const VInteger &other) const;
+  VInteger operator!=(const VInteger &other) const;
+  VInteger operator!() const;
+  VInteger operator~() const;
+  VInteger operator-() const;
+  VInteger operator+() const;
+
+  void print(llvm::raw_ostream &os) const;
+
+  void castFrom(const VFloat &other);
+  void castFrom(const VInteger &other);
+
+  bool isSameType(const VInteger &other) const {
+    if (bitWidth == 1 && other.bitWidth == 1)
+      return true;
+    return isSigned == other.isSigned && bitWidth == other.bitWidth;
+  }
+
+  friend llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
+                                       const VInteger &v) {
+    v.print(os);
+    return os;
+  }
+
+private:
+  friend class VFloat;
+  void createValue();
+
+  std::uint64_t value;
+  bool isSigned;
+  unsigned bitWidth;
+};
+
+class VFloat {
+public:
+  VFloat(std::uint64_t value, int bitWidth)
+      : value(value), bitWidth(bitWidth) {}
+  VFloat(int bitWidth) : value(0), bitWidth(bitWidth) {}
+
+  VFloat(float value);
+  VFloat(double value);
+
+  std::uint64_t getValue() const { return value; }
+  int getBitWidth() const { return bitWidth; }
+
+  float getAsFloat() const;
+  double getAsDouble() const;
+
+  VFloat operator+(const VFloat &other) const;
+  VFloat operator-(const VFloat &other) const;
+  VFloat operator*(const VFloat &other) const;
+  VFloat operator/(const VFloat &other) const;
+
+  VInteger operator<(const VFloat &other) const;
+  VInteger operator<=(const VFloat &other) const;
+  VInteger operator>(const VFloat &other) const;
+  VInteger operator>=(const VFloat &other) const;
+  VInteger operator==(const VFloat &other) const;
+  VInteger operator!=(const VFloat &other) const;
+  VFloat operator-() const;
+  VFloat operator+() const;
+  VInteger operator!() const;
+
+  void print(llvm::raw_ostream &os) const;
+
+  void castFrom(const VInteger &other);
+  void castFrom(const VFloat &other);
+  static VFloat fromAPFloat(llvm::APFloat apFloat);
+
+  bool isSameType(const VFloat &other) const {
+    return bitWidth == other.bitWidth;
+  }
+
+  bool isZero() const;
+
+  friend llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const VFloat &v) {
+    v.print(os);
+    return os;
+  }
+
+private:
+  friend class VInteger;
+  std::uint64_t value;
+  int bitWidth;
+};
 
 class VRegister : public utils::PointerCastBase<VRegister> {
 public:
@@ -68,10 +182,10 @@ public:
 
   std::uint64_t getValue() const { return value; }
   void setValue(std::uint64_t v) { value = v; }
-  void setValue(llvm::APSInt v);
+  void setValue(VInteger v);
   void setValue(VMemory v);
 
-  llvm::APSInt getAsInteger(unsigned bitWidth, bool isSigned) const;
+  VInteger getAsInteger(unsigned bitWidth, bool isSigned) const;
   VMemory getAsMemory() const;
 
   static bool classof(const VRegister *v) { return v->getKind() == Kind::Int; }
@@ -94,10 +208,10 @@ public:
   VRegisterFloat(std::uint64_t v) : VRegister(Kind::Float), value(v) {}
 
   std::uint64_t getValue() const { return value; }
-  void setValue(llvm::APFloat v);
+  void setValue(VFloat v);
   void setValue(std::uint64_t v);
 
-  llvm::APFloat getAsFloat(int bitwidth) const;
+  VFloat getAsFloat(int bitwidth) const;
   void print(llvm::raw_ostream &os, Type type,
              StructSizeAnalysis *analysis) const override;
   void mv(VRegister *src) override;
@@ -312,7 +426,7 @@ private:
   Module *module;
   StructSizeAnalysis *structSizeAnalysis;
   ir::InstructionStorage *programCounter = nullptr;
-  size_t stackOverflowLimit = 1024;
+  size_t stackOverflowLimit = 24;
 };
 
 } // namespace kecc::ir

@@ -19,29 +19,49 @@ static ir::Value convertToBoolean(ir::IRBuilder &builder, ir::Value value,
                                   llvm::SMRange range) {
   ir::Type valueT = value.getType();
   if (!valueT.isBoolean()) {
-    ir::IntT intT;
-    if (valueT.isa<ir::IntT>())
-      intT = valueT.cast<ir::IntT>();
-    else if (valueT.isa<ir::PointerT>()) {
-      intT =
-          ir::IntT::get(builder.getContext(),
-                        builder.getContext()->getArchitectureBitSize(), false);
-      value = builder.create<ir::inst::TypeCast>(range, value, intT);
-    } else
-      llvm_unreachable("Unsupported condition type");
+    if (valueT.isa<ir::FloatT>()) {
+      ir::FloatT floatT = valueT.cast<ir::FloatT>();
+      ir::Value zero;
+      {
+        ir::IRBuilder::InsertionGuard guard(builder);
+        builder.setInsertionPoint(
+            builder.getCurrentBlock()->getParentIR()->getConstantBlock());
+        zero = builder.create<ir::inst::Constant>(
+            range,
+            ir::ConstantFloatAttr::get(
+                builder.getContext(),
+                llvm::APFloat::getZero(floatT.getBitWidth() == 32
+                                           ? llvm::APFloat::IEEEsingle()
+                                           : llvm::APFloat::IEEEdouble())));
+      }
+      value = builder.create<ir::inst::Binary>(range, value, zero,
+                                               ir::inst::Binary::Ne);
 
-    ir::Value zero;
-    {
-      ir::IRBuilder::InsertionGuard guard(builder);
-      builder.setInsertionPoint(
-          builder.getCurrentBlock()->getParentIR()->getConstantBlock());
-      zero = builder.create<ir::inst::Constant>(
-          range, ir::ConstantIntAttr::get(builder.getContext(), 0,
-                                          intT.getBitWidth(), intT.isSigned()));
+    } else {
+      ir::IntT intT;
+      if (valueT.isa<ir::IntT>())
+        intT = valueT.cast<ir::IntT>();
+      else if (valueT.isa<ir::PointerT>()) {
+        intT = ir::IntT::get(builder.getContext(),
+                             builder.getContext()->getArchitectureBitSize(),
+                             false);
+        value = builder.create<ir::inst::TypeCast>(range, value, intT);
+      }
+
+      ir::Value zero;
+      {
+        ir::IRBuilder::InsertionGuard guard(builder);
+        builder.setInsertionPoint(
+            builder.getCurrentBlock()->getParentIR()->getConstantBlock());
+        zero = builder.create<ir::inst::Constant>(
+            range,
+            ir::ConstantIntAttr::get(builder.getContext(), 0,
+                                     intT.getBitWidth(), intT.isSigned()));
+      }
+
+      value = builder.create<ir::inst::Binary>(range, value, zero,
+                                               ir::inst::Binary::Ne);
     }
-
-    value = builder.create<ir::inst::Binary>(range, value, zero,
-                                             ir::inst::Binary::Ne);
   }
   return value;
 }
@@ -123,15 +143,13 @@ void RecordDeclManager::updateStructSizeAndFields(
 
   for (const auto *field : decl->fields()) {
     llvm::StringRef fieldName = field->getName();
-    if (fieldName.empty()) {
-      assert(field->isAnonymousStructOrUnion() &&
-             "Unnamed field must be anonymous struct");
-      auto structDecl = field->getType()->getAsRecordDecl();
+    if (auto structDecl = field->getType()->getAsRecordDecl()) {
       assert(structDecl && "Anonymous struct/union without declaration");
       assert(structDecl->isCompleteDefinition() &&
              "Anonymous struct/union without definition");
       updateStructSizeAndFields(irgen, structDecl, typeConverter);
     }
+
     ir::Type fieldType =
         typeConverter.VisitQualType(field->getType(), field->getLocation());
     assert(fieldType && "Struct field type conversion failed");
@@ -204,6 +222,9 @@ void IRGenerator::VisitVarDecl(const VarDecl *D) {
 }
 
 void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
+  if (D->isImplicit())
+    return;
+
   auto declType =
       typeConverter.VisitQualType(D->getType(), D->getTypeSpecStartLoc());
   assert(declType && "Function type conversion failed");
@@ -224,7 +245,8 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
 
   auto funcPointerT = ir::PointerT::get(ctx, funcT);
   assert(env.isGlobalScope() && "Function declaration in non-global scope");
-  {
+  if (!env.lookup(name)) {
+    // not yet declared
     ir::IRBuilder::InsertionGuard guard(builder);
     builder.setInsertionPoint(ir->getConstantBlock());
     auto funcConst = builder.create<ir::inst::Constant>(
@@ -233,9 +255,11 @@ void IRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
     env.insert(name, funcConst);
   }
 
-  D = D->getDefinition();
-  if (!D)
-    return; // Function declaration without definition
+  auto funcDef = D->getDefinition();
+  if (!funcDef || funcDef != D)
+    return; // Function declaration without definition or forward declaration
+
+  D = funcDef;
 
   currentFunctionData = std::make_unique<FunctionData>(func, D);
 
@@ -524,7 +548,6 @@ void IRGenerator::VisitSwitchStmt(const SwitchStmt *S) {
     bool first = true;
     // we don't add scope here because switch doesn't introduce a new scope
     for (const Stmt *stmt : body->body()) {
-      llvm::errs() << stmt->getStmtClassName() << '\n';
       if (const clang::CaseStmt *caseStmt = llvm::dyn_cast<CaseStmt>(stmt)) {
         ir::Value caseV = EvaluateExpr(caseStmt->getLHS());
         assert(caseV && "Case value generation failed");
@@ -898,8 +921,11 @@ GlobalInitGenerator::VisitCastExpr(const CastExpr *expr) {
     assert(destType.isa<ir::IntT>() && "Integer type expected");
     auto destIntT = destType.cast<ir::IntT>();
 
-    llvm::APSInt destValue = srcValue.extOrTrunc(destIntT.getBitWidth());
-    destValue.setIsSigned(destIntT.isSigned());
+    llvm::APInt destAPInt(destIntT.getBitWidth(),
+                          srcValue.isSigned() ? srcValue.getSExtValue()
+                                              : srcValue.getZExtValue(),
+                          srcValue.isSigned());
+    llvm::APSInt destValue = llvm::APSInt(destAPInt, srcValue.isSigned());
     return {destValue, expr->getSourceRange()};
   }
 }
@@ -1464,11 +1490,55 @@ ir::Value ExprEvaluator::VisitBinSubOp(const BinaryOperator *expr) {
   }
   return resultV;
 }
+
+static ir::Type getShiftCastType(ir::IntT lhsT, ir::IntT rhsT) {
+  if (lhsT.getBitWidth() < 32 && rhsT.getBitWidth() < 32)
+    return ir::IntT::get(lhsT.getContext(), 32, true);
+
+  return lhsT;
+}
+
+#define SHIFT_IMPL(kind, name)                                                 \
+  ir::Value ExprEvaluator::VisitBin##name##Op(const BinaryOperator *expr) {    \
+    ir::Value lhsV = Visit(expr->getLHS());                                    \
+    assert(lhsV && "LHS expression generation failed");                        \
+    ir::Value rhsV = Visit(expr->getRHS());                                    \
+    assert(rhsV && "RHS expression generation failed");                        \
+    assert(lhsV.getType().isa<ir::IntT>() &&                                   \
+           "Shift operator only supports ints");                               \
+    assert(rhsV.getType().isa<ir::IntT>() &&                                   \
+           "Shift operator only supports ints");                               \
+                                                                               \
+    auto lhsT = lhsV.getType().cast<ir::IntT>();                               \
+    auto rhsT = rhsV.getType().cast<ir::IntT>();                               \
+    auto castT = getShiftCastType(lhsT, rhsT);                                 \
+    if (lhsT != castT) {                                                       \
+      lhsV = builder.create<ir::inst::TypeCast>(                               \
+          irgen->convertRange(expr->getLHS()->getSourceRange()), lhsV, castT); \
+    }                                                                          \
+    if (rhsT != castT) {                                                       \
+      rhsV = builder.create<ir::inst::TypeCast>(                               \
+          irgen->convertRange(expr->getRHS()->getSourceRange()), rhsV, castT); \
+    }                                                                          \
+                                                                               \
+    ir::Value resultV = builder.create<ir::inst::Binary>(                      \
+        irgen->convertRange(expr->getSourceRange()), lhsV, rhsV,               \
+        ir::inst::Binary::kind);                                               \
+                                                                               \
+    auto resultT = resultV.getType();                                          \
+    auto exprT = irgen->typeConverter.VisitQualType(expr->getType(),           \
+                                                    expr->getBeginLoc());      \
+    if (resultT != exprT.constCanonicalize()) {                                \
+      resultV = builder.create<ir::inst::TypeCast>(                            \
+          irgen->convertRange(expr->getSourceRange()), resultV, exprT);        \
+    }                                                                          \
+    return resultV;                                                            \
+  }
 BINARY_IMPL(Mul, Mul)
 BINARY_IMPL(Div, Div)
 BINARY_IMPL(Mod, Rem)
-BINARY_IMPL(Shl, Shl)
-BINARY_IMPL(Shr, Shr)
+SHIFT_IMPL(Shl, Shl)
+SHIFT_IMPL(Shr, Shr)
 
 BINARY_IMPL(Lt, LT)
 BINARY_IMPL(Gt, GT)
@@ -1482,6 +1552,7 @@ BINARY_IMPL(BitXor, Xor)
 BINARY_IMPL(BitOr, Or)
 
 #undef BINARY_IMPL
+#undef SHIFT_IMPL
 
 ir::Value ExprEvaluator::VisitBinLAndOp(const BinaryOperator *expr) {
   ir::Value lhsV = Visit(expr->getLHS());
@@ -1685,9 +1756,10 @@ static ir::Value castConstant(ir::IRBuilder &builder, llvm::SMRange range,
                                                 floatValue);
             } else if (auto targetIntT = targetType.dyn_cast<ir::IntT>()) {
               bool isExact;
-              llvm::APSInt intValue;
+              llvm::APSInt intValue(targetIntT.getBitWidth(),
+                                    !targetIntT.isSigned());
               auto opStatus = floatAttr.getValue().convertToInteger(
-                  intValue, llvm::APFloat::rmNearestTiesToEven, &isExact);
+                  intValue, llvm::APFloat::rmTowardZero, &isExact);
               return ir::ConstantIntAttr::get(
                   builder.getContext(),
                   intValue.isSigned() ? intValue.getSExtValue()
@@ -1826,19 +1898,21 @@ ir::Value ExprEvaluator::VisitUnNotOp(const UnaryOperator *expr) {
 ir::Value ExprEvaluator::VisitUnLNotOp(const UnaryOperator *expr) {
   auto subV = Visit(expr->getSubExpr());
   assert(subV && "Sub-expression in bitwise not is invalid");
-  assert(subV.getType().isa<ir::IntT>() &&
-         "Bitwise not only supports integers");
-  auto subT = subV.getType().cast<ir::IntT>();
-  if (!subT.isBoolean()) {
-    auto zero = getIntegerValue(0, subT);
-    subV = builder.create<ir::inst::Binary>(
-        irgen->convertRange(expr->getSubExpr()->getSourceRange()), subV, zero,
-        ir::inst::Binary::Ne);
-  }
+
+  subV = convertToBoolean(
+      builder, subV, irgen->convertRange(expr->getSubExpr()->getSourceRange()));
   auto boolOne = getIntegerValue(1, ir::IntT::get(irgen->ctx, 1, true));
-  return builder.create<ir::inst::Binary>(
+  ir::Value resultV = builder.create<ir::inst::Binary>(
       irgen->convertRange(expr->getSourceRange()), subV, boolOne,
       ir::inst::Binary::BitXor);
+
+  auto resultT =
+      irgen->typeConverter.VisitQualType(expr->getType(), expr->getBeginLoc());
+  if (resultV.getType() != resultT.constCanonicalize()) {
+    resultV = builder.create<ir::inst::TypeCast>(
+        irgen->convertRange(expr->getSourceRange()), resultV, resultT);
+  }
+  return resultV;
 }
 
 ir::Value ExprEvaluator::VisitUnPreIncOp(const UnaryOperator *expr) {
@@ -2428,7 +2502,7 @@ ir::Value ExprEvaluator::VisitCallExpr(const CallExpr *expr) {
   for (size_t i = 0; i < expr->getNumArgs(); ++i) {
     ir::Value argV = Visit(expr->getArg(i));
     assert(argV && "Argument expression generation failed");
-    assert(argV.getType() == funcT.getArgTypes()[i] &&
+    assert(argV.getType() == funcT.getArgTypes()[i].constCanonicalize() &&
            "Argument type must match parameter type");
     argVs.emplace_back(argV);
   }

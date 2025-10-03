@@ -29,48 +29,63 @@ struct FuzzOptions {
       llvm::cl::desc(
           "Number of tests to run. 0 means infinite. Negative means error"),
       llvm::cl::init(0),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::cl::alias numTestsA{
       "n",
       llvm::cl::desc("Alias for -num"),
       llvm::cl::aliasopt(numTests),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::cl::opt<int> startSeed{
       "seed",
-      "Provide seed of fuzz generation",
+      llvm::cl::desc("Provide seed of fuzz generation"),
       llvm::cl::init(-1),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::cl::alias startSeedA{
       "s",
       llvm::cl::desc("Alias for -seed"),
       llvm::cl::aliasopt(startSeed),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::cl::opt<bool> reduce{
       "reduce",
       llvm::cl::desc("Reducing input file"),
       llvm::cl::init(false),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::cl::alias reduceA{
       "r",
       llvm::cl::desc("Alias for -reduce"),
       llvm::cl::aliasopt(reduce),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::cl::opt<bool> easy{
       "easy",
       llvm::cl::desc("Generate easier programs"),
       llvm::cl::init(false),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::cl::opt<bool> clangAnalyze{
       "clang-analyze",
       llvm::cl::desc("Run clang static analyzer for reducing."),
       llvm::cl::init(false),
+      llvm::cl::cat(FuzzCategory),
+  };
+
+  llvm::cl::opt<bool> testInterpreterOnly{
+      "test-interp-only",
+      llvm::cl::desc("Test only the interpreter."),
+      llvm::cl::init(false),
+      llvm::cl::cat(FuzzCategory),
   };
 
   llvm::DenseMap<llvm::StringRef, llvm::StringRef> replaceDict{
@@ -84,7 +99,12 @@ struct FuzzOptions {
       {R"(__attribute__\s*\(\(.*\)\))", ""},
       {"_Float128",                     "double"},
       {"long double",                   "double"},
-      {R"((\+[0-9^FL]*)L)",             R"(\1)"},
+      {"__Float32x4_t",                 "double"},
+      {"__Float64x2_t",                 "double"},
+      {"__SVFloat32_t",                 "double"},
+      {"__SVFloat64_t",                 "double"},
+      {"__SVBool_t",                    "int"},
+      {R"((\+[0-9^FL]*)L)",             "$1"},
       {"union",                         "struct"},
       {R"(enum[\w\s]*\{[^\}]*\};)",     ""},
       {R"(typedef enum[\w\s]*\{[^;]*;[\s_A-Z]*;)",     ""},
@@ -121,7 +141,7 @@ std::string generate(int seed, bool easy, llvm::StringRef outputPath) {
   llvm::SmallVector<llvm::StringRef> args{
       CSMITH_BIN_PATH,  "--no-argc",    "--no-arrays",        "--no-jumps",
       "--no-pointers",  "--no-structs", "--no-unions",        "--float",
-      "--strict-float", "-seed",        std::to_string(seed),
+      "--strict-float", "--seed",       std::to_string(seed),
   };
 
   if (easy) {
@@ -158,19 +178,24 @@ std::string polish(llvm::StringRef code, llvm::StringRef outputPath) {
     os << code;
   }
 
-  llvm::SmallVector<llvm::StringRef> clangArgs{
-      CLANG_DIR, outputPath, "-I", CSMITH_INCLUDE_PATH,
-      "-E",      "-P",       "-o", outputPath,
+  TempDirectory tempDir;
+  llvm::SmallVector<char> tempFile;
+  llvm::sys::path::append(tempFile, tempDir.getDirectory(), "temp.c");
+  llvm::StringRef tempFileRef{tempFile.data(), tempFile.size()};
+
+  llvm::SmallVector<llvm::StringRef> gccArgs = {
+      GCC_BIN_PATH, outputPath, "-I", CSMITH_INCLUDE_PATH,
+      "-E",         "-P",       "-o", tempFileRef,
   };
 
-  auto clangReturn = llvm::sys::ExecuteAndWait(CLANG_DIR, clangArgs);
+  auto clangReturn = llvm::sys::ExecuteAndWait(GCC_BIN_PATH, gccArgs);
   if (clangReturn != 0) {
-    llvm::errs() << "Error: clang failed with return code " << clangReturn
+    llvm::errs() << "Error: gcc failed with return code " << clangReturn
                  << '\n';
     return "";
   }
 
-  auto fileBuffer = llvm::MemoryBuffer::getFile(outputPath);
+  auto fileBuffer = llvm::MemoryBuffer::getFile(tempFileRef);
   if (fileBuffer.getError()) {
     llvm::errs() << "Error: could not read preprocessed file\n";
     return "";
@@ -234,6 +259,10 @@ int fuzz(llvm::StringRef testDir, int numTests, bool easy) {
         llvm::StringRef{testP.data(), testP.size()},
     };
 
+    if (cl::fuzzOptions->testInterpreterOnly) {
+      fuzzArgs.push_back("--test-interp-only");
+    }
+
     auto fuzzReturn = llvm::sys::ExecuteAndWait(FUZZ_BIN_PATH, fuzzArgs,
                                                 std::nullopt, std::nullopt, 60);
     if (fuzzReturn == SKIP_TEST) {
@@ -266,10 +295,14 @@ std::string makeFuzzErrmsg(llvm::StringRef testDir) {
       llvm::StringRef{testP.data(), testP.size()},
   };
 
+  if (cl::fuzzOptions->testInterpreterOnly) {
+    fuzzArgs.push_back("--test-interp-only");
+  }
+
   auto fuzzReturn =
       llvm::sys::ExecuteAndWait(FUZZ_BIN_PATH, fuzzArgs, std::nullopt,
                                 {std::nullopt, stdOutRef, stdOutRef}, 60);
-  llvm::StringRef errMsg = "panicked";
+  llvm::StringRef errMsg = "Unreachable";
   if (fuzzReturn != 0) {
     auto fileBuffer = llvm::MemoryBuffer::getFile(stdOutRef);
     if (fileBuffer.getError()) {
@@ -277,8 +310,12 @@ std::string makeFuzzErrmsg(llvm::StringRef testDir) {
       return "";
     }
     auto output = fileBuffer.get()->getBuffer();
-    if (output.find("assert") == llvm::StringRef::npos) {
-      errMsg = "assertion failed";
+    if (output.find("Assertion") == llvm::StringRef::npos) {
+      errMsg = "Assertion";
+    } else if (output.find("segmentation") != llvm::StringRef::npos) {
+      errMsg = "segmentation";
+    } else if (output.find("match")) {
+      errMsg = "match";
     }
   }
   return errMsg.str();
@@ -302,7 +339,8 @@ utils::LogicalResult makeReduceCriteria(llvm::StringRef testDir,
   llvm::raw_fd_ostream os(
       llvm::StringRef(criteriaPath.data(), criteriaPath.size()), ec);
   if (ec) {
-    llvm::errs() << "Error: could not create reduce criteria file\n";
+    llvm::errs() << "Error: could not create reduce criteria file: "
+                 << ec.message() << "\n";
     return utils::LogicalResult::failure();
   }
 
@@ -315,22 +353,22 @@ utils::LogicalResult makeReduceCriteria(llvm::StringRef testDir,
     }
 
     os << templateStr.slice(pos, nextPos);
-    templateStr = templateStr.drop_front(nextPos);
-    if (templateStr.starts_with("$TEST_DIR")) {
+    auto dropped = templateStr.drop_front(nextPos);
+    if (dropped.starts_with("$TEST_DIR")) {
       pos = nextPos + 9;
       os << testDir;
-    } else if (templateStr.starts_with("$REDUCED_C")) {
+    } else if (dropped.starts_with("$REDUCED_C")) {
       pos = nextPos + 10;
       llvm::SmallVector<char> reducedC;
       llvm::sys::path::append(reducedC, testDir, "test_reduced.c");
       os << llvm::StringRef{reducedC.data(), reducedC.size()};
-    } else if (templateStr.starts_with("$FUZZ_BIN")) {
-      pos = nextPos + 8;
+    } else if (dropped.starts_with("$FUZZ_BIN")) {
+      pos = nextPos + 9;
       os << FUZZ_BIN_PATH;
-    } else if (templateStr.starts_with("$FUZZ_ERRMSG")) {
+    } else if (dropped.starts_with("$FUZZ_ERRMSG")) {
       pos = nextPos + 12;
       os << errMsg;
-    } else if (templateStr.starts_with("$CLANG_ANALYZE")) {
+    } else if (dropped.starts_with("$CLANG_ANALYZE")) {
       pos = nextPos + 15;
       if (clangAnalyze)
         os << "true";
@@ -344,7 +382,8 @@ utils::LogicalResult makeReduceCriteria(llvm::StringRef testDir,
 
   ec = llvm::sys::fs::setPermissions(
       llvm::StringRef{criteriaPath.data(), criteriaPath.size()},
-      llvm::sys::fs::perms::owner_exe);
+      llvm::sys::fs::perms::owner_read | llvm::sys::fs::perms::owner_write |
+          llvm::sys::fs::perms::owner_exe);
   if (ec) {
     llvm::errs() << "Error: could not set execute permission to reduce "
                     "criteria file\n";
@@ -426,10 +465,15 @@ int fuzz_test_main(int argc, char **argv) {
   if (cl::fuzzOptions->startSeed != -1)
     srand(cl::fuzzOptions->startSeed);
   else
-    llvm::outs() << "Use default random seed";
+    llvm::outs() << "Use default random seed\n";
 
   llvm::SmallVector<char> fuzzDir;
-  llvm::sys::path::append(fuzzDir, TEST_LOG_DIR, "fuzz");
+  llvm::sys::path::append(fuzzDir, TEST_LOG_DIR);
+  auto ec = llvm::sys::fs::create_directories(fuzzDir);
+  if (ec) {
+    llvm::errs() << "Error: could not create test log directory\n";
+    return 1;
+  }
 
   if (cl::fuzzOptions->reduce) {
     return creduce(llvm::StringRef{fuzzDir.data(), fuzzDir.size()},

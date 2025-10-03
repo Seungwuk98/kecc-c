@@ -233,12 +233,16 @@ private:
 class ParseCAction
     : public ActionTemplate<CompilationAction, ActionData, OptArg> {
 public:
-  ParseCAction(Compilation *compilation) : Base(compilation) {}
+  ParseCAction(Compilation *compilation, bool ignoreWarnings = false)
+      : Base(compilation), ignoreWarnings(ignoreWarnings) {}
 
   static llvm::StringRef getNameStr() { return "Parse C source"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
 
   std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override;
+
+private:
+  bool ignoreWarnings;
 };
 
 class ParseIRAction
@@ -417,6 +421,12 @@ public:
     }
   }
 
+  void addArguments(llvm::ArrayRef<llvm::StringRef> args) {
+    for (auto arg : args) {
+      addArgument(arg);
+    }
+  }
+
   int execute() {
     llvm::SmallVector<llvm::StringRef> argRefs = llvm::map_to_vector(
         arguments, [](const std::string &s) { return llvm::StringRef(s); });
@@ -433,8 +443,10 @@ class CompileToObjAction
       public ClangExecutor {
 public:
   CompileToObjAction(llvm::StringRef inputFileName,
-                     llvm::StringRef outputFileName)
-      : inputFileName(inputFileName), outputFileName(outputFileName) {}
+                     llvm::StringRef outputFileName,
+                     llvm::StringRef triple = "riscv64-unknown-linux-gnu")
+      : inputFileName(inputFileName), outputFileName(outputFileName),
+        triple(triple) {}
 
   static llvm::StringRef getNameStr() { return "Compile to Object"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
@@ -443,7 +455,7 @@ public:
     addArgument("-c");
     addArgument("-o", outputFileName);
     addArgument(inputFileName);
-    addArgument("--target", "riscv64-unknown-linux-gnu");
+    addArgument("--target", triple);
 
     int returnCode = ClangExecutor::execute();
     if (returnCode != 0)
@@ -457,6 +469,7 @@ public:
 private:
   llvm::StringRef inputFileName;
   llvm::StringRef outputFileName;
+  std::string triple;
 };
 
 class CompileToExeAction
@@ -464,8 +477,11 @@ class CompileToExeAction
       public ClangExecutor {
 public:
   CompileToExeAction(llvm::ArrayRef<llvm::StringRef> inputFileNames,
-                     llvm::StringRef outputFileName)
-      : inputFileNames(inputFileNames), outputFileName(outputFileName) {}
+                     llvm::StringRef outputFileName,
+                     llvm::ArrayRef<llvm::StringRef> extraArgs = {},
+                     llvm::StringRef triple = "riscv64-unknown-linux-gnu")
+      : inputFileNames(inputFileNames), outputFileName(outputFileName),
+        extraArgs(extraArgs), triple(triple) {}
 
   static llvm::StringRef getNameStr() { return "Compile to Executable"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
@@ -477,8 +493,10 @@ public:
       addArgument(inputFileName);
     }
 
-    addArgument("--target", "riscv64-unknown-linux-gnu");
+    addArgument("--target", triple);
     addArgument("-fuse-ld", "lld");
+    if (!extraArgs.empty())
+      addArguments(extraArgs);
 
     int returnCode = ClangExecutor::execute();
     if (returnCode != 0)
@@ -491,19 +509,92 @@ public:
 private:
   llvm::SmallVector<llvm::StringRef> inputFileNames;
   llvm::StringRef outputFileName;
+  llvm::SmallVector<llvm::StringRef> extraArgs;
+  std::string triple;
+};
+
+class CompileToExeGccAction
+    : public ActionTemplate<Action, ActionData, ReturnCodeResult> {
+public:
+  CompileToExeGccAction(llvm::ArrayRef<llvm::StringRef> inputFileNames,
+                        llvm::StringRef outputFileName,
+                        llvm::ArrayRef<llvm::StringRef> extraArgs = {})
+      : inputFileNames(inputFileNames), outputFileName(outputFileName),
+        extraArgs(extraArgs) {}
+
+  static llvm::StringRef getNameStr() { return "Compile to Executable by GCC"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
+    llvm::SmallVector<llvm::StringRef> gccArgs{GCC_DIR, "-o", outputFileName};
+    for (auto inputFileName : inputFileNames) {
+      gccArgs.push_back(inputFileName);
+    }
+    if (!extraArgs.empty())
+      gccArgs.append(extraArgs.begin(), extraArgs.end());
+
+    int returnCode = llvm::sys::ExecuteAndWait(GCC_DIR, gccArgs);
+    if (returnCode != 0)
+      return std::make_unique<ReturnCodeResult>(utils::LogicalResult::failure(),
+                                                returnCode);
+    return std::make_unique<ReturnCodeResult>(utils::LogicalResult::success(),
+                                              returnCode);
+  }
+
+private:
+  llvm::SmallVector<llvm::StringRef> inputFileNames;
+  llvm::StringRef outputFileName;
+  llvm::SmallVector<llvm::StringRef> extraArgs;
+};
+
+class ExecuteBinAction
+    : public ActionTemplate<Action, ActionData, ReturnCodeResult> {
+public:
+  ExecuteBinAction(llvm::StringRef binPath,
+                   llvm::ArrayRef<llvm::StringRef> args = {},
+                   size_t timeout = 0)
+      : binPath(binPath), args(args), timeout(timeout) {}
+
+  static llvm::StringRef getNameStr() { return "Execute Binary"; }
+  llvm::StringRef getActionName() const override { return getNameStr(); }
+
+  std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
+    llvm::SmallVector<llvm::StringRef> execArgs{binPath};
+    if (!args.empty())
+      execArgs.append(args.begin(), args.end());
+    int returnCode = llvm::sys::ExecuteAndWait(binPath, execArgs, std::nullopt,
+                                               std::nullopt, timeout);
+    if (returnCode < 0)
+      return std::make_unique<ReturnCodeResult>(utils::LogicalResult::failure(),
+                                                returnCode);
+    return std::make_unique<ReturnCodeResult>(utils::LogicalResult::success(),
+                                              returnCode);
+  }
+
+private:
+  llvm::StringRef binPath;
+  llvm::SmallVector<llvm::StringRef> args;
+  size_t timeout;
 };
 
 class ExecuteExeByQemuAction
     : public ActionTemplate<Action, ActionData, ReturnCodeResult> {
 public:
-  ExecuteExeByQemuAction(llvm::StringRef qemuPath, llvm::StringRef exePath)
+  ExecuteExeByQemuAction(llvm::StringRef qemuPath, llvm::StringRef exePath,
+                         llvm::ArrayRef<llvm::StringRef> args = {})
       : qemuPath(qemuPath), exePath(exePath) {}
 
   static llvm::StringRef getNameStr() { return "Execute Executable by QEMU"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
 
   std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
-    int returnCode = llvm::sys::ExecuteAndWait(qemuPath, {qemuPath, exePath});
+    llvm::SmallVector<llvm::StringRef> qemuArgs{qemuPath, exePath};
+    if (!args.empty())
+      qemuArgs.append(args.begin(), args.end());
+    int returnCode = llvm::sys::ExecuteAndWait(qemuPath, qemuArgs);
+    if (returnCode < 0)
+      return std::make_unique<ReturnCodeResult>(utils::LogicalResult::failure(),
+                                                returnCode);
     return std::make_unique<ReturnCodeResult>(utils::LogicalResult::success(),
                                               returnCode);
   }
@@ -511,6 +602,7 @@ public:
 private:
   llvm::StringRef qemuPath;
   llvm::StringRef exePath;
+  llvm::SmallVector<llvm::StringRef> args;
 };
 
 } // namespace kecc

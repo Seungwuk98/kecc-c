@@ -33,10 +33,10 @@ PassResult CreateFunctionArgument::run(Module *module, Function *func) {
       auto phi = (*I)->getDefiningInst<Phi>();
       assert(phi && "Phi instruction expected");
       auto argType = argTypes[phiIdx];
-      assert(argType == phi.getType() &&
+      assert(argType.constCanonicalize() == phi.getType() &&
              "Phi argument type must match function argument type");
       auto arg =
-          builder.create<inst::FunctionArgument>(phi.getRange(), argType);
+          builder.create<inst::FunctionArgument>(phi.getRange(), phi.getType());
       replacements.emplace_back(phi, arg);
     }
 

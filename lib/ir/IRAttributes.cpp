@@ -10,6 +10,7 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/SMLoc.h"
+#include "llvm/Support/SourceMgr.h"
 
 DEFINE_KECC_TYPE_ID(kecc::ir::StringAttr)
 DEFINE_KECC_TYPE_ID(kecc::ir::ConstantIntAttr)

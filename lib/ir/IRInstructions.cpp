@@ -144,7 +144,7 @@ llvm::ArrayRef<Value> Call::Adaptor::getArguments() const {
 
 void TypeCast::build(IRBuilder &builder, InstructionState &state, Value value,
                      Type targetType) {
-  state.pushType(targetType);
+  state.pushType(targetType.constCanonicalize());
   state.pushOperand(value);
 }
 

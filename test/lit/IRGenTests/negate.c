@@ -24,7 +24,9 @@ int foo(int x, int y, int z) {
   // CHECK-NEXT:   %b0:i6:i32 = typecast %b0:i5:i1 to i32
   // CHECK-NEXT:   %b0:i7:i1 = cmp ne %b0:i6:i32 0:i32
   // CHECK-NEXT:   %b0:i8:i1 = xor %b0:i7:i1 1:i1
-  // CHECK-NEXT:   br %b0:i8:i1, b1(), b2()
+  // CHECK-NEXT:   %b0:i9:i32 = typecast %b0:i8:i1 to i32
+  // CHECK-NEXT:   %b0:i10:i1 = cmp ne %b0:i9:i32 0:i32
+  // CHECK-NEXT:   br %b0:i10:i1, b1(), b2()
   if (!(x == y)) {
     // CHECK-LABEL: block b1:
     // CHECK-NEXT:   %b1:i0:i32 = load %l1:i32*

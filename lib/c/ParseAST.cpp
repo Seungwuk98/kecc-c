@@ -260,6 +260,10 @@ void AssertImpl::VisitVarDecl(const VarDecl *decl) {
 }
 
 void AssertImpl::VisitFunctionDecl(const FunctionDecl *decl) {
+  // clang create implicit extern function decl which has double type parameter
+  if (decl->isImplicit())
+    return;
+
   VisitQualType(decl->getType(), decl->getLocation());
   for (const auto *param : decl->parameters()) {
     DeclVisitor::Visit(param);

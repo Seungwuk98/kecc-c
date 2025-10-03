@@ -9,6 +9,8 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
+#include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
 
 namespace kecc {
 
@@ -115,6 +117,18 @@ struct PassOptions {
 static llvm::ManagedStatic<PassOptions> pmOption;
 
 void registerPMOption() { *pmOption; }
+
+struct FuzzOptions {
+  llvm::cl::OptionCategory category{"Fuzz Options"};
+
+  llvm::cl::opt<bool> testInterpreterOnly{
+      "test-interp-only",
+      llvm::cl::desc("Only test the interpreter, skip native compilation"),
+      llvm::cl::init(false), llvm::cl::cat(category)};
+};
+
+static llvm::ManagedStatic<FuzzOptions> fuzzOption;
+void registerFuzzOption() { *fuzzOption; }
 
 } // namespace cl
 
@@ -329,10 +343,9 @@ int fuzzMain() {
   llvm::StringRef inputExt = llvm::sys::path::extension(cl::inputOption->input);
   if (inputExt == ".c") {
     inputFormat = InputFormat::C;
-  } else if (inputExt == ".ir") {
-    inputFormat = InputFormat::KeccIR;
   } else {
-    llvm::errs() << "Error: unknown input file extension: " << inputExt << "\n";
+    llvm::errs() << "Error: unknown input file extension for fuzz: " << inputExt
+                 << "\n";
     return 1;
   }
 
@@ -363,46 +376,87 @@ int fuzzMain() {
                           inputBufferOrErr->get()->getBuffer());
   compilation.setOptPipeline(cl::pmOption->passCallback);
 
-  std::optional<int> returnCode;
-  llvm::StringRef returnCodeFrom;
+  int nativeClangReturnCode;
+  int nativeGCCReturnCode;
+  std::optional<int> riscv64ReturnCode;
+
+  // First, run clang to get the native return code
+  Invocation clangInvocation;
+
+  llvm::SmallVector<char> clangOutputFileBuffer;
+  auto inputStem = llvm::sys::path::stem(cl::inputOption->input);
+  llvm::sys::path::append(clangOutputFileBuffer, testDir,
+                          std::format("{}_clang_native.out", inputStem.str()));
+  clangInvocation.addAction<CompileToExeAction>(
+      llvm::StringRef(cl::inputOption->input),
+      llvm::StringRef(clangOutputFileBuffer.data(),
+                      clangOutputFileBuffer.size()),
+      llvm::ArrayRef<llvm::StringRef>{"-w"},
+      llvm::sys::getDefaultTargetTriple());
+
+  clangInvocation.addAction<ExecuteBinAction>(
+      llvm::StringRef(clangOutputFileBuffer.data(),
+                      clangOutputFileBuffer.size()),
+      llvm::ArrayRef<llvm::StringRef>{}, 20);
+
+  auto result = clangInvocation.executeAll();
+  if (!result->getLogicalResult().succeeded()) {
+    llvm::errs() << "Error: clang invocation failed\n";
+    if (auto returnCodeResult = result->cast<ReturnCodeResult>();
+        returnCodeResult->getReturnCode() < 0) {
+      llvm::errs() << "Clang or binary execution timed out\n"
+                   << "Test skipped\n";
+      return 0;
+    }
+    return 1;
+  }
+
+  ReturnCodeResult *returnCodeResult = result->cast<ReturnCodeResult>();
+  nativeClangReturnCode = returnCodeResult->getReturnCode();
+
+  // Second, run gcc to get the native return code
+  Invocation gccInvocation;
+  llvm::SmallVector<char> gccOutputFileBuffer;
+  llvm::sys::path::append(gccOutputFileBuffer, testDir,
+                          std::format("{}_gcc_native.out", inputStem.str()));
+  gccInvocation.addAction<CompileToExeGccAction>(
+      llvm::StringRef(cl::inputOption->input),
+      llvm::StringRef(gccOutputFileBuffer.data(), gccOutputFileBuffer.size()),
+      llvm::ArrayRef<llvm::StringRef>{"-w"});
+
+  gccInvocation.addAction<ExecuteBinAction>(
+      llvm::StringRef(gccOutputFileBuffer.data(), gccOutputFileBuffer.size()),
+      llvm::ArrayRef<llvm::StringRef>{}, 20);
+  auto gccResult = gccInvocation.executeAll();
+  if (!gccResult->getLogicalResult().succeeded()) {
+    llvm::errs() << "Error: gcc invocation failed\n";
+    if (auto returnCodeResult = gccResult->cast<ReturnCodeResult>();
+        returnCodeResult->getReturnCode() < 0) {
+      llvm::errs() << "GCC or binary execution timed out\n"
+                   << "Test skipped\n";
+      return 0;
+    }
+    return 1;
+  }
+  ReturnCodeResult *gccReturnCodeResult = gccResult->cast<ReturnCodeResult>();
+  nativeGCCReturnCode = gccReturnCodeResult->getReturnCode();
+  if (nativeGCCReturnCode != nativeClangReturnCode) {
+    llvm::errs() << "Warning: clang return code " << nativeClangReturnCode
+                 << " does not match gcc's " << nativeGCCReturnCode << "\n";
+  }
+
+  // Then, run interpreter to get the kecc interpreted return code
   Invocation fullInvocation;
   Invocation interpretInvocation;
 
-  if (inputFormat == InputFormat::C) {
-    Invocation clangInvocation;
+  fullInvocation.addAction<ParseCAction>(&compilation, true);
+  interpretInvocation.addAction<ParseCAction>(&compilation, true);
 
-    llvm::SmallVector<char> clangOutputFileBuffer;
-    auto inputStem = llvm::sys::path::stem(cl::inputOption->input);
-    llvm::sys::path::append(clangOutputFileBuffer, testDir,
-                            std::format("{}_clang.out", inputStem.str()));
-    clangInvocation.addAction<CompileToExeAction>(
-        llvm::StringRef(cl::inputOption->input),
-        llvm::StringRef(clangOutputFileBuffer.data(),
-                        clangOutputFileBuffer.size()));
-
-    clangInvocation.addAction<ExecuteExeByQemuAction>(
-        QEMU_RISCV64_STATIC, llvm::StringRef(clangOutputFileBuffer.data(),
-                                             clangOutputFileBuffer.size()));
-
-    auto result = clangInvocation.executeAll();
-    if (!result->getLogicalResult().succeeded()) {
-      llvm::errs() << "Error: clang invocation failed\n";
-      return 1;
-    }
-
-    ReturnCodeResult *returnCodeResult = result->cast<ReturnCodeResult>();
-    returnCode = returnCodeResult->getReturnCode();
-    returnCodeFrom = "clang";
-
-    fullInvocation.addAction<ParseCAction>(&compilation);
-    interpretInvocation.addAction<ParseCAction>(&compilation);
-  } else if (inputFormat == InputFormat::KeccIR) {
-    fullInvocation.addAction<ParseIRAction>(&compilation);
-    interpretInvocation.addAction<ParseIRAction>(&compilation);
-  } else {
-    llvm_unreachable("unknown input format");
-  }
-
+  llvm::SmallVector<char> interpretIRFileBuffer;
+  llvm::sys::path::append(interpretIRFileBuffer, testDir,
+                          std::format("{}_interp_kecc.ir", inputStem.str()));
+  interpretInvocation.addAction<OutputAction>(llvm::StringRef(
+      interpretIRFileBuffer.data(), interpretIRFileBuffer.size()));
   interpretInvocation.addAction<IRInterpretAction>(std::nullopt);
   auto interpretInvokeResult = interpretInvocation.executeAll();
   if (!interpretInvokeResult->getLogicalResult().succeeded()) {
@@ -419,22 +473,57 @@ int fuzzMain() {
                                ->cast<ir::VRegisterInt>()
                                ->getValue());
   bool testFailed = false;
-  if (returnCode) {
-    if (interpretReturnCode != *returnCode) {
-      llvm::errs() << "Error: return code " << interpretReturnCode
-                   << " does not match clang's " << *returnCode << "\n";
-      testFailed = true;
-    }
+  if (interpretReturnCode == nativeClangReturnCode ||
+      interpretReturnCode == nativeGCCReturnCode) {
+    if (interpretReturnCode != nativeClangReturnCode)
+      llvm::errs() << "Warning: interpreted return code " << interpretReturnCode
+                   << " matches gcc's " << nativeGCCReturnCode
+                   << ", but not clang's " << nativeClangReturnCode << "\n";
+    else if (interpretReturnCode != nativeGCCReturnCode)
+      llvm::errs() << "Warning: interpreted return code " << interpretReturnCode
+                   << " matches clang's " << nativeClangReturnCode
+                   << ", but not gcc's " << nativeGCCReturnCode << "\n";
+    else
+      llvm::outs() << "Info: interpreted return code " << interpretReturnCode
+                   << " matches both clang and gcc\n";
   } else {
-    returnCode = interpretReturnCode;
-    returnCodeFrom = "interpreter";
+    llvm::errs() << "Error: interpreted return code " << interpretReturnCode
+                 << " does not match clang's " << nativeClangReturnCode
+                 << " nor gcc's " << nativeGCCReturnCode << "\n";
+    testFailed = true;
   }
 
+  if (cl::fuzzOption->testInterpreterOnly) {
+    return testFailed;
+  }
+
+  // second clang to get the riscv64 return code
+  Invocation riscv64ClangInvocation;
+  llvm::SmallVector<char> riscv64ClangOutputFileBuffer;
+  llvm::sys::path::append(riscv64ClangOutputFileBuffer, testDir,
+                          std::format("{}_clang_riscv64.out", inputStem.str()));
+  riscv64ClangInvocation.addAction<CompileToExeAction>(
+      llvm::StringRef(cl::inputOption->input),
+      llvm::StringRef(riscv64ClangOutputFileBuffer.data(),
+                      riscv64ClangOutputFileBuffer.size()),
+      llvm::ArrayRef<llvm::StringRef>{"-w"});
+  riscv64ClangInvocation.addAction<ExecuteExeByQemuAction>(
+      QEMU_RISCV64_STATIC,
+      llvm::StringRef(riscv64ClangOutputFileBuffer.data(),
+                      riscv64ClangOutputFileBuffer.size()));
+  auto riscv64ClangResult = riscv64ClangInvocation.executeAll();
+  if (!riscv64ClangResult->getLogicalResult().succeeded()) {
+    llvm::errs() << "Error: riscv64 clang invocation failed\n";
+    return 1;
+  }
+  auto riscv64ReturnCodeResult = riscv64ClangResult->cast<ReturnCodeResult>();
+  riscv64ReturnCode = riscv64ReturnCodeResult->getReturnCode();
+
+  // Finally, do the full kecc compilation and execution
   fullInvocation.addAction<RegisterPassesAction>(compilation.getOptPipeline());
   fullInvocation.addAction<RunPassesAction>();
 
   llvm::SmallVector<char> irFileBuffer;
-  auto inputStem = llvm::sys::path::stem(cl::inputOption->input);
   llvm::sys::path::append(irFileBuffer, testDir,
                           std::format("{}_kecc.ir", inputStem.str()));
 
@@ -474,10 +563,10 @@ int fuzzMain() {
   ReturnCodeResult *fullReturnCodeResult = fullResult->cast<ReturnCodeResult>();
   int fullReturnCode =
       static_cast<uint8_t>(fullReturnCodeResult->getReturnCode());
-  if (returnCode && fullReturnCode != *returnCode) {
-    llvm::errs() << "Error: return code " << fullReturnCode
-                 << " does not match " << returnCodeFrom << "'s " << *returnCode
-                 << "\n";
+  if (fullReturnCode != riscv64ReturnCode) {
+    llvm::errs() << "Error: kecc return code " << fullReturnCode
+                 << " does not match clang(riscv64)'s return code "
+                 << riscv64ReturnCode << "\n";
     testFailed = true;
   }
 
@@ -532,6 +621,7 @@ int fuzz_main(int argc, char **argv) {
   kecc::ir::registerCanonicalizeStructPasses();
   kecc::cl::registerInputOption();
   kecc::cl::registerPMOption();
+  kecc::cl::registerFuzzOption();
 
   llvm::cl::ParseCommandLineOptions(argc, argv, "Kecc C Compiler\n");
   return kecc::fuzzMain();

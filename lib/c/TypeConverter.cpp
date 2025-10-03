@@ -93,7 +93,7 @@ ir::Type TypeConverter::VisitBuiltinType(const BuiltinType *T,
   case BuiltinType::UInt:
     return ir::IntT::get(ctx, 32, false);
   case BuiltinType::ULong:
-    return ir::IntT::get(ctx, 32, false);
+    return ir::IntT::get(ctx, 64, false);
   case BuiltinType::ULongLong:
     return ir::IntT::get(ctx, 64, false);
   case BuiltinType::SChar:
@@ -103,7 +103,7 @@ ir::Type TypeConverter::VisitBuiltinType(const BuiltinType *T,
   case BuiltinType::Int:
     return ir::IntT::get(ctx, 32, true);
   case BuiltinType::Long:
-    return ir::IntT::get(ctx, 32, true);
+    return ir::IntT::get(ctx, 64, true);
   case BuiltinType::LongLong:
     return ir::IntT::get(ctx, 64, true);
   case BuiltinType::Float:

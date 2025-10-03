@@ -23,6 +23,9 @@ public:
   utils::LogicalResult parse();
 
   clang::ASTUnit *getASTUnit() const { return astUnit.get(); }
+  std::unique_ptr<clang::ASTUnit> releaseASTUnit() {
+    return std::move(astUnit);
+  }
 
   void dump() const;
 

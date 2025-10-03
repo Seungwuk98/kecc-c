@@ -1,5 +1,6 @@
 
 find_program(CLANG clang REQUIRED)
+find_program(GCC gcc REQUIRED)
 # TODO: require cross compile libraries
 find_program(LLD lld REQUIRED)
 
