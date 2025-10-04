@@ -518,22 +518,23 @@ class CompileToExeGccAction
 public:
   CompileToExeGccAction(llvm::ArrayRef<llvm::StringRef> inputFileNames,
                         llvm::StringRef outputFileName,
-                        llvm::ArrayRef<llvm::StringRef> extraArgs = {})
+                        llvm::ArrayRef<llvm::StringRef> extraArgs = {},
+                        llvm::StringRef gccPath = GCC_DIR)
       : inputFileNames(inputFileNames), outputFileName(outputFileName),
-        extraArgs(extraArgs) {}
+        extraArgs(extraArgs), gccPath(gccPath) {}
 
   static llvm::StringRef getNameStr() { return "Compile to Executable by GCC"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
 
   std::unique_ptr<ActionData> execute(std::unique_ptr<ActionData>) override {
-    llvm::SmallVector<llvm::StringRef> gccArgs{GCC_DIR, "-o", outputFileName};
+    llvm::SmallVector<llvm::StringRef> gccArgs{gccPath, "-o", outputFileName};
     for (auto inputFileName : inputFileNames) {
       gccArgs.push_back(inputFileName);
     }
     if (!extraArgs.empty())
       gccArgs.append(extraArgs.begin(), extraArgs.end());
 
-    int returnCode = llvm::sys::ExecuteAndWait(GCC_DIR, gccArgs);
+    int returnCode = llvm::sys::ExecuteAndWait(gccPath, gccArgs);
     if (returnCode != 0)
       return std::make_unique<ReturnCodeResult>(utils::LogicalResult::failure(),
                                                 returnCode);
@@ -545,6 +546,7 @@ private:
   llvm::SmallVector<llvm::StringRef> inputFileNames;
   llvm::StringRef outputFileName;
   llvm::SmallVector<llvm::StringRef> extraArgs;
+  llvm::StringRef gccPath;
 };
 
 class ExecuteBinAction
@@ -581,8 +583,9 @@ class ExecuteExeByQemuAction
     : public ActionTemplate<Action, ActionData, ReturnCodeResult> {
 public:
   ExecuteExeByQemuAction(llvm::StringRef qemuPath, llvm::StringRef exePath,
-                         llvm::ArrayRef<llvm::StringRef> args = {})
-      : qemuPath(qemuPath), exePath(exePath) {}
+                         llvm::ArrayRef<llvm::StringRef> args = {},
+                         size_t timeout = 0)
+      : qemuPath(qemuPath), exePath(exePath), timeout(timeout) {}
 
   static llvm::StringRef getNameStr() { return "Execute Executable by QEMU"; }
   llvm::StringRef getActionName() const override { return getNameStr(); }
@@ -591,7 +594,8 @@ public:
     llvm::SmallVector<llvm::StringRef> qemuArgs{qemuPath, exePath};
     if (!args.empty())
       qemuArgs.append(args.begin(), args.end());
-    int returnCode = llvm::sys::ExecuteAndWait(qemuPath, qemuArgs);
+    int returnCode = llvm::sys::ExecuteAndWait(qemuPath, qemuArgs, std::nullopt,
+                                               std::nullopt, timeout);
     if (returnCode < 0)
       return std::make_unique<ReturnCodeResult>(utils::LogicalResult::failure(),
                                                 returnCode);
@@ -603,6 +607,7 @@ private:
   llvm::StringRef qemuPath;
   llvm::StringRef exePath;
   llvm::SmallVector<llvm::StringRef> args;
+  size_t timeout;
 };
 
 } // namespace kecc

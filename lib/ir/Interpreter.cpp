@@ -965,11 +965,34 @@ void typecast(StackFrame *frame, ir::inst::TypeCast typecast) {
     VRegisterFloat *srcFloatR = srcReg->cast<VRegisterFloat>();
     llvm::APFloat srcFloat = srcFloatR->getAsFloat(srcFloatT.getBitWidth());
 
+    llvm::SmallVector<char> buffer;
+    srcFloat.toString(buffer);
+
     if (auto destIntT = destType.dyn_cast<IntT>()) {
       llvm::APSInt destInt(destIntT.getBitWidth(), !destIntT.isSigned());
 
       bool isExact;
-      srcFloat.convertToInteger(destInt, llvm::APFloat::rmTowardZero, &isExact);
+      auto status = srcFloat.convertToInteger(
+          destInt, llvm::APFloat::rmTowardZero, &isExact);
+
+      if (status & llvm::APFloat::opInvalidOp) {
+        // UB cases: handle as we wish for interpreter testing
+        // In this case, we match the behavior of arm64 machine as possible
+        if (destIntT.isSigned()) {
+          // If dest is signed int and source float ranged on usnigned int,
+          // we try to convert as unsigned int first, then set the sign bit
+          // manually.
+          // ex) (signed char)254 => 127 (APFloat)
+          //     (signed char)254 => -2   (arm64)
+          llvm::APSInt destIntUnsigned(destIntT.getBitWidth(), true);
+          status = srcFloat.convertToInteger(
+              destIntUnsigned, llvm::APFloat::rmTowardZero, &isExact);
+          if (status == llvm::APFloat::opOK) {
+            destIntUnsigned.setIsSigned(true);
+            destInt = destIntUnsigned;
+          }
+        }
+      }
 
       VRegisterInt *destIntR = destReg->cast<VRegisterInt>();
       destIntR->setValue(destInt);
@@ -1380,13 +1403,17 @@ Interpreter::call(llvm::StringRef name, llvm::ArrayRef<VRegister *> args,
     executeInstruction(this, frame, currentInst);
   }
 
+  IRPrintContext printContext(os);
+  func->registerAllInstInfo(printContext);
+  frame->print(printContext);
+  printGlobalTable(os);
+
   if (irContext->diag().hasError()) {
     std::unique_ptr<VRegisterInt> retR = std::make_unique<VRegisterInt>();
     retR->setValue(-1);
     frame->getReturnValues().clear();
     frame->getReturnValues().emplace_back(std::move(retR));
   }
-
   return std::move(frame->getReturnValues());
 }
 

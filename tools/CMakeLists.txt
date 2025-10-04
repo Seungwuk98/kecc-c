@@ -93,24 +93,24 @@ target_link_libraries(
   KeccTranslatePasses
 )
 
+if (KECC_ENABLED_FUZZ_TEST)
+  add_kecc_driver(
+    fuzz 
+    GEN_DRIVER_MAIN
+    SOURCES
+    driver.cpp
+  )
 
-add_kecc_driver(
-  fuzz 
-  GEN_DRIVER_MAIN
-  SOURCES
-  driver.cpp
-)
-
-target_link_libraries(
-  fuzz 
-  PRIVATE 
-  ${llvm_libs}
-  KeccDriver
-  KeccParser
-  KeccIR
-  KeccIRAnalyses
-  KeccIRPasses
-  KeccC
-)
-
+  target_link_libraries(
+    fuzz 
+    PRIVATE 
+    ${llvm_libs}
+    KeccDriver
+    KeccParser
+    KeccIR
+    KeccIRAnalyses
+    KeccIRPasses
+    KeccC
+  )
+endif()
 
