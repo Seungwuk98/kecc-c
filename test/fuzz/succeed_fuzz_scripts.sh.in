@@ -6,7 +6,10 @@ FUZZ_TEST_BIN=@PROJECT_BINARY_DIR@/test/fuzz/fuzz-test
 if (\
   $FUZZ_TEST_BIN -n 100 --easy --test-interp-only &&\
   $FUZZ_TEST_BIN -n 100 --easy --test-interp-only -seed 1313 &&\
-  $FUZZ_TEST_BIN -n 50 --test-interp-only -seed 1313) 
+  $FUZZ_TEST_BIN -n 50 --test-interp-only -seed 1313 &&\
+  $FUZZ_TEST_BIN -n 50 --test-interp-only -seed 2 &&\
+  $FUZZ_TEST_BIN -n 100 --test-interp-only -seed 55 &&\
+  $FUZZ_TEST_BIN -n 50 --test-interp-only -seed 1501359) 
 then
   echo "succeed"
   exit 0

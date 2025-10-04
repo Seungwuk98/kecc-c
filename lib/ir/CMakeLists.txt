@@ -18,7 +18,18 @@ add_library(KeccIR
   JumpArg.cpp
   PatternMatch.cpp
   Interpreter.cpp
+  InterpreterValue.cpp
 )
+
+if (KECC_ENABLED_FUZZ_TEST) 
+  # Some cases, clang optimization causes transformation when calculating float values or casting
+  # which makes fuzz testing fail.
+  message(STATUS "Fuzz testing enabled: Disabling optimizations for InterpreterValue.cpp")
+  set_source_files_properties(
+    InterpreterValue.cpp
+    PROPERTIES COMPILE_FLAGS "-O0" 
+  )
+endif()
 
 add_subdirectory(Analyses)
 add_subdirectory(Passes)
@@ -29,3 +40,4 @@ target_link_libraries(KeccIR
   MLIRSupport
   KeccIRAnalyses
 )
+

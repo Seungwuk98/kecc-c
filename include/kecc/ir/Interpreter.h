@@ -4,6 +4,7 @@
 #include "kecc/ir/IR.h"
 #include "kecc/ir/IRAnalyses.h"
 #include "kecc/ir/IRInstructions.h"
+#include "kecc/ir/InterpreterValue.h"
 #include "kecc/ir/Module.h"
 #include "kecc/ir/Value.h"
 #include "kecc/utils/PointerCastBase.h"
@@ -66,10 +67,10 @@ public:
 
   std::uint64_t getValue() const { return value; }
   void setValue(std::uint64_t v) { value = v; }
-  void setValue(llvm::APSInt v);
+  void setValue(VInteger v);
   void setValue(VMemory v);
 
-  llvm::APSInt getAsInteger(unsigned bitWidth, bool isSigned) const;
+  VInteger getAsInteger(unsigned bitWidth, bool isSigned) const;
   VMemory getAsMemory() const;
 
   static bool classof(const VRegister *v) { return v->getKind() == Kind::Int; }
@@ -92,10 +93,10 @@ public:
   VRegisterFloat(std::uint64_t v) : VRegister(Kind::Float), value(v) {}
 
   std::uint64_t getValue() const { return value; }
-  void setValue(llvm::APFloat v);
+  void setValue(VFloat v);
   void setValue(std::uint64_t v);
 
-  llvm::APFloat getAsFloat(int bitwidth) const;
+  VFloat getAsFloat(int bitwidth) const;
   void print(llvm::raw_ostream &os, Type type,
              StructSizeAnalysis *analysis) const override;
   void mv(VRegister *src) override;
